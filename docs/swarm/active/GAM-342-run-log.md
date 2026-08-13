@@ -169,3 +169,31 @@ summary.
   four triggers apply)** with `run_in_background: false`. **If this line is the
   last one in this file, the run died holding this subagent** — no worker diff
   landed, no gates were run, and no PR was opened.
+- **VERDICT: worker returned, and existence VERIFIED rather than assumed
+  (item 21).** Commit `135b8bb`, 9 files / 456 insertions, working tree clean.
+  `git show --stat` confirms the change is in the committed blob and that
+  **every path is inside Allowed Files** — 2 spec files, 6 screenshots, 1
+  findings JSON. No `src/**`, no `supabase/**`, no `tests/e2e-harness/**`, no
+  workflow file.
+  - New specs: `coach-checkin.spec.ts` +35 lines (AC 3 overwrite),
+    `student-checkin.spec.ts` +326 lines (picker / crash boundary /
+    self-checkoff UI + RLS policy proof / kiosk).
+  - Worker-reported gates: new+changed files **7 passed, twice, exit 0**;
+    full suite **27 passed / 5 failed**, the 5 being exactly the pre-existing
+    ones named in packet §0 — so this branch **added 6 passing tests and broke
+    nothing**.
+  - Three mutations run with real red output and restoration: wrong session id
+    (`Expected 1 / Received 0`), duplicate INSERT (`23505
+    attendance_session_id_student_id_key`, labelled honestly as a
+    database-level proof and not dressed up as a code mutation), and
+    `method='coach'` (`Expected "coach" / Received "self"`).
+  - Worker declared three honest deviations from the packet's literal
+    selectors, each browser-verified: the Save button's real accessible name is
+    `Save — 1 day added` (used `/^Save/`), the `/checkin` error `alert` has no
+    computed accessible name (used `.filter({ hasText })`), and it did not run
+    `stop.sh` because the packet overrides the skill there. All three are
+    corrections to my packet, not scope drift.
+- **DISPATCHED `checker-reviewer` (opus) on commit `135b8bb`**, with
+  `run_in_background: false`. **If this line is the last one in this file, the
+  run died holding this subagent** — the work is committed and pushed at
+  `135b8bb`, but nobody independent has verified it and no PR was opened.
