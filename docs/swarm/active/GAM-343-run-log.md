@@ -188,3 +188,12 @@ thing that survives if the container is killed.
     measured, cost the gate a 7-minute timeout); set an explicit per-student
     hours override so AC 6 is non-vacuous; use auto-retrying
     `toBeChecked()` on both students before the uncheck.
+- **Packet gated DISPATCH and caveats folded in** (§3 date row + caveat 1 block,
+  §4 step 1, §4 step 5 caveats 2 and 3, §4 step 6 tolerance, §5 AC-5 mutation
+  re-cited, §2b UPDATE nuance corrected). Item 19's Definition of Ready is
+  satisfied: gate returned DISPATCH in round 2 of a cap of 2.
+- **Dispatched `worker-implementer`** on the gated packet. Model: default pin
+  (`sonnet`) — none of item 18's four triggers apply (test files only; no
+  migration, RLS, metric SQL or auth logic). *If this line is the last one in
+  this file, the run died holding this subagent.* Dispatched
+  `run_in_background: false`.

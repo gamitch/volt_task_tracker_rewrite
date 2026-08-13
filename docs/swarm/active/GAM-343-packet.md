@@ -134,9 +134,11 @@ policies, so **a coach may write any `responded_by`**.
 
 AC 3's mutation is therefore only red when the actor is the **student**.
 
-Skill trap that still applies: a blocked INSERT raises `42501`, a blocked
-**UPDATE** reports `UPDATE 0` and raises nothing. Assert the SQLSTATE for the
-insert; re-read the row for the update.
+Skill trap, with a round-2 correction: a blocked INSERT raises `42501`. For an
+UPDATE it depends which arm blocks — a `USING`-filtered update is silent
+(`UPDATE 0`), but an update *setting* a foreign `responded_by` raises `42501`
+from the `WITH CHECK` arm (gate-measured). Re-reading the row is safe either
+way; do not rely on an exception alone.
 
 ### 2c. ✅ AC 5 / T309 is real and sharper than stated
 
@@ -222,7 +224,7 @@ otherwise. Round 1 got four of these wrong; the corrections are flagged.
 | Scope | `page.getByRole('dialog').filter({ hasText: 'Basics' }).first()` | `:1294`, `:1314` |
 | Title | `dialog.getByLabel(/^Title/)` — regex; `isRequired` decorates the label | `:1317` |
 | Schedule mode | `getByRole('radiogroup', { name: 'Schedule mode' })` → `radio` | `:1386-1392` |
-| Date (single) | `getByRole('combobox', { name: /^Date/ })`, fill `MM/DD/YYYY`, press Enter | `:1397` |
+| Date (single) | `getByRole('combobox', { name: /^Date/ })` — **CLICK it, then fill `MM/DD/YYYY`, Enter, Escape** (caveat 1) | `:1397` |
 | **Start time** | `dialog.getByLabel(/^Start time/)` — label is `Start time ({friendly date})`; also `input[placeholder="Select a time"]` nth(0) | `:1492-1503` |
 | **End time** | `dialog.getByLabel(/^End time/)` — or nth(1) | `:1492-1503` |
 | Team scope | `getByRole('combobox', { name: 'Team scope' })`; options `role=option` | `:1558-1567` |
@@ -260,6 +262,19 @@ itself covered — Escape is the only working route.)
 
 *Round 1 imported this trap from the `e2e-personas` skill's list, which
 describes the meetings dialog. It does not transfer.*
+
+🔴 **CAVEAT 1 (binding, round 2) — CLICK the date combobox BEFORE filling.**
+The calendar popover opens on **pointer**, not on `fill()`. Both branches
+gate-measured:
+
+```
+click → fill → Enter → Escape:   dialogs 2 → 2 → 1, form intact, dateValue "August 12, 2026"
+        fill → Enter → Escape:   dialogs 1 → 1 → 0,  FORM DIALOG DESTROYED
+```
+
+The second is what round 2's §4 step 1 literally prescribed, and it cost the
+gate a 7-minute test timeout on its first probe. Without the opening click there
+is no calendar layer, so the Escape falls through and closes the **form**.
 
 ### Student answers — `RsvpControl.tsx` on `/outreach/:eventId`
 
@@ -368,7 +383,8 @@ Use a distinctive title prefix (e.g. `GAM343 Lifecycle`) — cleanup keys on it.
 
 1. **Coach creates the outreach event.** Sign in as `coach`. `/outreach` → open
    the dialog → type the title → set the date to **Chicago-today** and **start
-   time `11:59 PM`** (§2e) → fill date, Enter, **Escape** → open `Team scope`
+   time `11:59 PM`** (§2e) → **click the date combobox, then** fill, Enter,
+   **Escape** (caveat 1 — the other order destroys the form) → open `Team scope`
    and **deselect `Volt Junior 4402`** → in Expected attendees check
    **Jordan only** → read the submit label's session count → save.
 
@@ -403,9 +419,44 @@ Use a distinctive title prefix (e.g. `GAM343 Lifecycle`) — cleanup keys on it.
    This exists so step 5's uncheck has a recorded row to change — §2c.
 
 5. **Coach completes the day, unchecking Jordan — ONE dialog pass.** Open
-   `Mark day complete — {date}`. Both students arrive **pre-checked** (the
-   dialog derives checked state from the recorded rows). **Uncheck Jordan.**
-   Type a people-reached number. Read the confirm label's hours. Confirm.
+   `Mark day complete — {date}`.
+
+   🔴 **CAVEAT 3 (binding) — wait for the settled arrival state before touching
+   anything.** The dialog seeds its checklist from recorded **attendance**
+   (`MarkDayCompleteDialog.tsx:699-731`), but only once its own
+   `loadAttendance` resolves. Before that there is an observable transient seeded
+   from **RSVPs** — gate-measured `DLG IMMEDIATE Priya false Jordan true` (Priya
+   `declined`, Jordan coach-authored `going`) settling to `DLG ARRIVAL Priya
+   true Jordan true`. And `handleCheckedStudentIdsChange` **latches**
+   `hasCoachTouchedChecklistRef` (`:1072-1075`), so an edit made during that
+   window freezes the checklist at the RSVP seed forever — Priya would be
+   written `absent` and **AC 5 and AC 6 would both silently invert**.
+
+   So use an auto-retrying assertion on **both** students, never a one-shot
+   `isChecked()`:
+   ```ts
+   await expect(dlg.getByRole('checkbox', { name: 'Priya Raman' })).toBeChecked();
+   await expect(dlg.getByRole('checkbox', { name: 'Jordan Okafor' })).toBeChecked();
+   ```
+
+   Then: **uncheck Jordan** → **set Priya's hours** (caveat 2) → type a
+   people-reached number → read the confirm label's hours → confirm.
+
+   🔴 **CAVEAT 2 (binding) — set an explicit per-student hours override, or AC 6
+   is vacuous.** §2e's `11:59 PM` start makes the session **zero-duration**, so
+   `computeSessionDurationHours` is 0 and `AttendancePanel` writes
+   `hours_override: null`. Gate-measured on the un-overridden run: `CONFIRM
+   LABEL "… · 0 h"`, `DELTA PRIYA 0`, `DELTA JORDAN 0` — **AC 6 passes with the
+   entire attendance write path deleted.** That is round 1's MAJOR 11 re-entering
+   through the fix for BLOCKER 4. Remedy, gate-measured working:
+   ```ts
+   await dlg.getByLabel(/^Priya Raman hours/).fill('2.5');   // then blur
+   // → hours_override 2.5, label "Mark complete — 1 attended · 2.5 h",
+   //   DELTA PRIYA 2.4999999999999996, DELTA JORDAN 0
+   ```
+   Scope it to the dialog — the field name collides with `AttendancePanel`'s.
+   Give **Jordan** a non-zero hours value in step 4 too, so `delta(Jordan) == 0`
+   detects the `absent` write instead of being an arithmetic tautology.
 
    🔴 **There is no second pass** *(gate BLOCKER 1)*. Round 1 prescribed
    completing first and re-opening to uncheck; measured, the trigger is **gone**
@@ -431,7 +482,10 @@ Use a distinctive title prefix (e.g. `GAM343 Lifecycle`) — cleanup keys on it.
    so it passes with the entire write path deleted. Assert instead:
    - read `v_student_hours` **before** step 5 and **after**;
    - `delta(Priya)` equals the hours the confirm label promised (`· {h} h`) —
-     the app's own UI as an independent witness, nothing duplicated;
+     the app's own UI as an independent witness, nothing duplicated. **Use a
+     tolerance: `toBeCloseTo(2.5, 6)`.** Exact equality is red for a correct
+     app — gate-measured `2.5` (label) vs `2.4999999999999996` (view), and
+     `formatHours` (`:751-754`) additionally rounds to 1 dp;
    - `delta(Jordan) == 0` — he is `absent` and contributes nothing
      (`MarkDayCompleteDialog.tsx:481`);
    - while the session is still `scheduled` its contribution is **0** (the view
@@ -488,7 +542,7 @@ shared tree, which other agents are using.
 | AC 2 | Drop the `rsvps` upsert in `makeSubmitRsvpChange` (`outreach.ts:1226-1239`) | step 2's row-count assertion |
 | AC 3 | Send the **coach's** id as `respondedBy` while acting as the student | `42501` from the RLS insert policy — only red as the student (§2b) |
 | AC 4 | Switch the upsert to a plain `.insert()` | **the `status='declined'` assertion** — see below |
-| AC 5 | Return early from the `'absent'` branch (`MarkDayCompleteDialog.tsx:831`) | step 5's `status='absent'` assertion |
+| AC 5 | Make `buildAttendanceAbsenceRows` return `[]` (`MarkDayCompleteDialog.tsx:~800-840`) | step 5's `status='absent'` assertion |
 
 🔴 **AC 4's red is NOT the row count** *(gate BLOCKER 6)*. `rsvps` carries
 `UNIQUE (session_id, student_id)`, so `.insert()` raises `23505`, the write is
