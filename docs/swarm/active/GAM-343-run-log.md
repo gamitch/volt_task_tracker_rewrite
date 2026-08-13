@@ -94,3 +94,17 @@ thing that survives if the container is killed.
   a cited selector map (§3), the six-step journey (§4), four required mutations
   (§5), Allowed Files (§6), and the item-19d Least-confident list (§7, five
   entries). `npm ci` completed exit 0.
+- **Environment up, baseline measured.** `npm ci` exit 0; harness started under
+  `sudo` (the script needs root for `su postgres`; `.env.e2e` chowned back to
+  `runner`); chromium installed; `playwright@1.62.1` installed `--no-save` as
+  the config's comment requires; bundle built exit 0 and previewed **IPv4-bound**
+  to dodge the `[::1]` trap GAM-342 recorded. **Baseline persona suite: 27
+  passed, 5 failed (3.4m).** The five are exactly the ones GAM-342 recorded as
+  pre-existing — `coach-meeting.spec.ts:88` and `:115` (archived team no longer
+  offered) and `student-parent.spec.ts:27`, `:66`, `:121`. Not mine; not to be
+  chased.
+- **Dispatched `checker-premise` (item 19 gate, round 1) on the packet**, with
+  the environment LIVE so the gate can run rather than only read (item 26: "a
+  gate that only reads is worth much less than one that runs"). *If this line
+  is the last one in this file, the run died holding this subagent.* Dispatched
+  `run_in_background: false`.
