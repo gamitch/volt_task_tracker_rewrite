@@ -41,3 +41,21 @@ tiering judgement was required as part of claiming under item 28d).
   disagree. This blocks the persona harness outright: its `webServer` command
   is `npm run build -- --mode e2e`, so no persona spec can run until the build
   passes. Investigating whether CI on `main` is green before deciding scope.
+- **11:52Z — the premise failure above was MY OWN and is retracted; `main` is
+  fine.** Kept above rather than deleted, because deleting it would delete the
+  evidence that the check happened (item 30c). The cause was the previous
+  milestone's own `npm install --no-save --no-package-lock playwright`:
+  `--no-package-lock` makes npm ignore the lockfile and re-resolve every
+  dependency from its `package.json` range, and `@astryxdesign/core`'s range
+  is `^0.1.6`, which admits 0.1.9. So I upgraded the design system under
+  myself and then read the resulting 6 `tsc` errors as the repository's state.
+  Measured refutation: a clean `npm ci` restores `@astryxdesign/core` 0.1.6
+  and `npm run typecheck` exits 0 with no output. Cross-check: CI run
+  `31696325414` on `main` (merge of PR #177, 11:37Z today) ran the identical
+  `npm run typecheck` step and printed no errors — that is what prompted the
+  re-measurement rather than the filing. **No finding is filed for this, and
+  none should be:** there is no defect, and `docs/swarm/astryx-api.md:472` is
+  accurate for the pinned version. The correct install is
+  `npm install --no-save playwright` (no `--no-package-lock`), verified to
+  leave `@astryxdesign/core` at 0.1.6, `package.json`/`package-lock.json`
+  untouched, and typecheck clean.
