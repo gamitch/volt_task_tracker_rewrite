@@ -72,3 +72,43 @@ take the heavier one.
 - **Dispatching `checker-premise` (opus) on the packet** — item 19, full check,
   because item 19b requires one for anything touching metric SQL. *If this line
   is the last one in this file, the run died holding this subagent.*
+- **Premise gate round 1 VERDICT: REVISE (BLOCKER).** The subagent returned; it
+  is not in flight. It ran the real cluster and a real browser in its own
+  worktree (item 23), then stopped the cluster and removed the worktree — shared
+  tree confirmed clean. 14 findings; the ones that change the work:
+  1. **BLOCKER — AC5 is written against a control that does not exist.**
+     `buildRosterCsv`/`buildEventsCsv`/`buildAttendanceCsv`
+     (`csvExport.ts:305,372,437`) are called from **nowhere** in `src/`.
+     Measured in-browser: no export control on any of the three tabs. The
+     issue's own AC5 is therefore unsatisfiable as written. **This is the
+     premise failure the gate exists to catch**, and it is worth more as a
+     finding than as a criterion.
+  2. **BLOCKER — my GAM-300 mechanism claim was FALSE.** `checkin.ts:362-365`
+     and `meetings.ts:517` both return the single view row verbatim before ever
+     reaching the `Math.max(x, 1)` at `:375`/`:527`. The floor is unreachable
+     for a single-team student. I asserted the opposite in the packet.
+  3. **MAJOR — the real live defect is `Participation: null%`, not `0%`.**
+     Watched in the browser on `/meetings` as the student persona:
+     `meetings.ts:302` types the column `number` while the view returns SQL
+     NULL, and `StudentMeetingView.tsx:757` interpolates it straight into a
+     label. StudentHome and the Participation tab both correctly show `—`.
+     So a **new** finding cross-referencing GAM-300, not a filing under it.
+  4. **MAJOR — AC2's hours cross-screen check could not have failed.**
+     `reports.ts:424-428` and `leaderboard.ts:137-142` issue the byte-identical
+     `v_student_hours` query; StudentHome reads the same view through
+     `v_student_goal_projection`. One read, three renderers. What *does* vary is
+     formatting: `4.0` vs `4 hrs`.
+  5. **MAJOR — the KPI strip carries no per-student figure at all** (four tiles,
+     season/team only). My LCD 5 doubt was correct.
+  6. **MAJOR — AC2/3/4 demand loader mutations that my own Allowed Files
+     forbade "without exception".** Needed an explicit worktree clause.
+  7. **MAJOR — a bare `students` insert produces ZERO view rows**; a
+     `student_teams` row with `left_on is null` is required. This is exactly the
+     silent mis-test LCD 3 feared, measured.
+  Plus MINORs: `confirmed_hours` is really `3.999999112222222` (the GAM-303
+  shape) so AC6 needs a tolerance; the reports tabs are `role=button` inside
+  `<nav aria-label="Tabs">`, **not** `role=tab`, and filter/sort exist only on
+  the Participation tab; two citation slips of my own.
+  **Four of the five doubts I declared under item 19d were load-bearing, and
+  two of them were wrong in the direction I feared.** Item 19d earned its cost
+  here.
