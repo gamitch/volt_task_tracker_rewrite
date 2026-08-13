@@ -102,3 +102,19 @@ summary.
     `beforeEach`-only cleanup would poison a passing test. It also proved that
     deleting session `…-0006`'s attendance removes Priya's only
     `v_student_hours` row, which other specs read.
+- **Packet revised (round 2)** — all eight of the gate's required revisions
+  applied: AC 1-9 pasted verbatim (AC 4 re-scoped to a real-RLS `execAs` proof
+  plus a filed finding, AC 8 re-scoped to the new files' own re-runnability and
+  strengthened to require `afterAll`); the self-checkoff route corrected and
+  restated as an unbuildable-by-fixture **fact** rather than a worker
+  exploration; the false "renders the error path" claim replaced with the
+  measured white-screen and its root cause; a kiosk describe added with
+  gate-measured accessible names; the cleanup section given an explicit
+  FORBIDDEN delete; the baseline restated as 21 passed / 5 failed; citations
+  fixed. Four findings are now pre-specified with `findingKey`s. New Least
+  confident decisions list written for round 2.
+- **DISPATCHED `checker-premise` (opus, round 2)** on the revised packet, with
+  `run_in_background: false`. Scoped per item 19b to the deltas, not a
+  re-audit. **If this line is the last one in this file, the run died holding
+  this subagent** — no worker was dispatched and nothing below was written.
+  Round 2 is the cap (item 19a); a third REVISE escalates to the owner.

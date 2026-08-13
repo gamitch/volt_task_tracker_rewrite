@@ -1,268 +1,332 @@
-# GAM-342 worker packet — E2E W1 check-in journey
+# GAM-342 worker packet — E2E W1 check-in journey (round 2, post-gate)
 
 **Issue:** GAM-342 — E2E — W1 Check in: a student arrives and gets counted
 **Tier:** HEAVY (item 26). **Worker model:** default pin (`sonnet`) — none of
 item 18's four triggers apply: no migration, no RLS policy or `security
-definer`, no metric-view SQL, no auth/session/role logic. This packet adds
-test files only.
-**Branch:** `claude/gam-342-e2e-w1-checkin` (already created and pushed).
+definer`, no metric-view SQL, no auth/session/role logic. Test files only.
+**Branch:** `claude/gam-342-e2e-w1-checkin`.
+
+> **Round 1 of the premise gate returned REVISE (BLOCKER) and this is the
+> revision.** Everything below marked *(gate-measured)* was verified in a real
+> browser or against the live cluster by `checker-premise`, not read from
+> source. Where this packet and the Linear issue body disagree, **this packet
+> is right and the issue is stale** — the gate measured it.
 
 ---
 
-## 0. What the orchestrator already measured, so you do not repeat it
+## 0. Environment — already up; do not rebuild it
 
-The environment is **up and working right now**. Do not re-derive it, and do
-not run `start.sh` again — it recreates the cluster and would drop rows other
-steps depend on.
+Do **not** run `tests/e2e-harness/start.sh`; it recreates the cluster and would
+destroy state other specs read.
 
 | Fact | Measured |
 | -- | -- |
-| Scratch Postgres | `127.0.0.1:55432`, db `scratch`, seeded (5 profiles, 6 students, 3 events, 8 sessions, 10 attendance) |
-| Harness API | `http://127.0.0.1:54321`, healthy |
-| Preview bundle | `http://127.0.0.1:4174`, **started with `--host 127.0.0.1`** |
-| Playwright | `playwright@1.62.1` installed `--no-save`; chromium headless shell present |
-| Baseline | `coach-checkin.spec.ts` → **1 passed (5.4s)** |
-
-Run the suite with exactly this (the preview server is already up, and
-`reuseExistingServer: true` means Playwright will adopt it):
+| Scratch Postgres | `psql -h 127.0.0.1 -p 55432 -U postgres -d scratch` |
+| Harness API | `http://127.0.0.1:54321` |
+| Preview bundle | `http://127.0.0.1:4174` (started with `--host 127.0.0.1`) |
+| Playwright | `playwright@1.62.1`, installed `--no-save`; chromium present |
 
 ```bash
 npx playwright test -c tests/e2e-harness/playwright.personas.config.ts
 ```
 
-**If the preview server has died**, restart it detached and IPv4-bound —
-`npm run preview` alone binds `[::1]` only and the config polls `127.0.0.1`,
-which is a 180s silent timeout:
+If the preview server has died, restart it **IPv4-bound** — `npm run preview`
+alone binds `[::1]` only while the config polls `127.0.0.1`, which costs a
+silent 180s timeout:
 
 ```bash
 (setsid npm run preview -- --outDir dist-e2e --port 4174 --strictPort \
    --host 127.0.0.1 > /tmp/preview.log 2>&1 < /dev/null &)
 ```
 
+**Baseline, stated honestly (gate revision 6).** `coach-checkin.spec.ts` alone
+passes (1 passed, 5.4s). **The full persona suite is `21 passed, 5 failed`,
+reproducible across two runs, exit 1.** All five failures are pre-existing, live
+in files you may not edit, and are **not yours**:
+
+| Failing test | Why |
+| -- | -- |
+| `coach-meeting.spec.ts:88` and `:115` | `Volt Legacy 2201` (archived) is no longer offered in the team picker — the test is stale against shipped archived-team-picker work |
+| `student-parent.spec.ts:66` | `expect(before).toHaveLength(0)` got `[{"status":"going"}]` — an rsvp row on `5e550000-…-0008` left by a prior run |
+| (2 further failures in the same files) | same shape |
+
+Do not chase or "fix" these. Record them; they are findings, not your task.
+
 ---
 
-## 1. Corrections to the issue body — verified against the tree
+## 1. Acceptance criteria — verbatim from GAM-342 (gate revision 7)
 
-The issue is accurate about intent and wrong about three paths. **Use these,
-not the issue's.**
+1. **Every step is driven, not inspected.** The run types into fields, opens and selects from controls, submits, and edits something already saved. A spec that only asserts rendered text has not tested this workflow.
+2. **Every write is proven by reading the row back and comparing values**, never by asserting which request was sent. *Mutation: point a write at the wrong session id → red.*
+3. **A changed mark overwrites rather than duplicates.** Marking a student Present, then Late, leaves one row with the later value. *Mutation: switch the upsert to an insert → red.*
+4. **Student self-checkoff is covered for real**, writing `method='self'`, and is not conflated with the QR path.
+5. **The QR/short-code boundary is stated in the spec file itself**, naming the Edge Function and what was therefore not proven.
+6. **Screenshots exist for the evidence-bearing moments** and are committed.
+7. **Findings are emitted as JSON and filed.** A run that finds nothing records that explicitly rather than staying silent.
+8. **The suite is re-runnable without a reseed.** Cleanup happens in `beforeEach` and touches only rows the run created.
+9. **Each new spec is proven non-vacuous by at least one mutation**, per the `mutation-replay` skill, and the red output is recorded.
 
-1. **Loader paths.** The issue says `loaders/checkin.ts`, `loaders/kiosk.ts`,
-   `loaders/attendance.ts`. The real directory is
-   **`src/lib/supabase/loaders/`**. All three files exist there.
-2. **`SelfCheckoffDialog` is an *outreach* surface, not a meetings one.** It
-   lives at `src/pages/outreach/SelfCheckoffDialog.tsx`, is opened from
-   `/outreach/:eventId` (`OutreachDetail`), and is backed by
-   `src/lib/supabase/loaders/selfCheckoff.ts`. The issue's framing ("student
-   self-checkoff" as part of the check-in journey) is about the *write*, which
-   is genuinely `attendance` with `method='self'` — that part is correct.
-3. **`selfCheckoff.ts` is INSERT + DELETE, never upsert** (its module doc §4:
-   *"plain INSERT, never upsert… no update policy… delete + re-insert"*).
-   `insertSelfCheckoff` writes `status:'present'`, `method:'self'`,
-   `recorded_by: <acting profile id>`; `removeSelfCheckoff` deletes filtered by
-   `.eq('method','self')`. **So acceptance criterion 3 (a changed mark
-   overwrites rather than duplicates) belongs to the coach console upsert, not
-   to self-checkoff.** Do not try to prove upsert semantics on the self path.
+**Two criteria are re-scoped, with reasons, because the gate proved them
+unmeasurable as written:**
 
-## 2. Route and structure facts you will need
+- **AC 4** cannot be met through the UI — the surface is unreachable in seeded
+  fixtures (§4). It is met against **real RLS** instead, via `execAs`, plus a
+  filed finding. The substance of AC 4 (a `method='self'` row is genuinely
+  written and is not the QR path) is fully preserved.
+- **AC 8** is scoped to **the new spec files' own re-runnability**, not the
+  whole suite, because five pre-existing failures live in files you may not
+  edit and one of them is *caused* by prior-run residue. Prove your own files
+  run twice cleanly. **AC 8's "cleanup happens in `beforeEach`" is additionally
+  strengthened to require an `afterAll`** — see §6.
+- **AC 6** is satisfied by `capture()` calls listed in §5; screenshots are
+  tracked (not gitignored), so they must be committed.
 
-Verified in `src/app/router.tsx:190-250`:
+---
+
+## 2. Corrections to the issue body — all gate-verified
+
+1. **Loader paths.** The issue says `loaders/*.ts`; the real directory is
+   **`src/lib/supabase/loaders/`**.
+2. **`SelfCheckoffDialog` is NOT opened from `/outreach/:eventId`.** *(gate
+   revision 1 — my round-1 claim was false.)* It is imported **only** by
+   `src/pages/outreach/OutreachList.tsx:851`, on route **`/outreach`**, behind
+   `Button label={`Mark attendance – ${event.title}`}` (`:3642`, **en dash
+   U+2013**), gated by `allowSelfCheckoff && hasCompletedSession` (`:3592`),
+   with `allowSelfCheckoff={false}` on the Upcoming section (`:4019`) and
+   `true` only on Past (`:4031`).
+3. **`selfCheckoff.ts` is INSERT + DELETE, never upsert** (module doc §4).
+   **AC 3's upsert semantics therefore belong to the coach console only** — do
+   not try to prove them on the self path.
+4. **The kiosk calls a *different* Edge Function than the packet assumed.**
+   *(gate revision 4.)* `kiosk.ts:369` invokes **`checkin-token`**, and
+   `EDGE_FUNCTIONS` (`server.mjs:474-500`) has no such key → `404
+   {"message":"harness: no stand-in for Edge Function \"checkin-token\""}`. The
+   issue's claim that the kiosk "reports 'QR not available yet'" is **still
+   true**, measured.
+
+## 3. Routes (verified, `src/app/router.tsx:196-250`)
 
 | Route | Guard | Component |
 | -- | -- | -- |
 | `/checkin` | `RequireAuth` (any role) | `CheckinResult` |
 | `/kiosk/:sessionId` | `RequireAuth` + `RequireRole ['coach','admin']` | `KioskPage` |
 | `/meetings/live/:sessionId` | `RequireAuth` | `LiveConsolePage` |
-| `/outreach/:eventId` | `RequireAuth` | `OutreachDetail` |
+| `/outreach` | `RequireAuth` | `OutreachList` |
 
-**The single most important structural fact, and it is not obvious from the
-issue.** In `CheckinResult.tsx` the code field and the open-sessions picker
-render **inside the `error` state branch** (`src/pages/checkin/CheckinResult.tsx:809-890`),
-not on a neutral landing state. Navigating to `/checkin` with no credential in
-the URL therefore lands on "Couldn't check you in" **by design**, and that
-error card is where the journey continues:
+**Structural fact that is not obvious from the issue.** In `CheckinResult.tsx`
+the code field and open-sessions picker render **inside the `error` state
+branch** (branch starts `:809`; TextInput+Button `:832-847`; picker block
+`~:857-895`, map at `:866`). Landing on `/checkin` with no URL credential
+therefore shows "Couldn't check you in" **by design**, and that card is where
+the journey continues. The seeded live session `5e550000-…-0004` is inside
+`OPEN_SESSION_GRACE_MS` (2h, `checkin.ts:564`; window at `:457-458`) and appears
+titled **`Weeknight Build Session`** *(gate-measured in a browser)*.
 
-- no session id knowable → the **open-sessions picker** renders (`:855-880`),
-  one `Button` per open session whose `label` is the *event* title;
-- after `setPickedSessionId`, the **`TextInput label="Check-in code"`** plus
-  `Button label="Check in with code"` render (`:832-847`).
+## 4. Two hard boundaries — measured, and binding on what you may claim
 
-The seeded live session `5e550000-…-0004` starts 30 minutes ago and ends in two
-hours, and `OPEN_SESSION_GRACE_MS` is two hours either side
-(`src/lib/supabase/loaders/checkin.ts:564`), so it **is** inside the window and
-**will** appear in that picker, titled `Weeknight Build Session` (the event
-title, not the session's). This is real-loader data, which is what item 27
-requires the spec to prove it reads.
+### 4a. The `checkin` Edge Function stand-in has no redemption branch
 
-## 3. The Tier-2 boundary — measured, and worse than the issue says
+`tests/e2e-harness/server.mjs:475-492` is the whole stand-in: it checks
+`identity.sub` and a `sessionId`, then **mints a rotating QR token**. There is
+**no branch that accepts a short code and writes `attendance`.** So submitting a
+code **cannot** produce a row here. Never write an assertion waiting for one.
 
-The issue says the `checkin` Edge Function stand-in is "deliberately shallow".
-**Measured, it is not shallow — redemption is entirely absent.**
-`tests/e2e-harness/server.mjs:475-492` is the whole stand-in: it validates
-`identity.sub` and a `sessionId`, then **mints a rotating QR token and returns
-it**. That is the *coach/kiosk* side of the contract. There is **no branch that
-accepts a short code or a token and writes an `attendance` row.**
+**And the observable outcome is not an error card — it is a crash.** *(gate
+revision 3; my round-1 claim was false.)* Measured: submitting posts
+`{"session_id":"5e550000-…-0004","code":"ABC234"}`, gets `200` with a token
+body, and the page **white-screens** — `pageerror: TypeError: Cannot read
+properties of undefined (reading 'check_in_at')`, `document.body.innerText ===
+""`, `#root` empty. Root cause: `CheckinResult.tsx:343` casts with `payload as
+CheckinResponsePayload` without validating, and `:773`/`:792` then dereference
+`state.attendance.check_in_at`. There is no error boundary. Note
+`StudentHome`'s own code field does **not** crash on the same response — this is
+`CheckinResult`-specific.
 
-Consequence, and it is binding on what you may claim:
+**AC 5 is a file-level obligation:** the spec file itself must name
+`supabase/functions/checkin/` and state that HMAC validation, rate limiting,
+session liveness and team scope are **not proven here** because Deno does not
+run in this harness. A green suite must not read as QR coverage.
 
-- Submitting a code on `/checkin` **cannot** produce an `attendance` row in
-  this harness. Do not write an assertion that waits for one — it will hang for
-  the full timeout and then fail for the wrong reason.
-- You may drive the form for real (type, submit) and assert **the app's
-  handling of the documented contract** — that it posts, and renders the error
-  path when redemption does not come back with attendance.
-- **Acceptance criterion 5 is a file-level obligation**: the spec file itself
-  carries a comment naming `supabase/functions/checkin/` and stating that HMAC
-  validation, rate limiting, session liveness and team scope are **not proven
-  here**, because Deno does not run in this harness. A green suite must not
-  read as QR coverage.
+### 4b. The self-checkoff UI is unreachable in seeded fixtures — this is a fact, not a task
 
-## 4. Allowed Files
+*(gate revision 2. Do not go looking for a way in; the gate already did, in a
+browser, and there is none.)*
 
-Create or edit **only** these:
+- Library STEM Night (`e0e00000-…-0002`) buckets **Upcoming**, because its
+  session `5e550000-…-0008` is `scheduled` (2026-08-23) — and Upcoming passes
+  `allowSelfCheckoff={false}`.
+- Its only `completed` session, `5e550000-…-0006`, **already holds a
+  `method='coach'` row for Priya**, so `computeLockedSessionIds` would render it
+  `isDisabled` even if the section allowed it.
+- Measured: `/outreach` as student exposes only `button "Hide session details –
+  Library STEM Night"` and `radiogroup "Your RSVP for Library STEM Night on Sun,
+  Aug 23"`. **No `Mark attendance` button exists.** `/outreach/e0e00000-…-0002`
+  renders no self-checkoff control at all.
+
+## 5. Allowed Files
+
+Create or edit **only**:
 
 - `tests/e2e-personas/coach-checkin.spec.ts` *(extend)*
 - `tests/e2e-personas/student-checkin.spec.ts` *(new)*
 - `tests/e2e-personas/screenshots/*.png` *(generated by `capture()`)*
 - `docs/swarm/inbox/claude-gam-342-e2e-w1-checkin-findings.json` *(new)*
 
-**Forbidden.** Everything under `src/**`, `supabase/**`, `tests/e2e-harness/**`,
-`package.json`, `package-lock.json`, `.github/workflows/**`, `docs/swarm/**`
-other than the one inbox file above. **No production code changes are in scope.
+**Forbidden:** all of `src/**`, `supabase/**`, `tests/e2e-harness/**`,
+`package.json`, `package-lock.json`, `.github/workflows/**`, and every
+`docs/swarm/**` path except the one inbox file. **No production code changes.
 If a test cannot pass without one, that is a finding — emit it, do not fix it.**
 
-## 5. What to build
+## 6. What to build
 
-### 5a. `coach-checkin.spec.ts` — extend, do not rewrite
+### 6a. `coach-checkin.spec.ts` — extend, do not rewrite
 
-Keep the existing test exactly as it is; it is the proven baseline. Add:
+Keep the existing test verbatim; it is the proven baseline. Add:
 
-1. **A changed mark overwrites rather than duplicates (AC 3).** Sign in as
-   coach, go to `/meetings/live/${SEED.liveSession}`, mark Priya **Present**,
-   wait for the row, then mark her **Late**. Assert **exactly one** row for
-   `(session_id, student_id)` and that its `status` is `late`. One row is the
-   assertion that matters — `attendance` has `unique (session_id, student_id)`,
-   so a second insert would raise rather than duplicate; assert the **count and
-   the updated value together** so the test fails if the mark silently did not
-   take.
-2. **Screenshot** the console after the change.
+1. **A changed mark overwrites rather than duplicates (AC 3).** Coach →
+   `/meetings/live/${SEED.liveSession}` → mark Priya **Present**, wait for the
+   row, then mark **Late**. Assert **exactly one** row for
+   `(session_id, student_id)` **and** `status === 'late'` together, so the test
+   fails if the mark silently did not take. *(gate-measured to work:
+   `count=1, status=late`.)*
+2. `capture()` the console after the change.
 
-Locators, from the skill's trap list and the existing test — do not improvise:
+Locators — use verbatim, do not improvise:
 `page.getByRole('radiogroup', { name: 'Attendance for Priya Raman' })` then
-`.getByRole('radio', { name: 'Present' | 'Late' })`. An unscoped "Present"
-matches one control per student.
+`.getByRole('radio', { name: 'Present' | 'Late' })`.
 
-### 5b. `student-checkin.spec.ts` — new
+### 6b. `student-checkin.spec.ts` — new. Four describes.
 
-Three describes, in this order:
+**1. `/checkin` picker (the genuinely new ground).** Sign in as `student`,
+`goto('/checkin')`. Assert the error card is the designed landing (comment that
+it is). Assert the picker offers `Weeknight Build Session`, **and** corroborate
+it against the database — the session that button represents is the one
+`readRows` finds open. Click it; assert the code field and submit button appear.
+`capture()` both moments.
 
-1. **`/checkin` open-sessions picker and code form (Tier 2 boundary).**
-   Sign in as `student`. `goto('/checkin')`. Assert the error card appears
-   (this is the designed landing, and say so in a comment). Assert the picker
-   offers **`Weeknight Build Session`** — read from the real loader, so also
-   assert it against the database: the session the button represents is the one
-   `readRows` finds open. Click it, then **type a 6-character code into
-   `Check-in code`** and submit. Assert what the app does with the response.
-   **Do not assert an attendance row appears.** Screenshot the picker and the
-   form. Carry the §3 boundary comment at the top of this describe.
-2. **Student self-checkoff writes `method='self'` for real (AC 4).**
-   Sign in as `student`, go to `/outreach/e0e00000-0000-4000-8000-000000000002`
-   (Library STEM Night), open the self-checkoff dialog, and check off an
-   eligible day. Prove it by reading the row back: exactly one `attendance` row
-   for that `(session_id, student_id)` with `method='self'`, `status='present'`,
-   `recorded_by` = `PERSONAS.student.profileId`. Then **remove** it and prove
-   the row is gone. Screenshot the dialog with the day checked.
-   **Explore the dialog's real accessible names before writing selectors** —
-   read `SelfCheckoffDialog.tsx` first. If the student persona cannot reach this
-   surface at all in seeded data, that is a **finding**, not a workaround:
-   record it and move on.
-3. **A comment block stating what was not proven (AC 5).**
+Measured accessible names:
+```
+alert   "Couldn't check you in …"
+button  "Try again"
+button  "Weeknight Build Session"      // then, after clicking it:
+textbox "Check-in code"                // placeholder "ABC234"
+button  "Check in with code"
+```
 
-### 5c. Cleanup (AC 8)
+**2. The submit, as a boundary test — assert the crash, do not invent an error
+card.** Type a 6-character code, submit, and assert the measured outcome:
+`#root` empties / a `pageerror` fires. **Label it explicitly in a comment as a
+harness-shaped input the deployed function would not produce**, so nobody reads
+this as a production bug report. Assert **no `attendance` row** was written.
+File the finding in §6d. Note §6b.1 partially overlaps
+`student-parent.spec.ts:48-64`, which already drives a bad code through
+`StudentHome`'s field — say so; the new ground is the **picker**.
 
-`beforeEach` deletes only rows the run creates:
-`delete from attendance where session_id = '<the session this file writes to>'`
-— scoped per describe. **Never** delete seeded rows the other specs assert on.
-The suite must be re-runnable with no reseed; prove it by running it twice.
+**3. Self-checkoff proven against real RLS (AC 4).** The UI path does not exist
+(§4b), so prove the substance directly with `execAs`, which runs as
+`authenticated` with the persona's real `auth.uid()`
+(`personaHarness.ts:138-150`) — i.e. against the **real `self_insert` /
+`self_delete` policies**, not a superuser bypass:
 
-### 5d. Findings (AC 7)
+- `execAs('student', …)` INSERT into `attendance` with `method='self'`,
+  `status='present'`, `recorded_by = PERSONAS.student.profileId`, on a session
+  the student may self-record. Read the row back and compare values.
+- `execAs('student', …)` DELETE it and prove it is gone.
+- Comment that this is a **policy-level** proof and that the UI route is
+  unreachable, cross-referencing the filed finding. Do not describe it as UI
+  coverage.
+
+**4. Kiosk (AC 1/6; gate revision 4 — cheap and high value).** Coach →
+`/kiosk/5e550000-0000-4000-8000-000000000004`. Assert, measured:
+```
+heading level=1 "Weeknight Build Session"
+text "QR not available yet."
+text "1 of 3 checked in"
+text "No student names are shown on this screen."
+link "Back to meetings"
+```
+`capture()` it. This is the app degrading **honestly** when its Edge Function is
+absent — record that. File the missing-stand-in finding (§6d).
+
+### 6c. Cleanup (AC 8) — read this twice; it is the sharpest trap here
+
+- Reuse the established pattern: `execAdmin` delete scoped to the session, in
+  `beforeEach` (`coach-checkin.spec.ts:28-31`).
+- **Add an `afterAll` too**, not `beforeEach` only. `student-parent.spec.ts:48-64`
+  is **green today** and asserts **zero `method='self'` rows for Priya
+  globally** — and Playwright runs files in path order, so
+  `student-checkin.spec.ts` runs **before** it. A failed or aborted self-checkoff
+  test that leaves a row turns a passing test red. Clean up on the way out.
+- **FORBIDDEN:** `delete from attendance where session_id =
+  '5e550000-0000-4000-8000-000000000006'`. The gate measured that this removes
+  Priya's only `v_student_hours` row (`3.9999990941666667` → 0 rows), which
+  `student-parent.spec.ts:27-46` and `:121-128` read.
+- Prove re-runnability by running **your new/changed files** twice.
+
+### 6d. Findings (AC 7)
 
 Write `docs/swarm/inbox/claude-gam-342-e2e-w1-checkin-findings.json` in the
 schema in `docs/swarm/active/FINDINGS-PIPELINE.md` — **read that file for the
-exact schema**. Emit it **even if you find nothing** (empty `findings` array);
-a missing file is indistinguishable from never having looked. One finding is
-already known and **you must include it**:
+exact schema**. Emit it even if empty. **Four findings are already established
+and must be included** (all `source: e2e-personas`, `area: w1`):
 
-- **`vite preview` binds IPv6-only, so the persona suite's `webServer` times
-  out.** `severity: MINOR`, `area: w1`, `source: e2e-personas`,
-  `findingKey: e2e-personas/preview-ipv6-only-webserver-timeout`. Evidence:
-  `ss -lntp` shows `LISTEN [::1]:4174` while
-  `tests/e2e-harness/playwright.personas.config.ts:29` polls
-  `http://127.0.0.1:4174`; the run dies on `Timed out waiting 180000ms from
-  config.webServer` with the server up and answering on `localhost`.
-  `verifiedBy`: watched it happen. Consequence: a fresh checkout cannot run this
-  suite without knowing the flag; costs a session to diagnose.
+| findingKey | Severity | Substance |
+| -- | -- | -- |
+| `checkin/unvalidated-200-payload-white-screens-result-page` | MINOR | `CheckinResult.tsx:343` casts an unvalidated payload; `:773` then dereferences `state.attendance.check_in_at` → `TypeError`, blank `#root`, no error boundary. Harness-shaped input; `StudentHome` does not crash on the same response. `verifiedBy`: watched it happen. |
+| `e2e-personas/self-checkoff-unreachable-in-seeded-fixtures` | MAJOR | No reachable path to `SelfCheckoffDialog` for any persona in seeded data (§4b, with the two gating reasons). AC 4 could only be met at the policy layer. |
+| `e2e-personas/harness-missing-checkin-token-stand-in` | MINOR | `kiosk.ts:369` invokes `checkin-token`; `EDGE_FUNCTIONS` has no such key → 404, kiosk shows "QR not available yet". `tests/e2e-harness/**` is forbidden here, so a finding is the correct deliverable. |
+| `e2e-personas/preview-ipv6-only-webserver-timeout` | MINOR | `vite preview` binds `[::1]` only while `playwright.personas.config.ts:29` polls `127.0.0.1` → silent 180s `webServer` timeout on a fresh checkout. |
 
-### 5e. Mutation proofs (AC 2, 9) — this is the criterion most likely to be faked
+Also record, as a fifth finding or as a stated observation, the **five
+pre-existing suite failures** (§0) — including that `student-parent.spec.ts:66`
+fails because an RSVP control *does* now write, contradicting that test's
+premise.
 
-Per the `mutation-replay` skill. **Commit your work first, then mutate, then
-revert** (item 26's fast-tier working rule — `git checkout --` on an
-uncommitted fix loses the fix). For each, record the **real red output** and the
-exit code:
+### 6e. Mutation proofs (AC 2, 9) — the criterion most likely to be faked
 
-1. **Wrong session id.** Point a write assertion at a different session id →
-   the read-back finds nothing → **red**. Proves the assertion reads rows rather
-   than trusting the UI.
-2. **Upsert → insert.** You may not edit `src/**`. Prove AC 3's guard the
-   database way instead: with one row present, attempt a second INSERT for the
-   same `(session_id, student_id)` via `execAdmin` and show it raises on the
-   unique constraint — then show your spec's single-row assertion is what would
-   catch a duplicate if one ever appeared. **State plainly in the run output
-   which of the two you did**, and do not describe a database-level proof as if
-   it were a code mutation.
-3. **Self-checkoff method.** Mutate your own assertion to expect
+Per `mutation-replay`. **Commit first, then mutate, then revert** (item 26's
+rule — `git checkout --` on an uncommitted fix loses the fix). Record the
+**real red output** and exit code for each:
+
+1. **Wrong session id.** Repoint a read-back at a different session id → finds
+   nothing → **red**. Proves the assertion reads rows, not the UI.
+2. **AC 3's guard, database-side.** You may not edit `src/**`, so prove it with
+   the live constraint: with one row present, attempt a second INSERT for the
+   same `(session_id, student_id)` via `execAdmin` and show it raises on
+   `attendance_session_id_student_id_key` *(gate-confirmed live)*. **State
+   plainly that this is a database-level proof, not a code mutation** — do not
+   dress it up as switching an upsert to an insert.
+3. **Self-checkoff method.** Mutate your §6b.3 assertion to expect
    `method='coach'` → **red**.
 
-## 6. Evidence you must return
+## 7. Evidence you must return
 
-- The exact command(s) run and their **exit codes**.
-- Full pass/fail line for the persona suite, run **twice** (AC 8).
-- The **red output** of each mutation, verbatim, plus proof you restored it.
-- List of screenshots written.
-- The commit SHA your work landed in (item 21 — "clean" is not "committed").
+- Exact commands and their **exit codes**.
+- Full pass/fail lines, with your new files run **twice** (AC 8), and the
+  pre-existing 5 failures identified as such.
+- **Verbatim red output** of each mutation, plus proof you restored it.
+- Screenshots written.
+- The **commit SHA** your work landed in (item 21 — "clean" ≠ "committed").
 - Anything you could not prove, named. **Do not report green with an unfiled
-  finding** — the skill's "Before reporting green" section is binding.
+  finding.**
 
-## 7. Least confident decisions (item 19d)
+## 8. Least confident decisions (item 19d), round 2
 
-1. **That the self-checkoff dialog is reachable by the `student` persona at
-   `/outreach/e0e00000-…-0002` in seeded data.** I verified the loader, the
-   route and the event row, but I did **not** open the dialog in a browser. It
-   would be wrong if `OutreachDetail` gates the dialog on RSVP state, on the
-   session being past, or on a coach-only control. If so, §5b.2 is
-   unbuildable as written and the honest outcome is a finding plus a narrowed
-   spec — not an invented path.
-2. **That `/checkin`'s error-state landing is intended rather than a defect.**
-   I read the code and it is clearly deliberate (T400's comment explains the
-   picker exists precisely for this case), but a student landing on "Couldn't
-   check you in" as the *normal* entry is a UX claim I am not certain of. If the
-   gate finds evidence it is a defect, it is a finding, and the spec should
-   record behaviour without blessing it (skill: "Record behaviour; do not bless
-   it").
-3. **That asserting "the app posts to the Edge Function and handles the
-   response" is worth writing at all**, given §3 proves the stand-in cannot
-   redeem. It may be that the honest deliverable for `/checkin` is *only* the
-   picker plus the boundary statement, and that driving the submit tests the
-   stand-in rather than the app. I lean toward driving it because AC 1 demands
-   the form be typed into and submitted, but I would change this on argument.
-4. **That the kiosk is worth including at all.** The issue lists
-   `pages/meetings/Kiosk.tsx` in scope and claims it "currently reports 'QR not
-   available yet'". **I did not verify that claim**, and I deliberately left the
-   kiosk out of §5 — the stand-in *does* mint a token, so the kiosk may well
-   render a real QR, which would make the issue's claim stale. If the gate finds
-   the kiosk is cheaply drivable, adding a screenshot-and-assert describe is a
-   correct expansion. I would rather be told to add it than have a worker invent
-   kiosk coverage.
-5. **That `unique (session_id, student_id)` on `attendance` is live in the
-   applied migrations.** I read it in `selfCheckoff.ts`'s module doc, which is a
-   *comment*, and item 19c is explicit that a comment is not proof. §5e.2 leans
-   on it. Verify against the running cluster.
+1. **That `execAs('student', …)` will actually satisfy `self_insert`'s `with
+   check` on a session of my choosing.** The policy requires `student_id in
+   (select my_student_ids()) and method='self' and recorded_by = auth.uid()`.
+   `PERSONAS.student.profileId` is a **profile** id; `SEED.studentPriya` is a
+   **student** id. Confusing the two would make §6b.3 fail for a reason that
+   looks like a policy denial. The worker must check which column takes which.
+2. **That asserting a white-screen is a legitimate test rather than pinning a
+   bug.** The skill says record behaviour, do not bless it — §6b.2 follows that,
+   but a future reader could mistake it for approval. The comment is doing all
+   the work, and comments rot.
+3. **That `afterAll` is sufficient** to protect `student-parent.spec.ts`. It is
+   not run on a hard crash or a `--timeout` kill. If that worries the checker,
+   the stronger form is for §6b.3 to write to a session Priya has no `self` row
+   expectation on at all.
+4. **That the five pre-existing failures are genuinely pre-existing** and not
+   something this branch introduced. The gate reproduced them twice, but one is
+   explicitly caused by prior-run residue, which means the suite is not
+   currently idempotent and "pre-existing" is a slightly soft claim.
