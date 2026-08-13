@@ -173,3 +173,36 @@ take the heavier one.
   error here is exactly the "lies to a user about their own data" case item 18
   and item 26 exist for. *If this line is the last one in this file, the run
   died holding this subagent.*
+- **Worker VERDICT: work delivered, not self-certified.** The subagent returned;
+  it is not in flight. Landed at `6320933`, four commits, **exactly the three
+  Allowed Files** — orchestrator-verified independently rather than taken on
+  trust (item 21): `git diff --name-only 398f505..6320933` touches no `src/`,
+  `supabase/`, `tests/e2e-harness/`, `.github/` or `.claude/` path; the spec is
+  in the committed blob at 632 lines; the findings JSON parses and carries five
+  entries. Working tree clean, no worktrees left behind, cluster stopped.
+  - Six mutation proofs, each in its own worktree, five red with verbatim
+    output; all five new tests green before and after.
+  - **M4 disproved the packet's own mechanism claim — the third correction to
+    that one claim in this run.** `/meetings` does not render through
+    `loaders/meetings.ts`: `MeetingsList.tsx:2769` mounts `<StudentMeetingView
+    variant="own">` with no `loadStripData`, so `StudentMeetingView.tsx:1068`'s
+    default wins and the strip comes from **`loaders/checkin.ts`**. Mutating
+    `meetings.ts:519` left the test GREEN; mutating `checkin.ts:363-365` turned
+    it red. The same `participation_pct: number` type lie sits at
+    `checkin.ts:239`, `meetings.ts:302` **and** `reports.ts:221`; only
+    `ParticipationTab.tsx:838`'s runtime null check guards any of them.
+    Revision 1 asserted the mechanism, round 1 corrected it, round 2 confirmed
+    the citation — and only *running* it found the path was wrong. Item 26's
+    "a gate that only reads is worth much less than one that runs", demonstrated
+    on this run rather than quoted from it.
+  - **Six gates all exit 0** at `6320933` (tsc, vite build, format:check,
+    eslint 0 errors, vitest 2443 tests, scoped vitest 112 tests).
+  - **Baseline is RED and is reported separately, not absorbed:** five persona
+    tests fail on this branch *without* the new spec — `coach-meeting.spec.ts:88`
+    and `:115` (the latter with `42501` RLS on `events`), and
+    `student-parent.spec.ts:27,:66,:121`. Filed as its own finding rather than
+    diagnosed; it is not this task's scope.
+  - Five findings emitted, none filed to Linear by the worker (correct — the
+    orchestrator files).
+- **Dispatching `checker-reviewer` (opus)** on the delivered work. *If this line
+  is the last one in this file, the run died holding this subagent.*
