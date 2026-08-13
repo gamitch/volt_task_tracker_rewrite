@@ -99,6 +99,13 @@ function cleanUpSpecStudents(): void {
   execAdmin(`delete from rsvps where student_id in (select id from students where display_name like 'E2E %')`);
   execAdmin(`delete from student_teams where student_id in (select id from students where display_name like 'E2E %')`);
   execAdmin(`delete from students where display_name like 'E2E %'`);
+  // Signing in creates rows the spec never asked for: `calendar_feeds` and
+  // `notification_prefs` are provisioned per profile on first load, and both
+  // reference `profiles` ON DELETE RESTRICT. Discovered by watching this
+  // cleanup fail with 23503 on the second `beforeEach`.
+  execAdmin(`delete from calendar_feeds where profile_id in (select id from profiles where email like 'e2e-%@volt.test')`);
+  execAdmin(`delete from notification_prefs where profile_id in (select id from profiles where email like 'e2e-%@volt.test')`);
+  execAdmin(`delete from audit_log where actor in (select id from profiles where email like 'e2e-%@volt.test')`);
   execAdmin(`delete from profiles where email like 'e2e-%@volt.test'`);
   execAdmin(`delete from auth.users where email like 'e2e-%@volt.test'`);
 }
@@ -167,8 +174,27 @@ function confirmedHoursOf(studentId: string): number {
   return Number(rows[0].confirmed_hours);
 }
 
+/**
+ * Drop the persisted session so the NEXT sign-in reaches the real login form.
+ *
+ * These tests deliberately read one screen as staff and another as the student
+ * it is about, in one test, because that is the comparison the task is for. But
+ * `LoginPage.tsx:168-172` navigates straight off `/login` whenever a resolved
+ * user is already present, so a second `signIn` in the same context would hang
+ * on a form that is never rendered. Clearing web storage is the smallest thing
+ * that restores the anonymous state the harness's `signIn` assumes.
+ */
+async function signOutInBrowser(page: Page): Promise<void> {
+  await page.goto('/');
+  await page.evaluate(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+  });
+}
+
 /** `signIn` only knows the four fixed personas; these students are ours. */
 async function signInAsEmail(page: Page, email: string): Promise<void> {
+  await signOutInBrowser(page);
   await page.goto('/login');
   await page.locator('input[name="email"]').fill(email);
   await page.locator('input[name="password"]').fill(PERSONA_PASSWORD);
@@ -188,6 +214,16 @@ async function openReportsTab(page: Page, label: 'Participation' | 'Hours' | 'Ev
 /** The `<tr>` carrying this student, in whichever report table is on screen. */
 function rowFor(page: Page, studentName: string) {
   return page.getByRole('row').filter({ hasText: studentName }).first();
+}
+
+/**
+ * Both report tabs render ONE `<table>` PER TEAM (`ParticipationTab.tsx:1011`,
+ * `HoursTab.tsx:1272`), so every column header exists twice on this page and an
+ * unscoped `getByRole('columnheader')` is a strict-mode violation. Scope to the
+ * table carrying the student under test.
+ */
+function tableWith(page: Page, studentName: string) {
+  return page.getByRole('table').filter({ hasText: studentName }).first();
 }
 
 test.beforeEach(() => {
@@ -217,12 +253,16 @@ test.describe('RPT-01 reports shell', () => {
     // Participation is the default tab. Wait for REAL rows: every list on this
     // app renders an empty-state card while its query is in flight.
     await expect(rowFor(page, 'Priya Raman')).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByRole('columnheader', { name: 'Participation %' })).toBeVisible();
+    await expect(
+      tableWith(page, 'Priya Raman').getByRole('columnheader', { name: 'Participation %' }),
+    ).toBeVisible();
     await capture(page, '70-coach-reports-participation');
 
     await openReportsTab(page, 'Hours');
-    await expect(page.getByRole('columnheader', { name: 'Confirmed hrs' })).toBeVisible({ timeout: 20_000 });
-    await expect(rowFor(page, 'Priya Raman')).toBeVisible();
+    await expect(rowFor(page, 'Priya Raman')).toBeVisible({ timeout: 20_000 });
+    await expect(
+      tableWith(page, 'Priya Raman').getByRole('columnheader', { name: 'Confirmed hrs' }),
+    ).toBeVisible();
     await capture(page, '71-coach-reports-hours');
 
     await openReportsTab(page, 'Events');
@@ -257,21 +297,28 @@ test.describe('RPT-01 reports shell', () => {
     await page.getByRole('button', { name: 'Sort descending' }).click();
     const descending = await frcStudentOrder(page);
 
-    expect(ascending.length).toBeGreaterThan(2);
-    expect(descending).toEqual([...ascending].reverse());
+    expect(ascending.length).toBeGreaterThan(3);
+    expect(descending).not.toEqual(ascending);
+    // Deliberately NOT `toEqual([...ascending].reverse())`: Priya and Sam are
+    // both on 100.0, `compareParticipationRows` returns 0 for that pair, and
+    // `Array.prototype.sort` is stable — so a tie keeps its incoming order in
+    // BOTH directions and a strict reversal is not what the code promises.
+    //
     // `compareParticipationRows` (ParticipationTab.tsx:632) places a NULL
     // participation with the `-1` sentinel, so the all-excused student sorts
-    // FIRST ascending — below a genuine 0.0, which is exactly the ordering the
-    // three-state distinction implies.
+    // BELOW a genuine 0.0 — which is exactly the ordering the three-state
+    // distinction implies, and the ends of the list are unambiguous.
     expect(ascending[0]).toBe(ALL_EXCUSED.name);
     expect(ascending[1]).toBe(GENUINE_ZERO.name);
+    expect(descending[descending.length - 1]).toBe(ALL_EXCUSED.name);
+    expect(descending[descending.length - 2]).toBe(GENUINE_ZERO.name);
     await capture(page, '74-coach-reports-participation-sorted');
   });
 });
 
-/** Student names, in render order, from the FRC group's table. */
+/** Student names, in render order, from the FRC group's own table. */
 async function frcStudentOrder(page: Page): Promise<string[]> {
-  const rows = await page.getByRole('row').allInnerTexts();
+  const rows = await tableWith(page, 'Priya Raman').getByRole('row').allInnerTexts();
   return rows
     .map((text) => text.split('\t')[0].split('\n')[0].trim())
     .filter((name) => name !== '' && name !== 'Student');
@@ -303,8 +350,11 @@ test.describe('RPT-03 hours accounting', () => {
     await signIn(page, 'coach');
     await page.goto('/reports');
     await openReportsTab(page, 'Hours');
-    await expect(page.getByRole('columnheader', { name: 'Confirmed hrs' })).toBeVisible({ timeout: 20_000 });
     const hoursRow = rowFor(page, 'Priya Raman');
+    await expect(hoursRow).toBeVisible({ timeout: 20_000 });
+    await expect(
+      tableWith(page, 'Priya Raman').getByRole('columnheader', { name: 'Confirmed hrs' }),
+    ).toBeVisible();
     const hoursTabConfirmed = (await hoursRow.getByRole('cell').nth(1).innerText()).trim();
     expect(hoursTabConfirmed).toBe(dbHours.toFixed(1));
     expect(hoursTabConfirmed).toBe('4.0');
@@ -329,9 +379,29 @@ test.describe('RPT-03 hours accounting', () => {
     // must agree exactly. If this ever goes red on a fixture that grows a
     // dual-team member, the strip — not this assertion — is what is wrong.
     expect(teamSum).toBe(Number(seasonKpi.active_students_count));
-    // And the strip on screen agrees with the rollup it claims to show.
-    const activeTile = page.getByText('Active students').locator('..');
-    await expect(activeTile).toContainText(String(seasonKpi.active_students_count));
+
+    // And the same comparison as a user meets it: the strip prints the season
+    // headline and its own per-team breakdown one line apart
+    // (`KpiStrip.tsx:291-293`, `formatTeamBreakdown` at `:398-403`), so the two
+    // can be read against each other without leaving the screen.
+    const activeTile = page
+      .getByRole('heading', { name: 'Active students', exact: true })
+      .locator('..');
+    await expect(activeTile).toBeVisible({ timeout: 20_000 });
+    const tileLines = (await activeTile.innerText())
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line !== '');
+    expect(tileLines[0]).toBe('Active students');
+    const headlineCount = Number(tileLines[1]);
+    expect(headlineCount).toBe(Number(seasonKpi.active_students_count));
+    // "Volt Robotics 9911 5 · Volt Junior 4402 2" — the count is the trailing
+    // integer of each segment (the team NAMES contain digits too).
+    const breakdownCounts = tileLines[2]
+      .split('·')
+      .map((segment) => Number(/(\d+)\s*$/.exec(segment.trim())?.[1] ?? NaN));
+    expect(breakdownCounts).toHaveLength(teamCounts.length);
+    expect(breakdownCounts.reduce((sum, n) => sum + n, 0)).toBe(headlineCount);
 
     // --- surface 2: the CoachHome leaderboard. Same `v_student_hours` read as
     // the Hours tab (`leaderboard.ts:137-142`), so this is NOT an independent
@@ -346,6 +416,7 @@ test.describe('RPT-03 hours accounting', () => {
 
     // --- surface 3: StudentHome, through `v_student_goal_projection`, which is
     // `coalesce(sh.confirmed_hours, 0)` over the same view.
+    await signOutInBrowser(page);
     await signIn(page, 'student');
     const goalBar = page.getByText(/ h \(/).first();
     await expect(goalBar).toBeVisible({ timeout: 20_000 });
