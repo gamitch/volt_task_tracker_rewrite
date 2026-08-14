@@ -140,3 +140,11 @@ a dispatched run hits".
   REVISE escalates, and the gate explicitly separated "must fix before a worker
   reads §1" from "a checker can catch later").
 - **2026-08-14 10:56Z — five fold-in corrections applied; packet is DISPATCHABLE.**
+- **2026-08-14 10:58Z — `worker-implementer` DISPATCHED**, blocking
+  (`run_in_background: false`). **Model: pinned default (sonnet), NO `model:
+  "opus"` override** — item 18's four triggers are each absent (no migration, no
+  RLS or `security definer`, no metric-view SQL, no auth/session/role logic) and
+  item 25's second obligation forbids bumping tier because a topic sounds
+  sensitive. Both premise-gate rounds independently confirmed the override is
+  not triggered. **If this line is the last one in this file, the run died
+  holding this subagent** and no implementation exists.
