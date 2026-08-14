@@ -266,10 +266,199 @@ export function makeSetStudentActive(
 /** Default `onSetStudentActive` for `StudentsTab.tsx`. */
 export const setStudentActive: SetStudentActiveFn = makeSetStudentActive();
 
+/* ==========================================================================
+ * GAM-340 (Part 1) -- the `student_teams` writer.
+ *
+ * Until this change the roster had NO writer for `student_teams` at all: the
+ * only application access to that table anywhere in `src/` was the read at
+ * `queryActiveTeamIdsByStudentId` above. Every student created or re-teamed
+ * through the roster since 2026-07-21 therefore drifted away from
+ * `20260721000000_student_teams.sql`'s one-time backfill, and since
+ * 2026-08-06 that drift is user-visible: `v_student_participation`
+ * INNER-joins `student_teams`
+ * (`20260806000000_met01_explicit_marks.sql:109`, `join student_teams st on
+ * st.student_id = s.id and st.left_on is null`) and uses `st.team_id` again
+ * at `:114` in the `e.team_ids` predicate, so a membership-less student
+ * produces zero participation rows rather than a 0%.
+ *
+ * Application code only -- no migration, no schema change, no RLS change.
+ *
+ * -------------------------------------------------------------------------
+ * (a) UPSERT, never INSERT. `student_teams`' primary key is `(student_id,
+ * team_id)` (`20260721000000_student_teams.sql:19-26`), and that migration
+ * states the intended semantics verbatim: "re-joining a team after leaving is
+ * a future UPDATE of `left_on` back to null, not a new row." A student who
+ * leaves team A, joins B, then returns to A must therefore REACTIVATE the
+ * existing `(student, A)` row; a plain `insert` raises
+ * `duplicate key value violates unique constraint "student_teams_pkey"`
+ * (SQLSTATE 23505 -- measured on a real cluster during this issue's premise
+ * gate) and the roster edit fails outright.
+ *
+ * (b) THE UPSERT PAYLOAD DELIBERATELY OMITS `joined_on`. Measured through a
+ * real `postgrest/postgrest` container against a row seeded `joined_on =
+ * 2026-01-05, left_on = 2026-06-30`, the payload below generates:
+ *
+ *   ON CONFLICT("student_id","team_id") DO UPDATE SET
+ *     "left_on" = EXCLUDED."left_on",
+ *     "student_id" = EXCLUDED."student_id",
+ *     "team_id" = EXCLUDED."team_id"
+ *
+ * leaving `joined_on` at 2026-01-05 and setting `left_on` to null. The
+ * counterfactual -- the same request WITH `joined_on` in the payload -- adds
+ * `"joined_on" = EXCLUDED."joined_on"` to that `DO UPDATE SET` list and
+ * resets the date. Omitting the column is what preserves an existing row's
+ * join date, while a brand-new row still takes the column's own
+ * `default current_date`. Do not "complete" this payload.
+ *
+ * (c) CLOSE ONLY THE PREVIOUS PRIMARY TEAM -- never every non-matching
+ * membership. The schema is deliberately multi-team (`students.team_id` is
+ * the LEGACY primary column only; `StudentHome.tsx:274` and `parentHome.ts`
+ * both exercise dual ACTIVE memberships, and `tests/rls/gam299_seed.sql`
+ * fixtures one). The roster edit form carries exactly ONE `teamId`, so a
+ * writer that closed every active membership whose `team_id` differs from
+ * the new one would silently delete a dual-team student's legitimate second
+ * team -- turning a participation-gap fix into a participation-LOSS bug in
+ * precisely the population the junction table exists for. Hence the close
+ * below filters POSITIVELY on `team_id = previousTeamId`. Never `.neq()`.
+ *
+ * (d) THE UNCONDITIONAL UPSERT ON AN UNCHANGED TEAM IS INTENTIONAL, AND SO
+ * IS ITS ONE ODD CONSEQUENCE. `makeUpdateStudent` upserts `payload.teamId`
+ * even when the team did not change, so that an edit to any field reconciles
+ * a membership-less student. That also re-opens a membership somebody
+ * deliberately closed while `students.team_id` still names that same team --
+ * configuration (a) of `20260812000000_events_rls_active_membership_read.sql
+ * :85-89`. This is accepted, not a bug to guard: a row saying "left team X"
+ * while the roster says "is on team X" is contradictory data, and the roster
+ * is the source of truth for a student's current team. Note the claim is
+ * positive only -- "is on X", never "and only X" -- which is why it does not
+ * contradict (c): it authorises OPENING X, never closing anything else. A
+ * guard of the form "upsert only if no ACTIVE row exists" was evaluated and
+ * rejected because it does not prevent this case at all (in configuration
+ * (a) there IS no active row for the pair, so the guarded upsert fires
+ * anyway) -- it would add a read and change nothing.
+ *
+ * (e) THESE WRITES ARE NOT ATOMIC, AND THAT IS A KNOWN RISK RATHER THAN A
+ * DEFECT SOLVED HERE. They are separate PostgREST statements issued from a
+ * browser; there is no transaction. So the ORDER is load-bearing -- the
+ * `students` write goes first, so the roster surface never shows a student
+ * whose base row failed to save -- and a membership failure is allowed to
+ * THROW through `runMutation`'s existing `toLoaderError` path. It is never
+ * swallowed: a silent catch here would recreate the exact invisible-drift
+ * defect this change exists to fix. A trigger or an RPC would be atomic and
+ * is the better long-term answer; it is excluded here because it is a
+ * migration, which constitution item 16 reserves for the owner, and the
+ * whole value of Part 1 is that it needs no migration applied.
+ *
+ * One measured caveat on "let it throw": an RLS-filtered `UPDATE` does not
+ * raise, it returns `UPDATE 0` silently, so the close cannot be relied on to
+ * throw for an actor without staff rights. That is unreachable in production
+ * and needs no defensive code -- `/roster` is gated by
+ * `RequireRole allowedRoles={['coach','admin']}` (`RosterShell.tsx:236`) and
+ * `is_staff()` is true for a `coach` profile.
+ *
+ * (f) THIS WRITER DOES NOT REPAIR EITHER ALREADY-BROKEN POPULATION, and
+ * cannot: a code change does not retroactively fix existing rows. Students
+ * with NO membership row gain a correct one the next time they are edited.
+ * Students carrying a STALE ACTIVE row for a team they already left keep it
+ * -- the close below targets the previous `students.team_id`, for which such
+ * a student has no row at all, and from the application their stale row is
+ * indistinguishable from a legitimate second team. They gain a correct row
+ * and keep an incorrect one, which is an improvement, not a repair. Both
+ * backfills are owner calls filed as their own issues.
+ * ==========================================================================
+ */
+
+/**
+ * `left_on` for a close -- a UTC-derived `YYYY-MM-DD` date string.
+ *
+ * NOT `current_date`: PostgREST accepts only JSON values, not SQL
+ * expressions. UTC is chosen over America/Chicago deliberately, matching the
+ * two existing in-repo derivations of "today" for a `date` column
+ * (`ScheduleMeetingsDialog.tsx:369`, `OutreachEventDialog.tsx:699,710`);
+ * introducing a second, Chicago-derived date convention for one column would
+ * be the larger inconsistency.
+ *
+ * The drift is stated rather than hidden: a close stamped between 19:00 and
+ * midnight Chicago time records the FOLLOWING day. That is inert today --
+ * every consumer of `left_on` in this repo tests `left_on is null` and none
+ * performs date arithmetic on the value. If a consumer ever reads the value
+ * itself, revisit this.
+ */
+function membershipCloseDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Opens -- or re-opens -- exactly one `(student_id, team_id)` membership.
+ * See (a), (b) and (d) of the GAM-340 block above for why this is an upsert,
+ * why `joined_on` is absent, and why it is unconditional.
+ */
+function makeOpenStudentTeamMembership(getClient: () => SupabaseClient) {
+  return runMutation<{ studentId: string; teamId: string }>(
+    (client, args) =>
+      client
+        .from('student_teams')
+        .upsert(
+          { student_id: args.studentId, team_id: args.teamId, left_on: null },
+          { onConflict: 'student_id,team_id' },
+        ),
+    getClient,
+  );
+}
+
+/**
+ * Closes exactly ONE membership: the student's ACTIVE row for the team they
+ * are leaving. Filtered positively on `team_id` -- see (c) above. `.neq()` is
+ * never used here, and the `.is('left_on', null)` predicate is the same
+ * ACTIVE test every already-migrated reader uses.
+ */
+function makeCloseStudentTeamMembership(getClient: () => SupabaseClient) {
+  return runMutation<{ studentId: string; teamId: string }>(
+    (client, args) =>
+      client
+        .from('student_teams')
+        .update({ left_on: membershipCloseDate() })
+        .eq('student_id', args.studentId)
+        .eq('team_id', args.teamId)
+        .is('left_on', null),
+    getClient,
+  );
+}
+
+/**
+ * GAM-340 -- the previous-team read-back for `makeUpdateStudent`.
+ * `UpdateStudentFn`'s signature is `(id, payload)` and carries no previous
+ * team, so the writer resolves it rather than having it threaded in from
+ * `StudentsTab.tsx`'s call site. That is a deliberate choice, measured:
+ * threading `editTarget.teamId` from an already-stale browser snapshot does
+ * not close the wrong team, it fails to close ANY team, and in one of the two
+ * concurrent-edit scenarios it leaves a team ACTIVE with nobody on it -- i.e.
+ * it re-creates the very drift population this change exists to eliminate.
+ * The read-back produces the roster-consistent state in both scenarios, for
+ * one extra round trip.
+ */
+interface StudentTeamIdDbRow {
+  team_id: string;
+}
+
+async function queryStudentTeamIdById(
+  client: SupabaseClient,
+  studentId: string,
+): Promise<LoaderQueryResult<StudentTeamIdDbRow>> {
+  const result = await client.from('students').select('team_id').eq('id', studentId).single();
+  return { data: (result.data as StudentTeamIdDbRow | null) ?? null, error: result.error };
+}
+
 /**
  * Known Context/Traps #6 -- real `students` insert. Never writes
  * `profile_id`/`id` (see module doc above). Resolves the freshly-written row
  * so the caller can merge it into local state without a full reload.
+ *
+ * GAM-340: also opens the new student's `student_teams` membership for
+ * `payload.teamId`, AFTER the `students` insert resolves (that insert already
+ * does `.select().single()`, so the DB-assigned id is in hand). The return
+ * value is unchanged -- still the mapped `StudentRow` from the `students`
+ * insert -- and so is `CreateStudentFn`'s signature.
  */
 export function makeCreateStudent(
   getClient: () => SupabaseClient = getSupabaseClient,
@@ -289,7 +478,13 @@ export function makeCreateStudent(
         .single(),
     getClient,
   );
-  return async (payload) => mapStudentDbRowToStudentRow(await mutate(payload));
+  const openMembership = makeOpenStudentTeamMembership(getClient);
+  return async (payload) => {
+    const row = await mutate(payload);
+    // Deliberately NOT wrapped in a try/catch -- see (e) above.
+    await openMembership({ studentId: row.id, teamId: payload.teamId });
+    return mapStudentDbRowToStudentRow(row);
+  };
 }
 
 /** Default `onCreateStudent` for `StudentsTab.tsx`. */
@@ -298,10 +493,19 @@ export const createStudent: CreateStudentFn = makeCreateStudent();
 /**
  * Known Context/Traps #6 -- real `students` update by id. Never writes
  * `profile_id`/`id`.
+ *
+ * GAM-340: also moves the student's `student_teams` membership. Ordered
+ * read-back -> `students` update -> close (only when the team actually
+ * changed, and only for the previous team) -> open. See the GAM-340 block
+ * above for every decision in that sentence.
  */
 export function makeUpdateStudent(
   getClient: () => SupabaseClient = getSupabaseClient,
 ): UpdateStudentFn {
+  const loadPreviousTeamId = createLoader<string, StudentTeamIdDbRow>(
+    queryStudentTeamIdById,
+    getClient,
+  );
   const mutate = runMutation<{ id: string; payload: StudentWritePayload }, StudentDbRow>(
     (client, args) =>
       client
@@ -318,7 +522,21 @@ export function makeUpdateStudent(
         .single(),
     getClient,
   );
-  return async (id, payload) => mapStudentDbRowToStudentRow(await mutate({ id, payload }));
+  const closeMembership = makeCloseStudentTeamMembership(getClient);
+  const openMembership = makeOpenStudentTeamMembership(getClient);
+  return async (id, payload) => {
+    // Read BEFORE the update -- afterwards `students.team_id` is already the
+    // new team and the previous one is unrecoverable.
+    const previous = await loadPreviousTeamId(id);
+    const row = await mutate({ id, payload });
+    const previousTeamId = previous?.team_id ?? null;
+    if (previousTeamId !== null && previousTeamId !== payload.teamId) {
+      await closeMembership({ studentId: id, teamId: previousTeamId });
+    }
+    // Unconditional -- fires on an unchanged team too, see (d) above.
+    await openMembership({ studentId: id, teamId: payload.teamId });
+    return mapStudentDbRowToStudentRow(row);
+  };
 }
 
 /** Default `onUpdateStudent` for `StudentsTab.tsx`. */

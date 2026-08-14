@@ -1028,7 +1028,15 @@ describe('createStudent / updateStudent (T089 real mutation, module doc #14)', (
     });
     const selectSpy = vi.fn(() => ({ single: singleSpy }));
     const insertSpy = vi.fn(() => ({ select: selectSpy }));
-    const fromSpy = vi.fn(() => ({ insert: insertSpy }));
+    // GAM-340: `createStudent` now issues a SECOND `from()`, on
+    // `student_teams`, so this fake dispatches by table instead of answering
+    // the same shape for every one. Same table-aware precedent this file
+    // already uses for the three-table load test above (`:919`). Nothing
+    // below this line changed: every pre-existing assertion is byte-identical.
+    const upsertSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+    const fromSpy = vi.fn((table: string) =>
+      table === 'student_teams' ? { upsert: upsertSpy } : { insert: insertSpy },
+    );
     const client = { from: fromSpy } as unknown as SupabaseClient;
 
     const create = makeCreateStudent(() => client);
@@ -1073,10 +1081,22 @@ describe('createStudent / updateStudent (T089 real mutation, module doc #14)', (
       },
       error: null,
     });
-    const selectSpy = vi.fn(() => ({ single: singleSpy }));
-    const eqSpy = vi.fn(() => ({ select: selectSpy }));
+    // GAM-340: `updateStudent` now issues TWO distinct entry points on
+    // `students` -- the pre-existing `.update(...).eq('id', id).select()
+    // .single()` write chain, and a new `.select('team_id').eq('id', id)
+    // .single()` previous-team read-back -- plus a `student_teams` upsert.
+    // `selectSpy`/`eqSpy` are therefore mutually recursive so BOTH chains
+    // resolve off the same two spies; the read-back reads `team_id` off the
+    // same mocked row ('team-2'), which equals the submitted teamId, so no
+    // close is issued here. Every pre-existing assertion below is
+    // byte-identical.
+    const selectSpy = vi.fn(() => ({ single: singleSpy, eq: eqSpy }));
+    const eqSpy = vi.fn(() => ({ select: selectSpy, single: singleSpy }));
     const updateSpy = vi.fn(() => ({ eq: eqSpy }));
-    const fromSpy = vi.fn(() => ({ update: updateSpy }));
+    const upsertSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+    const fromSpy = vi.fn((table: string) =>
+      table === 'student_teams' ? { upsert: upsertSpy } : { update: updateSpy, select: selectSpy },
+    );
     const client = { from: fromSpy } as unknown as SupabaseClient;
 
     const update = makeUpdateStudent(() => client);

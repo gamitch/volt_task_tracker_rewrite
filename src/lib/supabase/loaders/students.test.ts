@@ -23,9 +23,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it, vi } from 'vitest';
 import {
   aggregateStudentHomeParticipation,
+  makeCreateStudent,
   makeLoadStudentHomeData,
   makeResolveStudentIsActive,
   makeResolveStudentScope,
+  makeUpdateStudent,
 } from './students';
 
 /**
@@ -948,5 +950,640 @@ describe('makeResolveStudentIsActive (T189)', () => {
     expect(mutatedRow).toEqual({ data: { is_active: false }, error: null });
     expect(maybeSingleSpy).toHaveBeenCalledTimes(1);
     expect(eqSpy).not.toHaveBeenCalled();
+  });
+});
+
+/* ==========================================================================
+ * GAM-340 -- `makeCreateStudent`/`makeUpdateStudent` now write
+ * `student_teams`. Before this change neither function touched the junction
+ * table at all, and neither had any coverage in this file (its old dispatcher
+ * threw `unexpected table: students` for the write chains).
+ *
+ * The harness below is deliberately STATEFUL rather than a passthrough spy
+ * recorder. Call-shape assertions alone cannot distinguish the prescribed
+ * writer from the one Trap B forbids: a `.neq('team_id', newTeam)` close
+ * never NAMES a bystander team, so "assert no write targets team C" passes
+ * for the very design that wipes team C out. Only the post-write row state
+ * separates them, which is the `scratch-postgres` skill's own standing rule
+ * -- assert the rows, not the SQL you issued. `student_teams` rows are
+ * therefore really held here, really filtered by the recorded predicates, and
+ * really mutated.
+ *
+ * `.neq()` and `.insert()` are exposed on the `student_teams` fake even
+ * though the correct implementation calls NEITHER. That is not dead scaffolding:
+ * without them the criterion-3 and criterion-4 mutation replays would die on
+ * `TypeError: ....neq is not a function` instead of failing on the assertion
+ * they exist to exercise -- a misdirecting red this file already has a
+ * documented convention against (see the eq-drop proofs above, whose whole
+ * point is that the mutation's failure "genuinely comes from the intended
+ * `eqSpy` assertion going red, not from an unrelated crash").
+ *
+ * All names fabricated (constitution item 6).
+ * ==========================================================================
+ */
+
+interface GAM340MembershipRow {
+  student_id: string;
+  team_id: string;
+  joined_on: string;
+  left_on: string | null;
+}
+
+/** The `default current_date` a brand-new `student_teams` row would take. */
+const GAM340_ROW_DEFAULT_JOINED_ON = '2026-08-14';
+
+function gam340Membership(
+  studentId: string,
+  teamId: string,
+  overrides: Partial<GAM340MembershipRow> = {},
+): GAM340MembershipRow {
+  return {
+    student_id: studentId,
+    team_id: teamId,
+    joined_on: '2026-01-05',
+    left_on: null,
+    ...overrides,
+  };
+}
+
+/** `{ [teamId]: 'active' | 'closed' }` -- the shape criterion 3 asserts. */
+function gam340MembershipState(rows: readonly GAM340MembershipRow[]): Record<string, string> {
+  return Object.fromEntries(
+    rows.map((row) => [row.team_id, row.left_on === null ? 'active' : 'closed']),
+  );
+}
+
+interface GAM340MembershipFilterChain {
+  eq: (column: string, value: unknown) => GAM340MembershipFilterChain;
+  neq: (column: string, value: unknown) => GAM340MembershipFilterChain;
+  is: (column: string, value: unknown) => GAM340MembershipFilterChain;
+  then: (
+    onFulfilled: (value: {
+      data: null;
+      error: { message: string; code: string } | null;
+    }) => unknown,
+    onRejected?: (reason: unknown) => unknown,
+  ) => Promise<unknown>;
+}
+
+interface GAM340ClientOptions {
+  /** Seeded `student_teams` rows, mutated in place by the writes under test. */
+  memberships?: GAM340MembershipRow[];
+  /** What the previous-team read-back (`students.team_id`) resolves. */
+  previousTeamId?: string;
+  /** Overrides on the row the `students` insert/update resolves. */
+  studentRow?: Partial<{
+    id: string;
+    display_name: string;
+    team_id: string;
+    grad_year: number | null;
+    is_active: boolean;
+    goal_hours_override: number | null;
+  }>;
+  /** Injected PostgREST error on the `student_teams` upsert. */
+  upsertError?: { message: string; code: string };
+}
+
+function makeGAM340RosterWriteClient(options: GAM340ClientOptions = {}) {
+  const memberships: GAM340MembershipRow[] = (options.memberships ?? []).map((row) => ({ ...row }));
+  const studentRow = {
+    id: 'student-gam340',
+    profile_id: null,
+    display_name: 'Rowan Vance',
+    team_id: 'team-alder',
+    grad_year: null,
+    is_active: true,
+    goal_hours_override: null,
+    created_at: '2026-01-01T00:00:00.000Z',
+    ...options.studentRow,
+  };
+
+  // `students` -- the previous-team read-back chain
+  // (`.select('team_id').eq('id', id).single()`).
+  const readBackSingleSpy = vi
+    .fn()
+    .mockResolvedValue(
+      options.previousTeamId === undefined
+        ? { data: null, error: null }
+        : { data: { team_id: options.previousTeamId }, error: null },
+    );
+  const readBackEqSpy = vi.fn(() => ({ single: readBackSingleSpy }));
+  const readBackSelectSpy = vi.fn(() => ({ eq: readBackEqSpy }));
+
+  // `students` -- the pre-existing write chains, both ending `.select().single()`.
+  const writeSingleSpy = vi.fn().mockResolvedValue({ data: studentRow, error: null });
+  const writeSelectSpy = vi.fn(() => ({ single: writeSingleSpy }));
+  const writeEqSpy = vi.fn(() => ({ select: writeSelectSpy }));
+  const studentsInsertSpy = vi.fn(() => ({ select: writeSelectSpy }));
+  const studentsUpdateSpy = vi.fn(() => ({ eq: writeEqSpy }));
+
+  // `student_teams` -- stateful.
+  const membershipEqSpy = vi.fn();
+  const membershipNeqSpy = vi.fn();
+  const membershipIsSpy = vi.fn();
+
+  function makeMembershipFilterChain(values: Record<string, unknown>): GAM340MembershipFilterChain {
+    const predicates: ((row: GAM340MembershipRow) => boolean)[] = [];
+    let applied = false;
+    function apply(): void {
+      if (applied) return;
+      applied = true;
+      for (const row of memberships) {
+        if (predicates.every((predicate) => predicate(row))) Object.assign(row, values);
+      }
+    }
+    const chain: GAM340MembershipFilterChain = {
+      eq: (column, value) => {
+        membershipEqSpy(column, value);
+        predicates.push((row) => (row as unknown as Record<string, unknown>)[column] === value);
+        return chain;
+      },
+      neq: (column, value) => {
+        membershipNeqSpy(column, value);
+        predicates.push((row) => (row as unknown as Record<string, unknown>)[column] !== value);
+        return chain;
+      },
+      is: (column, value) => {
+        membershipIsSpy(column, value);
+        predicates.push((row) => (row as unknown as Record<string, unknown>)[column] === value);
+        return chain;
+      },
+      then: (onFulfilled, onRejected) => {
+        apply();
+        return Promise.resolve({ data: null, error: null }).then(onFulfilled, onRejected);
+      },
+    };
+    return chain;
+  }
+
+  const membershipUpdateSpy = vi.fn((values: Record<string, unknown>) =>
+    makeMembershipFilterChain(values),
+  );
+
+  // Declared with one parameter, but `vi.fn` records EVERY argument the call
+  // site passed -- which is what lets the `{ onConflict: 'student_id,team_id' }`
+  // options object still be asserted below.
+  const membershipUpsertSpy = vi.fn((payload: Record<string, unknown>) => {
+    if (options.upsertError !== undefined) {
+      return Promise.resolve({ data: null, error: options.upsertError });
+    }
+    const existing = memberships.find(
+      (row) => row.student_id === payload.student_id && row.team_id === payload.team_id,
+    );
+    if (existing === undefined) {
+      memberships.push({
+        student_id: payload.student_id as string,
+        team_id: payload.team_id as string,
+        // A brand-new row takes the column's own `default current_date`
+        // whenever the payload omits `joined_on`.
+        joined_on: (payload.joined_on as string | undefined) ?? GAM340_ROW_DEFAULT_JOINED_ON,
+        left_on: (payload.left_on as string | null | undefined) ?? null,
+      });
+      return Promise.resolve({ data: null, error: null });
+    }
+    // Real `ON CONFLICT ... DO UPDATE SET` semantics: exactly the columns
+    // PRESENT in the payload are overwritten. `joined_on` is absent from the
+    // prescribed payload, which is what preserves an existing row's join
+    // date -- so including it here would be observable, and is asserted.
+    if ('left_on' in payload) existing.left_on = payload.left_on as string | null;
+    if ('joined_on' in payload) existing.joined_on = payload.joined_on as string;
+    return Promise.resolve({ data: null, error: null });
+  });
+
+  const membershipInsertSpy = vi.fn(() => Promise.resolve({ data: null, error: null }));
+
+  const fromSpy = vi.fn((table: string) => {
+    if (table === 'students') {
+      return {
+        select: readBackSelectSpy,
+        insert: studentsInsertSpy,
+        update: studentsUpdateSpy,
+      };
+    }
+    if (table === 'student_teams') {
+      return {
+        upsert: membershipUpsertSpy,
+        update: membershipUpdateSpy,
+        insert: membershipInsertSpy,
+      };
+    }
+    throw new Error(`unexpected table: ${table}`);
+  });
+
+  return {
+    client: { from: fromSpy } as unknown as SupabaseClient,
+    fromSpy,
+    memberships,
+    readBackSelectSpy,
+    readBackEqSpy,
+    studentsInsertSpy,
+    studentsUpdateSpy,
+    membershipUpsertSpy,
+    membershipUpdateSpy,
+    membershipInsertSpy,
+    membershipEqSpy,
+    membershipNeqSpy,
+    membershipIsSpy,
+  };
+}
+
+const GAM340_PAYLOAD = {
+  displayName: 'Rowan Vance',
+  teamId: 'team-alder',
+  gradYear: null,
+  isActive: true,
+  goalHoursOverride: null,
+};
+
+describe('makeCreateStudent (GAM-340 criterion 1: opens a student_teams membership)', () => {
+  it('upserts (student_id, team_id) with left_on: null on conflict target student_id,team_id', async () => {
+    const { client, fromSpy, membershipUpsertSpy } = makeGAM340RosterWriteClient({
+      studentRow: { id: 'student-new-1', team_id: 'team-alder' },
+    });
+
+    await makeCreateStudent(() => client)({ ...GAM340_PAYLOAD, teamId: 'team-alder' });
+
+    expect(fromSpy).toHaveBeenCalledWith('student_teams');
+    expect(membershipUpsertSpy).toHaveBeenCalledTimes(1);
+    expect(membershipUpsertSpy).toHaveBeenCalledWith(
+      { student_id: 'student-new-1', team_id: 'team-alder', left_on: null },
+      { onConflict: 'student_id,team_id' },
+    );
+  });
+
+  it("uses the DB-assigned id from the students insert, never a value from the caller's payload", async () => {
+    const { client, membershipUpsertSpy } = makeGAM340RosterWriteClient({
+      studentRow: { id: 'student-assigned-by-db', team_id: 'team-birch' },
+    });
+
+    await makeCreateStudent(() => client)({ ...GAM340_PAYLOAD, teamId: 'team-birch' });
+
+    expect(membershipUpsertSpy.mock.calls[0][0]).toMatchObject({
+      student_id: 'student-assigned-by-db',
+    });
+  });
+
+  it('writes students FIRST and student_teams second -- the roster surface never shows a student whose base row failed to save', async () => {
+    const { client, fromSpy } = makeGAM340RosterWriteClient({
+      studentRow: { id: 'student-new-2', team_id: 'team-alder' },
+    });
+
+    await makeCreateStudent(() => client)(GAM340_PAYLOAD);
+
+    expect(fromSpy.mock.calls.map(([table]) => table)).toEqual(['students', 'student_teams']);
+  });
+
+  it('leaves the resolved value unchanged -- still the mapped StudentRow from the students insert', async () => {
+    const { client } = makeGAM340RosterWriteClient({
+      studentRow: { id: 'student-new-3', team_id: 'team-alder', grad_year: 2029 },
+    });
+
+    await expect(makeCreateStudent(() => client)(GAM340_PAYLOAD)).resolves.toEqual({
+      id: 'student-new-3',
+      profileId: null,
+      displayName: 'Rowan Vance',
+      teamId: 'team-alder',
+      gradYear: 2029,
+      isActive: true,
+      goalHoursOverride: null,
+    });
+  });
+
+  it('creates the membership row itself -- final state is one ACTIVE row for the new team', async () => {
+    const { client, memberships } = makeGAM340RosterWriteClient({
+      studentRow: { id: 'student-new-4', team_id: 'team-cedar' },
+    });
+
+    await makeCreateStudent(() => client)({ ...GAM340_PAYLOAD, teamId: 'team-cedar' });
+
+    expect(memberships).toEqual([
+      {
+        student_id: 'student-new-4',
+        team_id: 'team-cedar',
+        joined_on: GAM340_ROW_DEFAULT_JOINED_ON,
+        left_on: null,
+      },
+    ]);
+  });
+});
+
+describe('makeUpdateStudent (GAM-340 criterion 2: moves the membership)', () => {
+  it('reads the previous students.team_id BEFORE the update, then closes exactly that team and opens the new one', async () => {
+    const {
+      client,
+      fromSpy,
+      readBackSelectSpy,
+      readBackEqSpy,
+      membershipUpdateSpy,
+      membershipEqSpy,
+      membershipIsSpy,
+      membershipUpsertSpy,
+    } = makeGAM340RosterWriteClient({
+      previousTeamId: 'team-alder',
+      studentRow: { id: 'student-moved', team_id: 'team-birch' },
+      memberships: [gam340Membership('student-moved', 'team-alder')],
+    });
+
+    await makeUpdateStudent(() => client)('student-moved', {
+      ...GAM340_PAYLOAD,
+      teamId: 'team-birch',
+    });
+
+    expect(readBackSelectSpy).toHaveBeenCalledWith('team_id');
+    expect(readBackEqSpy).toHaveBeenCalledWith('id', 'student-moved');
+    // Read-back first, students update second, membership writes after.
+    expect(fromSpy.mock.calls.map(([table]) => table)).toEqual([
+      'students',
+      'students',
+      'student_teams',
+      'student_teams',
+    ]);
+    expect(membershipUpdateSpy).toHaveBeenCalledTimes(1);
+    expect(membershipEqSpy).toHaveBeenCalledWith('student_id', 'student-moved');
+    expect(membershipEqSpy).toHaveBeenCalledWith('team_id', 'team-alder');
+    expect(membershipIsSpy).toHaveBeenCalledWith('left_on', null);
+    expect(membershipUpsertSpy).toHaveBeenCalledWith(
+      { student_id: 'student-moved', team_id: 'team-birch', left_on: null },
+      { onConflict: 'student_id,team_id' },
+    );
+  });
+
+  /**
+   * The `left_on` literal, pinned. `current_date` cannot be sent through
+   * PostgREST (only JSON values), so the writer derives today in UTC --
+   * matching `ScheduleMeetingsDialog.tsx:369` and
+   * `OutreachEventDialog.tsx:699,710`, the two existing in-repo derivations
+   * for a `date` column. The clock is frozen here so this asserts the exact
+   * value rather than a shape.
+   */
+  it('stamps left_on with the UTC-derived YYYY-MM-DD date, not a timestamp and not a SQL expression', async () => {
+    vi.useFakeTimers();
+    try {
+      // 01:30 UTC on 2026-03-04 -- 19:30 the PREVIOUS day in America/Chicago,
+      // i.e. inside the disclosed drift window. The writer records the UTC
+      // date, deliberately and knowingly.
+      vi.setSystemTime(new Date('2026-03-04T01:30:00.000Z'));
+      const { client, membershipUpdateSpy } = makeGAM340RosterWriteClient({
+        previousTeamId: 'team-alder',
+        studentRow: { id: 'student-moved', team_id: 'team-birch' },
+        memberships: [gam340Membership('student-moved', 'team-alder')],
+      });
+
+      await makeUpdateStudent(() => client)('student-moved', {
+        ...GAM340_PAYLOAD,
+        teamId: 'team-birch',
+      });
+
+      expect(membershipUpdateSpy).toHaveBeenCalledWith({ left_on: '2026-03-04' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaves the resolved value unchanged -- still the mapped, freshly-updated StudentRow', async () => {
+    const { client } = makeGAM340RosterWriteClient({
+      previousTeamId: 'team-alder',
+      studentRow: {
+        id: 'student-moved',
+        display_name: 'Edited Name',
+        team_id: 'team-birch',
+        is_active: false,
+      },
+      memberships: [gam340Membership('student-moved', 'team-alder')],
+    });
+
+    const result = await makeUpdateStudent(() => client)('student-moved', {
+      ...GAM340_PAYLOAD,
+      displayName: 'Edited Name',
+      teamId: 'team-birch',
+      isActive: false,
+    });
+
+    expect(result).toEqual({
+      id: 'student-moved',
+      profileId: null,
+      displayName: 'Edited Name',
+      teamId: 'team-birch',
+      gradYear: null,
+      isActive: false,
+      goalHoursOverride: null,
+    });
+  });
+});
+
+/**
+ * GAM-340 criterion 3 -- Trap B. The schema is deliberately multi-team
+ * (`students.team_id` is the LEGACY primary column only) and the roster edit
+ * form carries exactly ONE teamId. A writer that closed every ACTIVE
+ * membership whose `team_id` differs from the new one would silently delete a
+ * dual-team student's legitimate second team.
+ *
+ * All three assertions below are required, and the third is the only one that
+ * distinguishes the two designs: a `.neq('team_id', newTeam)` close never
+ * NAMES the bystander team, so a "no write targets team C" call-shape
+ * assertion passes for the forbidden implementation. The row state does not.
+ */
+describe('makeUpdateStudent (GAM-340 criterion 3: Trap B -- a dual-team student keeps their second team)', () => {
+  function moveDualTeamStudentFromAlderToBirch() {
+    return makeGAM340RosterWriteClient({
+      previousTeamId: 'team-alder',
+      studentRow: { id: 'student-dual', team_id: 'team-birch' },
+      memberships: [
+        gam340Membership('student-dual', 'team-alder'),
+        gam340Membership('student-dual', 'team-cedar'),
+      ],
+    });
+  }
+
+  it('3a (positive filter) -- the close names student_id, the PREVIOUS team_id, and left_on is null', async () => {
+    const harness = moveDualTeamStudentFromAlderToBirch();
+
+    await makeUpdateStudent(() => harness.client)('student-dual', {
+      ...GAM340_PAYLOAD,
+      teamId: 'team-birch',
+    });
+
+    expect(harness.membershipEqSpy).toHaveBeenCalledWith('student_id', 'student-dual');
+    expect(harness.membershipEqSpy).toHaveBeenCalledWith('team_id', 'team-alder');
+    expect(harness.membershipIsSpy).toHaveBeenCalledWith('left_on', null);
+  });
+
+  it('3b (negative) -- .neq() is never called on student_teams', async () => {
+    const harness = moveDualTeamStudentFromAlderToBirch();
+
+    await makeUpdateStudent(() => harness.client)('student-dual', {
+      ...GAM340_PAYLOAD,
+      teamId: 'team-birch',
+    });
+
+    expect(harness.membershipNeqSpy).not.toHaveBeenCalled();
+  });
+
+  it('3c (row state) -- moving A->B with ACTIVE {A, C} leaves A closed, B active, C ACTIVE', async () => {
+    const harness = moveDualTeamStudentFromAlderToBirch();
+
+    await makeUpdateStudent(() => harness.client)('student-dual', {
+      ...GAM340_PAYLOAD,
+      teamId: 'team-birch',
+    });
+
+    expect(gam340MembershipState(harness.memberships)).toEqual({
+      'team-alder': 'closed',
+      'team-birch': 'active',
+      'team-cedar': 'active',
+    });
+  });
+});
+
+/**
+ * GAM-340 criterion 4 -- Trap A. `student_teams`' primary key is
+ * `(student_id, team_id)`, and the migration that created it states the
+ * intended semantics verbatim: "re-joining a team after leaving is a future
+ * UPDATE of `left_on` back to null, not a new row."
+ *
+ * ONLY THE CALL SHAPE AND THIS FAKE'S ROW STATE ARE OBSERVABLE FROM VITEST.
+ * The database behaviour was proved separately, on a real PostgreSQL cluster
+ * carrying all 25 migrations, during this issue's premise gate: a plain
+ * re-insert raised SQLSTATE 23505 `duplicate key value violates unique
+ * constraint "student_teams_pkey"`, while the prescribed upsert reactivated
+ * the row and took `v_student_participation` from 0 rows to 1. Cited, not
+ * re-derived here.
+ */
+describe('makeUpdateStudent (GAM-340 criterion 4: Trap A -- re-joining a previously-left team)', () => {
+  function rejoinAlder() {
+    return makeGAM340RosterWriteClient({
+      previousTeamId: 'team-birch',
+      studentRow: { id: 'student-returner', team_id: 'team-alder' },
+      memberships: [
+        gam340Membership('student-returner', 'team-alder', { left_on: '2026-06-30' }),
+        gam340Membership('student-returner', 'team-birch'),
+      ],
+    });
+  }
+
+  it('goes through the upsert path with left_on: null and onConflict student_id,team_id', async () => {
+    const harness = rejoinAlder();
+
+    await makeUpdateStudent(() => harness.client)('student-returner', {
+      ...GAM340_PAYLOAD,
+      teamId: 'team-alder',
+    });
+
+    expect(harness.membershipUpsertSpy).toHaveBeenCalledWith(
+      { student_id: 'student-returner', team_id: 'team-alder', left_on: null },
+      { onConflict: 'student_id,team_id' },
+    );
+  });
+
+  it('never calls .insert() on student_teams -- a plain insert violates the (student_id, team_id) primary key', async () => {
+    const harness = rejoinAlder();
+
+    await makeUpdateStudent(() => harness.client)('student-returner', {
+      ...GAM340_PAYLOAD,
+      teamId: 'team-alder',
+    });
+
+    expect(harness.membershipInsertSpy).not.toHaveBeenCalled();
+  });
+
+  it('reactivates the existing row rather than adding a second one, and preserves its original joined_on', async () => {
+    const harness = rejoinAlder();
+
+    await makeUpdateStudent(() => harness.client)('student-returner', {
+      ...GAM340_PAYLOAD,
+      teamId: 'team-alder',
+    });
+
+    // Two rows in, two rows out -- no third row, and `joined_on` still the
+    // original 2026-01-05 because the payload deliberately omits that column.
+    expect(harness.memberships).toEqual([
+      {
+        student_id: 'student-returner',
+        team_id: 'team-alder',
+        joined_on: '2026-01-05',
+        left_on: null,
+      },
+      {
+        student_id: 'student-returner',
+        team_id: 'team-birch',
+        joined_on: '2026-01-05',
+        left_on: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      },
+    ]);
+  });
+});
+
+describe('makeUpdateStudent (GAM-340 criterion 5: an unchanged team still reconciles, and closes nothing)', () => {
+  it('upserts the membership and issues no close at all when teamId did not change', async () => {
+    const { client, membershipUpsertSpy, membershipUpdateSpy, memberships } =
+      makeGAM340RosterWriteClient({
+        previousTeamId: 'team-alder',
+        studentRow: { id: 'student-same-team', team_id: 'team-alder' },
+        memberships: [],
+      });
+
+    await makeUpdateStudent(() => client)('student-same-team', {
+      ...GAM340_PAYLOAD,
+      teamId: 'team-alder',
+    });
+
+    expect(membershipUpdateSpy).not.toHaveBeenCalled();
+    expect(membershipUpsertSpy).toHaveBeenCalledWith(
+      { student_id: 'student-same-team', team_id: 'team-alder', left_on: null },
+      { onConflict: 'student_id,team_id' },
+    );
+    // A membership-less student is reconciled by an edit to any field --
+    // this is the whole reason step 2.4 is unconditional.
+    expect(gam340MembershipState(memberships)).toEqual({ 'team-alder': 'active' });
+  });
+
+  /**
+   * The disclosed, deliberate consequence of that unconditional upsert
+   * (`students.ts`'s own GAM-340 block, note (d)): it re-opens a membership
+   * somebody closed while `students.team_id` still names that same team.
+   * Asserted rather than merely commented, so a future reader who decides to
+   * "fix" it has to change a test that says why.
+   */
+  it('re-opens a deliberately-closed membership when the roster still names that team -- accepted, not a bug', async () => {
+    const { client, memberships } = makeGAM340RosterWriteClient({
+      previousTeamId: 'team-alder',
+      studentRow: { id: 'student-contradictory', team_id: 'team-alder' },
+      memberships: [
+        gam340Membership('student-contradictory', 'team-alder', { left_on: '2026-06-30' }),
+      ],
+    });
+
+    await makeUpdateStudent(() => client)('student-contradictory', {
+      ...GAM340_PAYLOAD,
+      teamId: 'team-alder',
+    });
+
+    expect(gam340MembershipState(memberships)).toEqual({ 'team-alder': 'active' });
+  });
+});
+
+describe('GAM-340 criterion 6: a failed membership write rejects, it never resolves successfully', () => {
+  it('createStudent rejects with the real SupabaseLoaderError when the student_teams upsert fails', async () => {
+    const { client } = makeGAM340RosterWriteClient({
+      studentRow: { id: 'student-new-5', team_id: 'team-alder' },
+      upsertError: { message: 'permission denied for table student_teams', code: '42501' },
+    });
+
+    await expect(makeCreateStudent(() => client)(GAM340_PAYLOAD)).rejects.toMatchObject({
+      code: '42501',
+    });
+  });
+
+  it('updateStudent rejects with the real SupabaseLoaderError when the student_teams upsert fails -- never swallowed into a silent success', async () => {
+    const { client } = makeGAM340RosterWriteClient({
+      previousTeamId: 'team-alder',
+      studentRow: { id: 'student-moved', team_id: 'team-birch' },
+      memberships: [gam340Membership('student-moved', 'team-alder')],
+      upsertError: { message: 'permission denied for table student_teams', code: '42501' },
+    });
+
+    await expect(
+      makeUpdateStudent(() => client)('student-moved', { ...GAM340_PAYLOAD, teamId: 'team-birch' }),
+    ).rejects.toMatchObject({ code: '42501' });
   });
 });
