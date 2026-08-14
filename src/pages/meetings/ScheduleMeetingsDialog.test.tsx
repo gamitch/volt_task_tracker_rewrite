@@ -435,15 +435,11 @@ describe('computeEndTimeError (GAM-290 packet §3.1)', () => {
   });
 
   it('errors on an equal pair (the sibling uses <=, not <; AC2)', () => {
-    expect(computeEndTimeError('18:00', '18:00')).toBe(
-      'End time must be after the start time.',
-    );
+    expect(computeEndTimeError('18:00', '18:00')).toBe('End time must be after the start time.');
   });
 
   it('errors on an inverted pair, using the sibling EditMeetingSessionDialog.tsx:319 exact copy string', () => {
-    expect(computeEndTimeError('22:00', '00:30')).toBe(
-      'End time must be after the start time.',
-    );
+    expect(computeEndTimeError('22:00', '00:30')).toBe('End time must be after the start time.');
   });
 
   it('compares wall-clock minutes-since-midnight, NOT UTC (packet §3.1 DST proof, AC4c): a valid 07:00-08:00 Chicago pair on the 2026-03-08 spring-forward date is NOT an error, even though chicagoWallTimeToUtcIso collapses both wall times onto the same UTC instant on that date', () => {

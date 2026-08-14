@@ -536,9 +536,7 @@ export function computeEndTimeError(
   endTime: string | undefined,
 ): string | undefined {
   if (startTime === undefined || endTime === undefined) return undefined;
-  if (
-    timeStringToMinutesSinceMidnight(endTime) <= timeStringToMinutesSinceMidnight(startTime)
-  ) {
+  if (timeStringToMinutesSinceMidnight(endTime) <= timeStringToMinutesSinceMidnight(startTime)) {
     return 'End time must be after the start time.';
   }
   return undefined;
