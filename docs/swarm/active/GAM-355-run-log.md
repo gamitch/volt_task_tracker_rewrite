@@ -82,3 +82,57 @@ subagent** — that is the failure shape the constitution's delegation rule and
   reason — specs from GAM-343 and GAM-345 have merged since — but the
   *membership* of the failing set is the part that matters and it has changed.
   Investigation continues before any packet is written.
+- **PREMISE RESOLVED — it holds for all five, and the one apparent
+  contradiction is a worse problem than the one filed.** Every line below is a
+  measurement, each on a cluster reseeded from scratch via
+  `stop.sh` + `start.sh`, each spec run **in isolation** so no other spec's
+  writes are in play.
+
+  1. **`coach-meeting.spec.ts:88` / `:115` — STALE, exactly as filed.**
+     `Volt Legacy 2201` is `teams.archived = true` in the seed and is no longer
+     offered by the scope picker: `ScheduleMeetingsDialog.tsx:277,885` filters
+     through `excludeArchivedTeams` and `:1236` disables any archived team that
+     is still selected. That is **GAM-305 shipped**, and the spec at
+     `coach-meeting.spec.ts:100-104` predicted this exact outcome in a comment —
+     *"If a fix lands that filters archived teams out of the scope picker, this
+     line is the one to delete."* `:88` fails on the option-list equality;
+     `:115` times out at 90s clicking an option that no longer exists (line 126).
+  2. **`student-parent.spec.ts:27` / `:121` — STALE, and the "selector
+     regression" the issue asked us to investigate is the fix landing.** The
+     page snapshot at failure reads `Outreach hours vs. your goal 4.0 / 100.0 h
+     (4%)`. The old selector `getByText(/\/ 100 h \(/)` requires the literal
+     `/ 100 h (`; the rounded render says `/ 100.0 h (`, so it matches nothing.
+     Note this is **not** merely a selector drift — `:44` asserts
+     `expect(label).not.toMatch(/^\d+(\.\d)? \/ 100 h/)`, i.e. it asserts the
+     label is *not* a clean rounded figure, which is now the opposite of the
+     truth. **GAM-303 shipped.** The test is a bug-witness that outlived its bug.
+  3. **`student-parent.spec.ts:66` — STALE as filed, and the reason my first
+     run disagreed is a second defect.** Isolated on a fresh seed it **fails**
+     at line 88 (`expect(after).toHaveLength(0)`), and the database confirms the
+     write it denies: `session 5e55…0008, status=going, responded_by=a000…0003`
+     (Priya's own profile). **GAM-304 shipped.** In the *full* suite the same
+     test **passes** — because `outreach-lifecycle.spec.ts` runs first, creates
+     an outreach event, and that new opportunity takes the slot the test's
+     `getByRole('button', {name:'Sign up'}).first()` grabs. The RSVP is then
+     written against a different session, the query against `…0008` finds
+     nothing, and the assertion "no write happened" is satisfied **by looking at
+     the wrong row.** A test that proves nothing while green is worse than one
+     that is honestly red, and this one is currently both depending on how it is
+     invoked. The packet must fix the order-dependence, not just the premise.
+
+  So the issue's five are **all genuinely stale against shipped fixes** and its
+  headline claim is correct. The mismatch in the first baseline was the suite's
+  own order-dependence, not a wrong filing.
+
+  **The two unfiled failures are real, reproduce in isolation, and are NOT this
+  issue's work** (item 20 — they get their own rows, not a widened scope):
+  - `outreach-lifecycle.spec.ts:149` fails at line 233 on a fresh seed with no
+    other spec running: the coach's RSVP fan-out writes **no** `rsvps` row for
+    Jordan (`toHaveLength(1)` receives `[]`). A write path that records nothing
+    is a candidate production defect, not a stale test.
+  - `student-checkin.spec.ts:182` fails at line 216 on a fresh seed: it waits
+    for a checkbox named `/Jul 14/`, and the dialog renders `Wed, Jul 15` and
+    `Mon, Aug 24`. `seed.sql` builds every date from `current_date`, so these
+    hardcoded labels track the day the harness was seeded — Aug 13 when the
+    spec was written, Aug 14 today. A calendar-dated test against a
+    relative-dated seed goes red on its own the next morning.
