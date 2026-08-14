@@ -4,10 +4,10 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-14T07:04:52.159Z from team `Gamitch`.
+Exported 2026-08-14T10:12:04.957Z from team `Gamitch`.
 
 - **373** issues (242 archived)
-- **73** not yet completed or cancelled
+- **72** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
 ## Open
@@ -57,7 +57,6 @@ Exported 2026-08-14T07:04:52.159Z from team `Gamitch`.
 | [GAM-334](https://linear.app/gamitch/issue/GAM-334/the-declaration-gate-cannot-express-second-half-of-a-two-pr-row-so) | — | Backlog | provenance/other tier/fast | The declaration gate cannot express "second half of a two-PR row", so every workflow-touching row will go red on the PR that completes it |
 | [GAM-336](https://linear.app/gamitch/issue/GAM-336/two-unguarded-lines-in-the-archived-team-scope-fix-reinstate-a-data) | — | Backlog | area/w3 provenance/checker tier/standard | Two unguarded lines in the archived-team scope fix reinstate a data-correctness MAJOR if deleted |
 | [GAM-337](https://linear.app/gamitch/issue/GAM-337/ending-a-meeting-can-report-failure-for-a-meeting-that-actually-ended) | — | Backlog | Improvement area/w3 tier/standard | Ending a meeting can report failure for a meeting that actually ended — the coach is told to retry an action that succeeded |
-| [GAM-338](https://linear.app/gamitch/issue/GAM-338/the-on-screen-promise-that-retrying-an-end-meeting-wont-record) | — | In Review | Improvement area/w3 tier/fast | The on-screen promise that retrying an end-meeting "won't record anything twice" is guarded by no test — removing `ignoreDuplicates: true` keeps the suite green |
 | [GAM-339](https://linear.app/gamitch/issue/GAM-339/three-near-identical-supabase-write-error-copy-helpers-and-a-fourth) | — | Backlog | Improvement area/w3 tier/standard | Three near-identical Supabase write-error copy helpers, and a fourth call site already needs one — share the classification, not the words |
 | [GAM-340](https://linear.app/gamitch/issue/GAM-340/student-teams-has-no-writer-so-any-student-added-since-the-2026-07-21) | — | Backlog | area/w5 tier/unreviewed | `student_teams` has no writer, so any student added since the 2026-07-21 backfill has no membership row and returns zero rows from `v_student_participation` |
 | [GAM-341](https://linear.app/gamitch/issue/GAM-341/no-assertion-guards-the-my-student-ids-test-in-the-new-events-rls) | — | Backlog | area/w5 tier/unreviewed | No assertion guards the `my_student_ids()` test in the new events RLS policies — removing it leaves the suite green |
@@ -386,6 +385,7 @@ Exported 2026-08-14T07:04:52.159Z from team `Gamitch`.
 | [GAM-328](https://linear.app/gamitch/issue/GAM-328/two-dispatch-loop-rules-live-where-a-dispatched-run-cannot-write-them) | — | Done | Two dispatch-loop rules live where a dispatched run cannot write them — the `.github/workflows/**` credential wall, and the subagent-blocking rule that decides whether a run finishes its chain |
 | [GAM-332](https://linear.app/gamitch/issue/GAM-332/the-reconciliation-sweep-drops-merged-prs-whose-declaration-failed-to) | — | Done | The reconciliation sweep drops merged PRs whose declaration failed to parse — the cases most likely to be wrong |
 | [GAM-335](https://linear.app/gamitch/issue/GAM-335/shadow-mode-computes-its-intended-action-from-the-post-automation) | — | Done | Shadow mode computes its intended action from the post-automation state, so an ordinary declared merge always scores MISMATCH — the 10-MATCH exit criterion is unreachable |
+| [GAM-338](https://linear.app/gamitch/issue/GAM-338/the-on-screen-promise-that-retrying-an-end-meeting-wont-record) | — | Done | The on-screen promise that retrying an end-meeting "won't record anything twice" is guarded by no test — removing `ignoreDuplicates: true` keeps the suite green |
 | [GAM-342](https://linear.app/gamitch/issue/GAM-342/e2e-w1-check-in-a-student-arrives-and-gets-counted) | — | Done | E2E — W1 Check in: a student arrives and gets counted |
 | [GAM-343](https://linear.app/gamitch/issue/GAM-343/e2e-w2-run-an-outreach-event-create-rsvp-attend-complete-hours-land) | — | Done | E2E — W2 Run an outreach event: create → RSVP → attend → complete → hours land |
 | [GAM-344](https://linear.app/gamitch/issue/GAM-344/e2e-w3-run-a-meeting-schedule-attendance-participation-percent) | — | Done | E2E — W3 Run a meeting: schedule → attendance → participation % |
