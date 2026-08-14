@@ -233,3 +233,28 @@ a dispatched run hits".
   I also confirmed the outreach dialog is genuinely unguarded before claiming it:
   `OutreachEventDialog.tsx:1200` is `title.trim() !== '' && sessionsPayload.length > 0`
   — the same presence-only shape the meetings dialog had before this fix.
+- **2026-08-14 11:56Z — PR could NOT be opened. Third wall, alongside the two in
+  `AGENTS.md` § "Two walls a dispatched run hits".** The API refuses:
+  `403 — "GitHub Actions is not permitted to create or approve pull requests."`
+  Credential findings, recorded so the next run does not re-derive them:
+  `GH_TOKEN`/`GITHUB_TOKEN` (the `ghs_` in the remote URL) authenticate `git
+  push` but return **401 Bad credentials** against both the REST and GraphQL
+  APIs, so `gh pr create` fails with a misleading auth error.
+  **`DEFAULT_WORKFLOW_TOKEN` is the one that works** (repo read 200) — and with
+  it the true error appears: not authentication, but a repository/org policy
+  forbidding Actions from opening PRs.
+  **Treated as a boundary doing real work, not an obstacle to route around**, per
+  the standing instruction for the workflow-file wall. No second channel was
+  attempted.
+  **The undeliverable half is preserved rather than lost:** the full PR body is
+  committed at `docs/swarm/active/GAM-290-pr-body.md`. An owner or a scoped
+  session opens the PR from the branch and pastes it, so CI still runs on it —
+  the same shape as PRs #159/#160.
+  Branch `claude/gam-290-end-time-lower-bound` carries the identifier, so
+  whenever that PR is opened and merged Linear links and closes GAM-290 through
+  the team's `PR merged → Done` automation (item 28f/28g). Nothing here depends
+  on me having opened it.
+- **2026-08-14 11:58Z — GAM-290 moved `In Progress → In Review`** (item 28e:
+  never `Done` — an agent closing its own issue is self-certification) and a
+  status comment posted on the issue naming the branch, the head SHA, the three
+  follow-ups and the PR-open handover. Read back to confirm. **Run complete.**
