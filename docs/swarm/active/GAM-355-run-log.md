@@ -460,3 +460,18 @@ subagent** — that is the failure shape the constitution's delegation rule and
 - **Run complete. No subagent was left in flight at any point**; every dispatch
   line above has a matching verdict line below it, which is the property this
   log exists to make checkable.
+
+---
+
+## Merge conflict with `main` resolved by hand (2026-08-14)
+
+- **Conflict:** `main` moved 17 commits while this branch sat unmerged at the PR wall, and PR #179 (GAM-344) landed a change to the same file. `tests/e2e-personas/coach-meeting.spec.ts` conflicted; nothing else did.
+- **Both sides made the identical code change.** GAM-344 removed `'Volt Legacy 2201'` from the team-scope option list as one of the two pre-existing failures it repaired; GAM-355 removed it as one of the five stale assertions it was filed to adjudicate. Only the explanatory comment differed — GAM-344's `FINDING 1` note above the assertion, GAM-355's more detailed note inside the array literal. **No behaviour was at stake, so this was not escalated as an ambiguous conflict.**
+- **Resolved by keeping one comment instead of two.** GAM-344's `FINDING 1` survives and now carries GAM-355's mechanism detail, so nothing is lost and nothing is said twice. All five cited `ScheduleMeetingsDialog.tsx` line numbers were **re-verified against the merged tree** before being kept: `:854` `excludeArchivedTeams`, `:855` `allTeamIds`, `:861` the `useState` seed, `:885` the re-include-if-selected filter, `:1236` `disabled: team.archived`. All five hold.
+- **The merged spec was run, not just typechecked.** `coach-meeting.spec.ts` — **5 passed**, including `:88`, the conflicted assertion.
+- **The suite count in the PR body is now stale, and the reason is not this branch.** The body records `36 passed / 2 failed`. Post-merge the tree measures **37 passed / 3 failed**. The third failure is `student-checkin.spec.ts:182` (self-checkoff, `expect(locator).toBeDisabled()`), and it is **pre-existing, not introduced here or by #179** — measured three ways:
+  - full suite on this merged branch → fails
+  - full suite on unmerged `main` (`bfdbb52`) → fails
+  - `student-checkin.spec.ts` alone at `896e8df`, this branch's own merge base and the commit immediately before #179 merged → **fails**
+  It is very likely the ordering-dependent fixture problem GAM-342's finding 2 already records (no Past outreach event with an unrecorded session exists in the seed until some other spec arranges one) — which is the same cross-spec interference class this row diagnosed for `student-parent.spec.ts:66`. **Not filed as a new row here**, because it is unverified whether it duplicates GAM-342's finding 2; raised with the owner instead.
+- The PR body was **not edited** to correct the count. It is the run's own artifact, and the correction belongs here and in the PR conversation rather than rewritten into text the run wrote.
