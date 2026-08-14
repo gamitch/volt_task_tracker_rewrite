@@ -77,3 +77,12 @@ Tier at dispatch: `tier/fast`. Labels: Improvement, fast, w3.
   18, +3). eslint 0 errors / 378 warnings (no new warning in the changed
   file itself — confirmed with a direct `npx eslint` run against it, zero
   output).
+- 2026-08-14: Opened PR #182
+  (https://github.com/gamitch/volt_task_tracker_rewrite/pull/182),
+  `Closes GAM-338` as its first body line, `Linear-Issue: GAM-338` trailer,
+  branch `claude/gam-338-end-meeting-dedup-test` carries the identifier
+  (item 28f — this branch does GAM-338's own work, so the identifier is
+  meant to link and close here).
+- 2026-08-14: Moved GAM-338 `In Progress → In Review` via `issueUpdate`, then
+  re-read the issue and confirmed `state.name == "In Review"` (item 28e —
+  never move to `Done`; the merge automation closes it). Run complete.
