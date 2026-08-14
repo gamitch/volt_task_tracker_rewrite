@@ -329,3 +329,30 @@ subagent** — that is the failure shape the constitution's delegation rule and
   strengthening. `run_in_background: false`.
   *If this line is the last one in this file, the run died holding this
   subagent.*
+- **`worker-implementer` attempt 2 VERDICT: delivered, commit `6d1e7bf`.**
+  Verdict seen and recorded — the dispatch above did not orphan. Verified by me
+  rather than taken on report: one file, `student-parent.spec.ts`, +8 lines,
+  0 removed; every prior assertion kept; `git worktree list` shows only the
+  shared tree; status clean outside screenshots.
+
+  **The mutation proof is the reason this round happened and it came back
+  exactly right.** The worker built its own bundle in `/tmp/gam355-w2` off the
+  committed SHA, served it on its own port 4175 (leaving the shared 4174
+  preview serving throughout), halved the formatter, and got:
+
+  ```
+  Error: expect(received).toBe(expected)
+  Expected: "4.0"
+  Received: "2.0"
+    > 56 |     expect(label.split(' ')[0]).toBe(raw.toFixed(1));
+  ```
+
+  That is the identical mutation that passed green one commit earlier. The
+  guard now has teeth, and it was watched failing rather than reasoned about.
+  Item 23 honoured throughout — the port change and the source mutation lived
+  only in the worktree, were never committed, and the worktree is removed.
+- **DISPATCHED `checker-reviewer` (re-check, scoped to `6d1e7bf`)** —
+  continued on the same agent so it grades its own finding as closed against
+  its own measurements. `run_in_background: false`.
+  *If this line is the last one in this file, the run died holding this
+  subagent.*
