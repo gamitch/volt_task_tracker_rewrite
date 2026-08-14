@@ -40,24 +40,40 @@ INVERTED (endsAt < startsAt)? true   delta_minutes=-90
 ⚠ **The issue's stated harm is false, and this packet no longer repeats it.**
 The issue says `v_planned_rsvp_hours` receives negative planned hours. It cannot:
 that view requires `e.counts_volunteer_hours`
-(`supabase/migrations/20260724000001_planned_hours_future_guard.sql:71`), and
+(`supabase/migrations/20260724000001_planned_hours_future_guard.sql:72`), and
 every meeting event is created with `counts_volunteer_hours: false`
 (`src/lib/supabase/loaders/meetings.ts:1096`; importer `scripts/migrate/transform.ts:108`).
 The series-edit update never writes that column. **A meeting session cannot enter
 that metric**, nor `v_student_hours`, `v_season_kpis`, or
 `computeStudentPlannedHours`.
 
-**The real, measured harm is the calendar feed.** `supabase/functions/ics/index.ts:230-238`
+**The harm reaches the calendar feed.** `supabase/functions/ics/index.ts:230-238`
 selects `event_sessions` filtered only by `event_id` and `starts_at`, with **no
 `counts_volunteer_hours` filter**, and `ics_builder.ts:65` passes `endsAt`
-straight to `ical-generator`. An inverted row emits a `VEVENT` whose `DTEND`
-precedes its `DTSTART`, into a calendar a student or parent has subscribed to —
-plus a nonsense range wherever the session is displayed.
+straight to `ical-generator`.
+
+⚠ **Round 2 correction — do not repeat the stronger version of this claim.**
+An inverted row does **not** emit a malformed `VEVENT`. `ical-generator@11`
+calls `swapStartAndEndIfRequired()` inside `ICalEvent.toString()`, measured
+against the real package with the inverted payload above:
+
+```
+in : start 2026-09-15T00:00:00Z, end 2026-09-14T22:30:00Z
+out: DTSTART:20260914T223000Z / DTEND:20260915T000000Z   (no throw, silently swapped)
+```
+
+So a subscriber gets the session at a **silently swapped span** — and on the DST
+date, a zero-length one. The stored row stays corrupt either way, and the range
+is nonsense wherever the session is displayed in-app. An earlier draft of this
+packet called the malformed-`VEVENT` version "measured" when it was not; the
+correction is kept visible rather than edited away.
 
 **The HEAVY tier is unaffected.** It rests on item 26's *write path* trigger,
-which stands on its own; the metric claim was never load-bearing for tiering.
-There is **no `CHECK` constraint** on `event_sessions` guarding the interval
-(confirmed: no `check (` in `20260717000000_scheduling_attendance.sql`).
+which stands on its own; neither the metric claim nor the ICS mechanism was ever
+load-bearing for tiering. **No `CHECK` constraint compares `starts_at`/`ends_at`
+in any migration** (grepped `supabase/migrations/*.sql`); the `check (`
+occurrences in `20260717000000_scheduling_attendance.sql` are all enum guards,
+e.g. `:59` on `status`.
 
 ## 2. The issue's own prescription is incomplete — read this before implementing
 
@@ -181,8 +197,10 @@ would break T611's passed behaviour, which constitution Definition-of-Ready item
 **One residual path this carve-out cannot cover, and you must not "fix" it.**
 With `timeFieldsTouched === false`, adding a *new* date writes the shared
 displayed pair for that date (`:803-809`, no `original` to reuse), so an
-already-inverted series can still propagate. Closing that would require gating
-on untouched fields, which breaks T611. Leave it; it is named in §4.
+already-inverted series can still propagate. Closing it would require a wider
+gate than this row scopes — a narrower one is conceivable (validate the shared
+pair only when the desired set contains a date with no `original`), but it is
+not what GAM-290 ordered. Leave it; it is named in §4.
 
 ## 4. Scope boundaries
 
@@ -199,9 +217,9 @@ on untouched fields, which breaks T611. Leave it; it is named in §4.
 - **`OutreachEventDialog`.** The round-1 gate falsified this packet's original
   claim that the meetings dialog is the only unguarded writer.
   `OutreachEventDialog.tsx:1492-1503` → `src/lib/supabase/loaders/outreach.ts:1484`
-  (insert) and `:1500-1515` (update) write `starts_at`/`ends_at` with the same
+  (insert) and `:1501-1516` (update) write `starts_at`/`ends_at` with the same
   missing guard — **and outreach events do carry `counts_volunteer_hours: true`**
-  (`outreach.ts:1452`), so the negative-planned-hours harm the issue wrongly
+  (`OutreachEventDialog.tsx:660-663` → `resolveEventTypeFlags:670-674`, passed through at `outreach.ts:1452`), so the negative-planned-hours harm the issue wrongly
   attributed to meetings **is real on that surface**. Out of scope here, filed
   under item 20, and it is why this packet's honest claim is narrow: *the
   meetings dialog cannot persist an inverted interval*, not *inverted intervals
@@ -278,15 +296,16 @@ Round-2 doubts are listed after them.
    component's source or drive it before accepting §2.
    → **SOUND, measured.** The falsifying condition does not exist in the
    installed source and does not occur when driven. §2 carries the evidence.
-2. **[WRONG — and wrong in the dangerous direction; see §3.1]** ~~That the pure
-   helper may compare wall-clock `HH:MM` strings.~~ Both times
+2. **[WRONG — and wrong in the dangerous direction; see §3.1. The whole body
+   below is struck; it is preserved only as the record of what was doubted.]**
+   ~~That the pure helper may compare wall-clock `HH:MM` strings.~~ ~~Both times
    apply to the same date, so a lexical compare is *probably* equivalent to the
    sibling's UTC round-trip and avoids needing a `date`. What would make it
    wrong: a DST-transition date, where `chicagoWallTimeToUtcIso` is not monotone
    in wall-clock time and a 02:00–03:00 pair does not exist (NFR-09 stores UTC,
    displays America/Chicago). If in doubt the worker takes the sibling's
    date-based UTC comparison — but the sibling *has* a `date` per session and
-   this dialog has many, which is the whole reason the question exists.
+   this dialog has many, which is the whole reason the question exists.~~
    → **The premise was right and the fallback was wrong.** Wall-clock is
    correct; the UTC fallback this text recommends would false-block a valid
    07:00–08:00 meeting on 2026-03-08. The discontinuity is not at 02:00 as
@@ -366,5 +385,7 @@ What it confirmed by running rather than reading: the defect reproduces
 crossing persists −1290 min, `isValid` has no escape path, and no currently-green
 test breaks (82 passing baselined).
 
-This is round 1 of the two permitted by item 19a. A round-2 REVISE is expected to
-be short; a third escalates to the human owner rather than looping.
+Round 2: **DISPATCH**, severity ceiling MINOR. It found one false claim in the
+round-2 text itself (the ICS mechanism, corrected in §1) and four off-by-one
+citations, all folded in without a third round — item 19a permits two, and a
+third escalates to the human owner rather than looping.
