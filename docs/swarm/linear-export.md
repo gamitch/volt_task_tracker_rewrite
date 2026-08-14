@@ -4,7 +4,7 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-14T10:12:04.957Z from team `Gamitch`.
+Exported 2026-08-14T10:13:49.460Z from team `Gamitch`.
 
 - **373** issues (242 archived)
 - **72** not yet completed or cancelled
@@ -37,7 +37,7 @@ Exported 2026-08-14T10:12:04.957Z from team `Gamitch`.
 | [GAM-282](https://linear.app/gamitch/issue/GAM-282/t606-a-single-meeting-cannot-have-its-own-location-this-week-were-in) | T606 | Backlog | area/w3 tier/heavy | T606 — A single meeting cannot have its own location ("this week we're in the shop") |
 | [GAM-284](https://linear.app/gamitch/issue/GAM-284/t608-collapse-the-three-surviving-narrow-copies-of-the-method-shape) | T608 | Backlog | area/w3 tier/unreviewed | T608 — Collapse the THREE surviving narrow copies of the `method` shape — `selfCheckoff.ts`'s fork plus two more T603 could not reach — and fix the module doc that T603 made false |
 | [GAM-286](https://linear.app/gamitch/issue/GAM-286/t610-item-10-names-two-different-rules-depending-on-which-part-of-the) | T610 | Backlog | area/w3 tier/unreviewed | T610 — "Item 10" names two different rules depending on which part of the constitution you read |
-| [GAM-290](https://linear.app/gamitch/issue/GAM-290/t614-the-end-time-field-has-no-lower-bound-so-a-series-edit-can) | T614 | Backlog | area/w3 tier/unreviewed | T614 — The End time field has no lower bound, so a series edit can persist a meeting whose end is before its start |
+| [GAM-290](https://linear.app/gamitch/issue/GAM-290/t614-the-end-time-field-has-no-lower-bound-so-a-series-edit-can) | T614 | Todo | area/w3 tier/unreviewed | T614 — The End time field has no lower bound, so a series edit can persist a meeting whose end is before its start |
 | [GAM-297](https://linear.app/gamitch/issue/GAM-297/t512-workflowsmd-reports-three-different-open-row-totals-60-42-36-item) | T512 | Backlog | area/w2 tier/unreviewed | T512 — `WORKFLOWS.md` reports three different open-row totals (~60, 42, 36); item 29 moved the source to the Linear export |
 | [GAM-300](https://linear.app/gamitch/issue/GAM-300/t807-two-loaders-still-apply-the-greatestx-1-floor-t509-removed-and) | T807 | Backlog | area/w5 tier/unreviewed | T807 — Two loaders still apply the `greatest(x, 1)` floor T509 removed, and three row types still declare `participation_pct` non-nullable |
 | [GAM-306](https://linear.app/gamitch/issue/GAM-306/t616-no-event-records-who-created-it-so-outreach-detail-permanently) | T616 | Backlog | area/w3 tier/unreviewed | T616 — No event records who created it, so outreach detail permanently reads "Unknown creator" |
@@ -83,7 +83,7 @@ Exported 2026-08-14T10:12:04.957Z from team `Gamitch`.
 | [GAM-368](https://linear.app/gamitch/issue/GAM-368/student-checkinspects216-pins-hardcoded-calendar-dates-jul-14-sun-aug) | — | Backlog | area/w1 provenance/e2e-personas tier/unreviewed | `student-checkin.spec.ts:216` pins hardcoded calendar dates (`Jul 14`, `Sun, Aug 23`) against a `current_date`-relative seed, so it goes red as the calendar moves |
 | [GAM-369](https://linear.app/gamitch/issue/GAM-369/coach-meetingspects88-is-still-titled-lists-every-team-after-it-was) | — | Backlog | area/w1 provenance/e2e-personas tier/unreviewed | `coach-meeting.spec.ts:88` is still titled "lists every team" after it was changed to assert the archived team is excluded |
 | [GAM-370](https://linear.app/gamitch/issue/GAM-370/the-same-login-card-overflow-ships-on-three-more-full-screen-cards) | — | Backlog | Bug tier/standard | The same login-card overflow ships on three more full-screen cards — `/accept-invite` measured at 40px on a 320px phone |
-| [GAM-371](https://linear.app/gamitch/issue/GAM-371/public-routesspects-asserts-no-horizontal-overflow-but-only-at-412px) | — | Backlog | Improvement tier/fast | `public-routes.spec.ts` asserts no horizontal overflow but only at 412px, so it passed through the entire GAM-271 login-card bug |
+| [GAM-371](https://linear.app/gamitch/issue/GAM-371/public-routesspects-asserts-no-horizontal-overflow-but-only-at-412px) | — | Todo | Improvement tier/fast | `public-routes.spec.ts` asserts no horizontal overflow but only at 412px, so it passed through the entire GAM-271 login-card bug |
 | [GAM-372](https://linear.app/gamitch/issue/GAM-372/the-layout-measurement-skill-documents-three-environment-facts-that) | — | Backlog | Improvement tier/fast | The `layout-measurement` skill documents three environment facts that are all false in a dispatched container, and its script exits 2 |
 | [GAM-373](https://linear.app/gamitch/issue/GAM-373/re-measure-t072s-liveconsoletsx1277-the-convention-it-was-changed-to) | — | Backlog | Improvement tier/fast | Re-measure T072's `LiveConsole.tsx:1277` — the convention it was changed to satisfy is now known to be inert under a shrink-to-fit parent |
 

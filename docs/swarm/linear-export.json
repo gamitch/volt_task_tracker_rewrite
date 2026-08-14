@@ -1,6 +1,6 @@
 {
   "meta": {
-    "exportedAt": "2026-08-14T10:12:04.957Z",
+    "exportedAt": "2026-08-14T10:13:49.460Z",
     "team": "Gamitch",
     "teamKey": "GAM",
     "issueCount": 373,
@@ -5176,8 +5176,8 @@
       "identifier": "GAM-290",
       "legacyId": "T614",
       "title": "T614 — The End time field has no lower bound, so a series edit can persist a meeting whose end is before its start",
-      "state": "Backlog",
-      "stateType": "backlog",
+      "state": "Todo",
+      "stateType": "unstarted",
       "archived": false,
       "labels": [
         "area/w3",
@@ -6833,8 +6833,8 @@
       "identifier": "GAM-371",
       "legacyId": null,
       "title": "`public-routes.spec.ts` asserts no horizontal overflow but only at 412px, so it passed through the entire GAM-271 login-card bug",
-      "state": "Backlog",
-      "stateType": "backlog",
+      "state": "Todo",
+      "stateType": "unstarted",
       "archived": false,
       "labels": [
         "Improvement",
