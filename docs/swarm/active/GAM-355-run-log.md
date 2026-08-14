@@ -454,3 +454,9 @@ subagent** — that is the failure shape the constitution's delegation rule and
 - **GAM-355 moved `In Progress → In Review`** (item 28e — never `Done`; the
   merge closes it, not the author), with the wall stated on the issue so it is
   visible where the owner will look rather than only in this log.
+- **GAM-355 is `In Review`, read back to confirm** (`state.name = "In Review"`,
+  `tier/heavy`). Handover comment posted on the issue leading with the one
+  manual step — open the PR — rather than burying it under the result.
+- **Run complete. No subagent was left in flight at any point**; every dispatch
+  line above has a matching verdict line below it, which is the property this
+  log exists to make checkable.
