@@ -93,21 +93,23 @@ test.describe('MTG-02 Schedule meetings dialog', () => {
     await scope.click();
 
     const optionLabels = await page.getByRole('option').allInnerTexts();
+    // FINDING 1 (GAM-344 Task 1, replaces the earlier comment describing a
+    // guard that no longer exists): GAM-305 (legacy T615) landed
+    // `excludeArchivedTeams` (`ScheduleMeetingsDialog.tsx:854`), so the
+    // archived `Volt Legacy 2201` is now correctly absent from this list.
+    // Kept exact, not loosened, so a regression that re-admits an archived
+    // team into the scope picker turns this red again.
     expect(optionLabels.map((t) => t.trim())).toEqual([
       'Select all',
       'Volt Robotics 9911',
       'Volt Junior 4402',
-      // Regression guard for FINDING 1: this team is `archived = true` in the
-      // database and is still offered here, pre-selected. If a fix lands that
-      // filters archived teams out of the scope picker, this line is the one
-      // to delete — the assertion records today's behaviour, it does not
-      // bless it.
-      'Volt Legacy 2201',
     ]);
     await capture(page, '11-coach-team-scope-open');
 
+    // Only `Volt Junior 4402` is left to deselect -- `Volt Legacy 2201` is no
+    // longer offered at all (see the FINDING 1 comment above), so there is
+    // nothing to click there any more.
     await page.getByRole('option', { name: 'Volt Junior 4402' }).click();
-    await page.getByRole('option', { name: 'Volt Legacy 2201' }).click();
     await page.keyboard.press('Escape');
     await expect(scope).toHaveText('Volt Robotics 9911');
   });
@@ -122,8 +124,14 @@ test.describe('MTG-02 Schedule meetings dialog', () => {
 
     const scope = dialog.getByRole('combobox').first();
     await scope.click();
+    // GAM-344 Task 1: the `Volt Legacy 2201` deselect click is dropped --
+    // GAM-305's `excludeArchivedTeams` means that option is no longer offered
+    // at all (see FINDING 1's comment above, in the team-scope-dropdown
+    // test). Measured by the gate in the browser: options are exactly
+    // `["Select all", "Volt Robotics 9911", "Volt Junior 4402"]`, and
+    // deselecting only `Volt Junior 4402` still leaves `Volt Robotics 9911`
+    // selected, so the `event.team_ids` assertion below still holds unchanged.
     await page.getByRole('option', { name: 'Volt Junior 4402' }).click();
-    await page.getByRole('option', { name: 'Volt Legacy 2201' }).click();
     await page.keyboard.press('Escape');
 
     const dateField = dialog.getByRole('combobox', { name: /^Date/ });
