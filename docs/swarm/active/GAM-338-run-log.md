@@ -26,3 +26,27 @@ Tier at dispatch: `tier/fast`. Labels: Improvement, fast, w3.
   a worker; FAST has neither, so it does not apply here. Proceeding to
   implement directly per item 26 (orchestrator implements, no packet/worker/
   checker subagent required for the implementation step itself).
+- 2026-08-14: Implemented directly (FAST, no subagent dispatched). Added a
+  `makeSemanticAttendanceClient` stub to `endMeeting.test.ts` that holds real
+  per-row state and applies Postgrest's actual conflict/guard semantics
+  (`ON CONFLICT ... DO NOTHING` vs. `resolution=merge-duplicates`, and a plain
+  guarded `UPDATE`), plus three new tests under
+  `describe('makeOnEndMeeting retry-idempotency (GAM-338)')`. Committed the
+  test file before mutating (item 26's "commit before mutating" rule, commit
+  `e0b2b3c`).
+- 2026-08-14: Mutation-replay verdict (item 26, three named mutations, one
+  at a time, git-diff confirmed clean before/after each):
+  1. Removed `ignoreDuplicates: true` (`endMeeting.ts:405`) → RED: reddened
+     both the pre-existing criterion-6 call-shape test AND the new
+     "does not revert a real attendance correction" test. Reverted; suite
+     green again (21/21), diff clean.
+  2. Removed `.is('check_out_at', null)` (`endMeeting.ts:417`) → RED:
+     reddened both the pre-existing criterion-7 call-shape test AND the new
+     "does not clobber a real checkout stamp" test. Reverted; suite green
+     again (21/21), diff clean.
+  3. Did not separately mutate the status-flip leg — the issue itself
+     states it is "safe by nature" (re-setting the same terminal value
+     cannot be made unsafe by any single-line mutation); its new test
+     exists to pin the trio as one test, not because a mutation was found
+     for it.
+  All work is test-only; zero lines of production change ship in this PR.
