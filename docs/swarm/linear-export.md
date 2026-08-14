@@ -4,10 +4,10 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-14T11:47:55.716Z from team `Gamitch`.
+Exported 2026-08-14T11:48:18.815Z from team `Gamitch`.
 
 - **380** issues (242 archived)
-- **74** not yet completed or cancelled
+- **73** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
 ## Open
@@ -87,7 +87,6 @@ Exported 2026-08-14T11:47:55.716Z from team `Gamitch`.
 | [GAM-377](https://linear.app/gamitch/issue/GAM-377/the-outreach-event-dialog-has-no-startend-ordering-guard-so-a-coach) | — | Backlog | Bug area/w2 tier/heavy | The outreach event dialog has no start/end ordering guard, so a coach can save a session whose end is before its start — and outreach hours are the ones that count toward season goals |
 | [GAM-378](https://linear.app/gamitch/issue/GAM-378/chicagowalltimetoutciso-resolves-the-zone-offset-at-the-naive-utc) | — | Backlog | Bug area/w3 tier/heavy | chicagoWallTimeToUtcIso resolves the zone offset at the naive-UTC instant, so every 07:00–07:59 session on a spring-forward date is stored an hour late — triplicated across three dialogs |
 | [GAM-379](https://linear.app/gamitch/issue/GAM-379/event-sessions-has-no-check-constraint-on-its-interval-so-nothing) | — | Backlog | Bug area/w3 tier/heavy | event_sessions has no CHECK constraint on its interval, so nothing below the UI stops an inverted session — and no audit has asked whether bad rows already exist |
-| [GAM-380](https://linear.app/gamitch/issue/GAM-380/the-session-records-7-calls-gam-350-and-gam-372-both-wrong-both-are) | — | In Review | provenance/other tier/fast | The session record's §7 calls GAM-350 and GAM-372 "both wrong"; both are correct as filed and the disproof cited was misread |
 
 ## Closed and cancelled
 
@@ -399,5 +398,6 @@ Exported 2026-08-14T11:47:55.716Z from team `Gamitch`.
 | [GAM-371](https://linear.app/gamitch/issue/GAM-371/public-routesspects-asserts-no-horizontal-overflow-but-only-at-412px) | — | Done | `public-routes.spec.ts` asserts no horizontal overflow but only at 412px, so it passed through the entire GAM-271 login-card bug |
 | [GAM-375](https://linear.app/gamitch/issue/GAM-375/three-gam-371-run-log-commits-are-on-main-unreviewed-revert-them-so) | — | Done | Three GAM-371 run-log commits are on `main` unreviewed — revert them so the branch's own PR lands the file properly |
 | [GAM-376](https://linear.app/gamitch/issue/GAM-376/record-the-2026-08-14-owner-driven-session-what-landed-what-the) | — | Done | Record the 2026-08-14 owner-driven session: what landed, what the process caught, and where the session itself was wrong |
+| [GAM-380](https://linear.app/gamitch/issue/GAM-380/the-session-records-7-calls-gam-350-and-gam-372-both-wrong-both-are) | — | Done | The session record's §7 calls GAM-350 and GAM-372 "both wrong"; both are correct as filed and the disproof cited was misread |
 
 Full descriptions, relations and timestamps are in `linear-export.json`.
