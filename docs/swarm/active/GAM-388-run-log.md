@@ -407,3 +407,26 @@ item 16, and whose answer changes the file.
   `claude/gam-388-checkin-token-deploy` is pushed and green; body is
   `docs/swarm/active/GAM-388-pr-body.md`, to be pasted **verbatim** — line 1 is
   parsed and indentation breaks it.
+
+## Close-out
+
+- **GAM-388 → `In Review`** (item 28e — never `Done`; the merge closes an issue,
+  not the author), read back and confirmed. Also added **`gate/human`**: while
+  `checkin-token` is undeployed, no machine should be able to close this row on
+  age or automation alone. Related links set to **GAM-395**, **GAM-396** and the
+  pre-existing **GAM-354**.
+- **Comment posted on GAM-388** stating plainly that it is Partial, what shipped,
+  what did not, the correction to its own prescription, and the two things
+  needing the owner.
+- **GAM-395** `Backlog` / Urgent / `gate/human` `tier/unreviewed`;
+  **GAM-396** `Backlog` / Medium / `gate/human` `tier/unreviewed`.
+
+**No subagent is in flight. Every one dispatched in this run —
+`checker-premise` round 1, `checker-premise` round 2, `worker-implementer` —
+was dispatched with `run_in_background: false`, waited for, and has its verdict
+recorded above as its own milestone.** Working tree clean; `git worktree list`
+shows the primary tree only.
+
+**Outstanding, and it needs a human:** the PR is not open. The branch is pushed
+and green; the body is at `docs/swarm/active/GAM-388-pr-body.md` and must be
+pasted verbatim.
