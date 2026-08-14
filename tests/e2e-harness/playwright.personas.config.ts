@@ -19,6 +19,13 @@
  * pinned devDependency, so this import resolves from a clean `npm ci` with
  * nothing installed globally. It previously did not, and the suite ran only
  * on hosts that happened to carry the package.
+ *
+ * Consequence worth knowing before you debug it: run the command above with
+ * `npx` (or the local `node_modules/.bin/playwright`), not a globally
+ * installed `playwright`. A global runner loading specs that import the
+ * repo-local `playwright/test` gives two module instances, so every `test()`
+ * registers in a registry the runner never reads and you get
+ * `Total: 0 tests in 0 files` rather than an error naming the cause.
  */
 import { defineConfig, devices } from 'playwright/test';
 
