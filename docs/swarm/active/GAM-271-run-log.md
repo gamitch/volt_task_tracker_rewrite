@@ -119,3 +119,9 @@ and 31527801235, and it is the thing this wording exists to make unmistakable.
   branch `claude/gam-271-experiment` removed, :5174 server stopped. Nothing
   from the rig is committed — it is an instrument, not a test (T131/T142
   convention).
+- **2026-08-14 05:05Z — packet written** to `docs/swarm/active/GAM-271-packet.md`,
+  carrying the *measured* prescription rather than the issue's wording, one
+  Allowed File (`src/pages/login/LoginPage.tsx`), seven acceptance criteria —
+  criterion 3 exists solely to catch the 247px collapse — and a Least confident
+  decisions list (not required at STANDARD; included because the gate attacks it
+  first and it is free).
