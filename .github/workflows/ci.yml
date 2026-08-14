@@ -286,6 +286,24 @@ jobs:
       - name: Gate-run parser and scope-derivation tests
         run: python3 .claude/skills/gate-run/scripts/test_gates.py
 
+      # pr-body's checker is JavaScript rather than Python because it IMPORTS
+      # `scripts/linear/declaration.mjs` instead of re-deriving that parse --
+      # that module's header forbids a second copy by name, and a checker with
+      # its own regex would be the very defect it exists to catch. Hence a
+      # node step here; `npm ci` is deliberately not run, since the script has
+      # no dependencies outside the repo.
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.2'
+
+      # These tests also pin the shipped PR template: one case asserts the
+      # template's own line 1 parses as PLACEHOLDER rather than
+      # NO_DECLARATION, so editing the template's first line without meaning
+      # to turns this red.
+      - name: PR-body declaration checker tests
+        run: node .claude/skills/pr-body/scripts/check.test.mjs
+
   # ---------------------------------------------------------------------------
   # Edge Function unit tests (Deno).
   #
