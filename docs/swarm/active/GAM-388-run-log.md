@@ -197,3 +197,44 @@ code half only; deploy half escalated to the owner.
   subagent** — packet r2 exists, no worker was dispatched, and no source file
   has been modified. A third REVISE escalates to the human owner (item 19a); it
   does not loop.
+
+- **checker-premise VERDICT: DISPATCH** — 2026-08-14, round 2 of 2. Subagent
+  returned; the run did not die holding it. 3 MINOR, 4 NIT, **no MAJOR, no
+  BLOCKER**. Definition of Ready item 1 is now satisfied and a worker may be
+  dispatched (item 19).
+
+  The gate again ran rather than read: own worktree `/tmp/pcheck-388-r2`
+  (item 23, removed afterwards, shared tree confirmed clean at `c35a97f`),
+  implemented packet r2 in full, wrote all five acceptance-criteria tests, and
+  measured `tsc --noEmit` **0**, `eslint` **0 errors**, full vitest
+  **95 files / 2463 tests green**, and `gate-run` **all six gates PASS**.
+
+  **Both round-1 MAJORs verified fixed by execution, not by assertion.**
+  - *MAJOR 1:* it ran **both** corrected mutations. Mutation A →
+    `1 failed | 30 passed`, the single red being criterion 1, with 2/3/4/5
+    green exactly as r2 predicts. Mutation B → single red on criterion 4 with
+    criterion 5 green. The expected-red sets are now correct.
+  - *MAJOR 2:* it searched for every surface rendering
+    `SupabaseLoaderError.message` verbatim and confirmed the packet's list is
+    **complete and exact** — `InviteParentDialog.tsx:477-483` and
+    `StudentDialog.tsx:474` do; `InvitesTab.tsx:748-753` uses fixed fallback
+    copy and does not; `StudentsTab.tsx:1176/1200` render `.message` only on
+    `runMutation` paths, never `invokeEdgeFunction`. The new string reads
+    correctly for coach and admin and misdirects no one.
+
+  Also confirmed: no shipped work is reversed (T103's "fixture data"/"not wired"
+  disclosure test keys on literals the new copy does not contain), and
+  `Kiosk.test.tsx:179-183` passes unmodified. The three MINORs and NIT 2 were
+  folded into the packet as **Worker notes** rather than spending a third round
+  on polish — there is no round 3 (item 19a).
+
+- **worker-implementer DISPATCHED** — 2026-08-14, on packet r2. Model: the
+  agent's pinned default (**sonnet**). Item 18's four `model: "opus"` triggers
+  are checked and **none fire** — no `supabase/migrations/` file, no RLS policy
+  or `security definer` helper, no metric-view SQL, no auth/session/role
+  resolution change. Item 25's second obligation applies: this is a read-path
+  error-state change and is not bumped because the word "check-in" sounds
+  sensitive. Dispatched with `run_in_background: false`; blocking now.
+  **If this line is the last one in this file, the run died holding this
+  subagent** — packet r2 is gated and complete on disk, and any partial source
+  edit is in the working tree only, uncommitted. Re-dispatch from the packet.

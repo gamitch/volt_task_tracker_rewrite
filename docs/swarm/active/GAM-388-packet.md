@@ -289,3 +289,49 @@ comment go stale and are left so deliberately; the underlying gap is already
 filed as `e2e-personas/harness-missing-checkin-token-stand-in`
 (`docs/swarm/inbox/claude-gam-342-e2e-w1-checkin-findings.json:44-56`) and is
 GAM-354's subject. Do not "fix" it here.
+
+---
+
+## Worker notes — from premise gate round 2 (DISPATCH)
+
+Round 2 returned **DISPATCH** (3 MINOR, 4 NIT, no MAJOR, no BLOCKER) after
+implementing this packet end to end: `tsc --noEmit` 0, `eslint` 0 errors, full
+vitest **2463/2463 green**, `gate-run` **all six gates PASS**. It also *ran both
+named mutations* and confirmed their expected-red sets are exactly as written —
+Mutation A → criterion 1 only (`1 failed | 30 passed`), Mutation B → criterion 4
+only, criterion 5 green. Apply these notes as you implement:
+
+1. **Run `npm run format` after applying Change 1.3.** The prescribed
+   `return { code: FUNCTION_NOT_DEPLOYED_CODE, message: FUNCTION_NOT_DEPLOYED_MESSAGE, cause: raw };`
+   is 102 characters against prettier's `printWidth: 100`, so it fails
+   `format:check` — gate 3, which acceptance criterion 6 requires green. Write
+   the object multi-line or reformat. The expression is otherwise correct
+   (tsc 0, eslint 0). *(Gate MINOR 1.)*
+
+2. **Import `FUNCTION_NOT_DEPLOYED_CODE` deep, from
+   `../../lib/supabase/functions`** — in both `Kiosk.tsx` and `Kiosk.test.tsx`.
+   `src/lib/supabase/index.ts:40` re-exports only `invokeEdgeFunction` from
+   `./functions`, and that barrel is **Forbidden** in this packet. Do not try to
+   add a re-export; `Kiosk.tsx` already deep-imports
+   `../../lib/supabase/loaders/kiosk`, so this is the established idiom.
+   *(Gate MINOR 2.)*
+
+3. **The shared string's "what to do" is deliberately system-level.** The gate
+   noted it states a remedy rather than a user action, unlike its sibling
+   `UNKNOWN_EDGE_FUNCTION_ERROR_MESSAGE`, and explicitly declined to block on it:
+   there genuinely is no user action, and inventing one is what produced round
+   1's MAJOR 2. **Do not "improve" it.** *(Gate MINOR 3.)*
+
+4. **Corrected citations** — use these when writing the module doc:
+   `errorResponse` is at `checkin-token/index.ts:213-215` (not 212-213); the
+   `OPTIONS`→200 return is at `:321-322` (not :320); the DES-12 Empty bullet is
+   `Kiosk.tsx:192-200` (not :195-200). *(Gate NIT 2.)*
+
+5. **`.catch((err) => …)` unannotated typechecks and lints clean** — the gate
+   verified this, so you are not trapped into an annotation either way.
+
+6. One fact in this packet's favour the gate found: a true Supabase *relay* 404
+   carries `x-relay-error` and is converted to `FunctionsRelayError` → `NETWORK`
+   **before** the new narrowing is reached
+   (`@supabase/functions-js` `FunctionsClient.js:263-265`), so relay failures
+   cannot be mislabelled as "not deployed".
