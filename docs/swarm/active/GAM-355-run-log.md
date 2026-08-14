@@ -257,3 +257,25 @@ subagent** — that is the failure shape the constitution's delegation rule and
   files, no `src/**`. `run_in_background: false`.
   *If this line is the last one in this file, the run died holding this
   subagent.*
+- **`worker-implementer` VERDICT: work delivered, commit `1861561`.** Verdict
+  seen and recorded — the dispatch above did not orphan. Independently verified
+  by the orchestrator rather than taken from the report (item 21: "clean" and
+  "committed" are different claims): `git log` shows HEAD at `1861561`,
+  `git show --stat` shows exactly
+  `tests/e2e-personas/coach-meeting.spec.ts` (+15) and
+  `tests/e2e-personas/student-parent.spec.ts` (+64), 47 insertions / 32
+  deletions, **two files, both in Allowed Files, no `src/**`**, and
+  `git status --porcelain -- ':!tests/e2e-personas/screenshots'` is empty.
+  The worker reports `npm run typecheck` exit 0, both specs green in isolation
+  (7 passed / 5 passed) and the full suite at 36 passed / 2 failed, exit 1,
+  with the two failures being exactly the out-of-scope pair AC6 predicted. It
+  correctly declined to self-certify.
+
+  One deviation it declared rather than hid: it widened the percentage match to
+  `\d+(\.\d)?%` instead of the measured `\d+%`, on the packet's own "do not
+  over-fit" instruction. That is a judgement call the checker should grade, not
+  something to wave through here.
+- **DISPATCHED `checker-reviewer`** on commit `1861561` against the packet's
+  AC1-AC7. `run_in_background: false`.
+  *If this line is the last one in this file, the run died holding this
+  subagent.*
