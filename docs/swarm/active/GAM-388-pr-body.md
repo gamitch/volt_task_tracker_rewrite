@@ -1,4 +1,4 @@
-Closes GAM-388 — but see **Scope** below: this ships **Partial**, not Passed. The deployment half is GAM-395.
+Closes GAM-388 — but see **Scope** below: this ships **Partial**, not Passed, and the deployment half is filed separately.
 
 ## What changed
 
