@@ -87,3 +87,19 @@ so this file is the only thing that survives.
     *permanently entrenches* them.
   Also: `met01` `e.team_ids` predicate is at `:114`, not `:113` (my error).
   Next: revise the packet, then round 2 (item 19a caps the gate at two rounds).
+- **22:24Z — packet revised for round 2.** All 8 findings dispositioned (table at
+  the foot of the packet). BLOCKER fixed by adding `src/pages/roster/StudentsTab.test.tsx`
+  to Allowed Files with the amendment scope bounded; criterion 3 rewritten to a
+  stateful row-state assertion plus a no-`.neq()` rule, and criterion 9 gains a
+  third mutation whose whole job is to prove criterion 3 can now fail; both
+  broken populations documented. Two of the gate's suggestions were **declined
+  with reasons rather than adopted**: the step-2.4 guard (it does not prevent the
+  case it targets) and threading `previousTeamId` from the call site (the
+  read-back is more correct — threading trusts a possibly-stale browser row and
+  would close the wrong team). Baselines measured on this branch after `npm ci`:
+  full **2458**, `loaders/` **235**, `StudentsTab.test.tsx` **34**.
+- **22:25Z — DISPATCHED `checker-premise` round 2 of max 2 (item 19a)**,
+  `run_in_background: false`, model opus. **If this line is the last one in this
+  file, the run died holding this subagent** — the revised packet was never
+  re-gated and no worker ran. A third REVISE escalates to the human owner rather
+  than looping. The next line is the verdict.
