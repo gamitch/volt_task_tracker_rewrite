@@ -18,3 +18,11 @@ Tier at dispatch: `tier/fast`. Labels: Improvement, fast, w3.
   on-screen "won't record anything twice" promise (`EndMeetingDialog.tsx:603`)
   false. No production code change. Renamed local branch to
   `claude/gam-338-end-meeting-dedup-test` per item 28.5.
+- 2026-08-14: Read constitution items 26 and 19 as directed. Confirmed FAST is
+  the correct tier: no write path (test-only change), no schema/RLS/migration/
+  auth logic, no signature change, zero lines of production change (well under
+  the ≤20 line cap), and a named mutation (`ignoreDuplicates: true` removal)
+  that must turn a test red. Item 19's premise-gate applies to packets reaching
+  a worker; FAST has neither, so it does not apply here. Proceeding to
+  implement directly per item 26 (orchestrator implements, no packet/worker/
+  checker subagent required for the implementation step itself).
