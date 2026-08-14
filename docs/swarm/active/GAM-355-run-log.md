@@ -202,3 +202,20 @@ subagent** — that is the failure shape the constitution's delegation rule and
   `StudentHome.tsx:1643-1645` / `ParentHome.tsx:1452-1454`), and §7.5 (no
   `src/**` change needed; the gate's candidate fix turned all 12 tests in the
   two files green with zero source edits, `tsc --noEmit` clean).
+- **Packet revised** against all nine round-1 findings (3 MAJOR, 4 MINOR,
+  2 NIT) and pushed. AC1 gains the line-110 deletion and the corrected
+  `ScheduleMeetingsDialog.tsx:854-855,861` citation; AC2 carries the measured
+  `created_by IS NULL` answer instead of a question; AC3/AC4 gain the shared
+  format string and the warning that the hours value moves every reseed; AC5
+  gains the gate's tested locator and a `beforeEach` cleanup, and withdraws the
+  §7.1 fallback; AC6 stops naming a fixed failure set and names the coupled
+  flaky pair instead; AC7 becomes
+  `git status --porcelain -- ':!tests/e2e-personas/screenshots'`. New §8 records
+  the falsified `outreach-lifecycle` claim. §7's original doubts are kept
+  verbatim with the gate's answers appended.
+- **DISPATCHED `checker-premise` round 2** (the cap, item 19a) — continued on
+  the *same* agent so it re-checks its own findings against its own
+  measurements, scoped to the revision deltas per item 19b rather than
+  re-auditing settled ground. `run_in_background: false`.
+  *If this line is the last one in this file, the run died holding this
+  subagent.*
