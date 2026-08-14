@@ -392,3 +392,35 @@ subagent** — that is the failure shape the constitution's delegation rule and
   `…-float` capture ids) is **dropped** rather than filed, because AC7
   deliberately forbids the rename that would close it — a row nobody may work
   is item 20's failure shape wearing the opposite hat.
+- **Gates run at `0d23316`, clean tree, `--require-clean`:** tsc 0 · vite build
+  0 · format:check 0 · eslint 0 errors / 378 warnings · vitest 95 files / 2443
+  tests exit 0 · scoped vitest **SKIPPED**. **Five of six, and I am saying
+  five** — gate 6 had no derivable scope because no `src/` file changed. No
+  baseline for gate 5 and none needed: `vite.config.ts:57-59` excludes
+  `tests/e2e-personas/**` from vitest discovery, so this change cannot move that
+  count by construction; I checked the exclusion rather than asserting it.
+
+  First attempt came back **eslint exit 1, 1124 errors** — all of them in
+  `playwright-report/personas`, the HTML report my own measurement runs wrote.
+  It is gitignored and eslint does not read `.gitignore`. Already filed as
+  **GAM-362** and **GAM-365**, so not re-filed. Removed the artifact and re-ran.
+  Also restored the 47 modified screenshot PNGs to HEAD before gating: they were
+  byproducts of my runs, not pre-existing work (the tree was clean at session
+  start), and AC7 was explicit that they are not to be staged.
+- **Follow-ups filed (item 20, before the row moves; written through the
+  `linear-task-writing` skill per item 30):** **GAM-367** (the
+  `outreach-lifecycle` read-after-write race and its coupling to
+  `reports-accounting:333` — the row states the constraint that fixing the race
+  alone makes the other failure permanent), **GAM-368** (`student-checkin`'s
+  hardcoded calendar labels), **GAM-369** (NIT, the stale test title). Every
+  line number in all three re-verified against the branch before writing.
+
+  **GAM-360 is this same issue filed twice** — the same five failures, from the
+  GAM-345 run rather than the GAM-342 one. Commented with the resolution and
+  recommended as a duplicate; **not closed**, because an agent closing a row it
+  did not work is item 28e's line and this is not my call.
+
+  **Not filed, deliberately:** the `…-float` capture ids. AC7 forbids the rename
+  that would close them, so the row could not be worked.
+- **Verification-log entry appended** (item 24 — recording and the work land in
+  the same delivery, not as a later catch-up).
