@@ -287,7 +287,7 @@ authority *against* this class of error, not for it.
 has a per-table fake (`students.test.ts:98`) but **no `students` branch at all**
 — its `fromSpy` throws `unexpected table: students` — and no write chains. The
 existing coverage for `createStudent`/`updateStudent` is in
-`StudentsTab.test.tsx:1014-1110`. Expect to work in both files.
+`StudentsTab.test.tsx:1014-1103`. Expect to work in both files.
 
 1. `createStudent` issues a `student_teams` write for the new student's id and
    `payload.teamId`, with `left_on: null`, on conflict target
@@ -416,10 +416,13 @@ still the right place for the next reader to push.
 5. **`left_on` date derivation.** *Round 1 was right that "`current_date` (or
    the client's equivalent)" was not a prescription at all* — you cannot send a
    SQL expression through PostgREST. §4 now pins the exact literal and chooses
-   **UTC**, matching `src/lib/format/dates.ts:41` and
-   `ScheduleMeetingsDialog.tsx:353`, over the Chicago derivation this entry
-   originally worried about. **What would make it wrong:** any consumer reading
-   the `left_on` *value* rather than its nullness. The gate found none.
+   **UTC**, matching `ScheduleMeetingsDialog.tsx:369` and
+   `OutreachEventDialog.tsx:699,710`, over the Chicago derivation this entry
+   originally worried about. *Round 2 also corrected §4's authority* — the
+   `dates.ts` citation was backwards, and the real drift window (19:00–midnight
+   Chicago stamps tomorrow) is now stated outright rather than waved at.
+   **What would make it wrong:** any consumer reading the `left_on` *value*
+   rather than its nullness. The gate found none.
 
 ## Round 1 gate findings, and what each one changed
 
