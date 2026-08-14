@@ -4,10 +4,10 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-14T11:21:05.071Z from team `Gamitch`.
+Exported 2026-08-14T11:47:55.716Z from team `Gamitch`.
 
-- **376** issues (242 archived)
-- **71** not yet completed or cancelled
+- **380** issues (242 archived)
+- **74** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
 ## Open
@@ -36,7 +36,6 @@ Exported 2026-08-14T11:21:05.071Z from team `Gamitch`.
 | [GAM-282](https://linear.app/gamitch/issue/GAM-282/t606-a-single-meeting-cannot-have-its-own-location-this-week-were-in) | T606 | Backlog | area/w3 tier/heavy | T606 — A single meeting cannot have its own location ("this week we're in the shop") |
 | [GAM-284](https://linear.app/gamitch/issue/GAM-284/t608-collapse-the-three-surviving-narrow-copies-of-the-method-shape) | T608 | Backlog | area/w3 tier/unreviewed | T608 — Collapse the THREE surviving narrow copies of the `method` shape — `selfCheckoff.ts`'s fork plus two more T603 could not reach — and fix the module doc that T603 made false |
 | [GAM-286](https://linear.app/gamitch/issue/GAM-286/t610-item-10-names-two-different-rules-depending-on-which-part-of-the) | T610 | Backlog | area/w3 tier/unreviewed | T610 — "Item 10" names two different rules depending on which part of the constitution you read |
-| [GAM-290](https://linear.app/gamitch/issue/GAM-290/t614-the-end-time-field-has-no-lower-bound-so-a-series-edit-can) | T614 | In Progress | area/w3 tier/unreviewed | T614 — The End time field has no lower bound, so a series edit can persist a meeting whose end is before its start |
 | [GAM-297](https://linear.app/gamitch/issue/GAM-297/t512-workflowsmd-reports-three-different-open-row-totals-60-42-36-item) | T512 | Backlog | area/w2 tier/unreviewed | T512 — `WORKFLOWS.md` reports three different open-row totals (~60, 42, 36); item 29 moved the source to the Linear export |
 | [GAM-300](https://linear.app/gamitch/issue/GAM-300/t807-two-loaders-still-apply-the-greatestx-1-floor-t509-removed-and) | T807 | Backlog | area/w5 tier/unreviewed | T807 — Two loaders still apply the `greatest(x, 1)` floor T509 removed, and three row types still declare `participation_pct` non-nullable |
 | [GAM-306](https://linear.app/gamitch/issue/GAM-306/t616-no-event-records-who-created-it-so-outreach-detail-permanently) | T616 | Backlog | area/w3 tier/unreviewed | T616 — No event records who created it, so outreach detail permanently reads "Unknown creator" |
@@ -85,6 +84,10 @@ Exported 2026-08-14T11:21:05.071Z from team `Gamitch`.
 | [GAM-372](https://linear.app/gamitch/issue/GAM-372/the-layout-measurement-skill-documents-three-environment-facts-that) | — | Backlog | Improvement tier/fast | The `layout-measurement` skill documents three environment facts that are all false in a dispatched container, and its script exits 2 |
 | [GAM-373](https://linear.app/gamitch/issue/GAM-373/re-measure-t072s-liveconsoletsx1277-the-convention-it-was-changed-to) | — | Backlog | Improvement tier/fast | Re-measure T072's `LiveConsole.tsx:1277` — the convention it was changed to satisfy is now known to be inert under a shrink-to-fit parent |
 | [GAM-374](https://linear.app/gamitch/issue/GAM-374/nothing-stopped-a-dispatched-run-pushing-three-commits-straight-to) | — | Backlog | provenance/other tier/fast | Nothing stopped a dispatched run pushing three commits straight to `main` — the declaration gate is `pull_request`-only, so a direct push bypasses every review control at once |
+| [GAM-377](https://linear.app/gamitch/issue/GAM-377/the-outreach-event-dialog-has-no-startend-ordering-guard-so-a-coach) | — | Backlog | Bug area/w2 tier/heavy | The outreach event dialog has no start/end ordering guard, so a coach can save a session whose end is before its start — and outreach hours are the ones that count toward season goals |
+| [GAM-378](https://linear.app/gamitch/issue/GAM-378/chicagowalltimetoutciso-resolves-the-zone-offset-at-the-naive-utc) | — | Backlog | Bug area/w3 tier/heavy | chicagoWallTimeToUtcIso resolves the zone offset at the naive-UTC instant, so every 07:00–07:59 session on a spring-forward date is stored an hour late — triplicated across three dialogs |
+| [GAM-379](https://linear.app/gamitch/issue/GAM-379/event-sessions-has-no-check-constraint-on-its-interval-so-nothing) | — | Backlog | Bug area/w3 tier/heavy | event_sessions has no CHECK constraint on its interval, so nothing below the UI stops an inverted session — and no audit has asked whether bad rows already exist |
+| [GAM-380](https://linear.app/gamitch/issue/GAM-380/the-session-records-7-calls-gam-350-and-gam-372-both-wrong-both-are) | — | In Review | provenance/other tier/fast | The session record's §7 calls GAM-350 and GAM-372 "both wrong"; both are correct as filed and the disproof cited was misread |
 
 ## Closed and cancelled
 
@@ -357,6 +360,7 @@ Exported 2026-08-14T11:21:05.071Z from team `Gamitch`.
 | [GAM-287](https://linear.app/gamitch/issue/GAM-287/t611-once-one-meeting-in-a-series-has-its-own-time-any-later-series) | T611 | Done | T611 — Once one meeting in a series has its own time, any later series edit silently rewrites it back — including a title-only save |
 | [GAM-288](https://linear.app/gamitch/issue/GAM-288/t612-mutation-replays-replaypy-reports-a-genuine-red-replay-as) | T612 | Done | T612 — `mutation-replay`'s `replay.py` reports a genuine red replay as `UNTRUSTWORTHY: the mutated run executed no tests` |
 | [GAM-289](https://linear.app/gamitch/issue/GAM-289/t613-three-currently-green-tests-go-red-on-2026-08-10-for-calendar) | T613 | Done | T613 — Three currently-green tests go red on 2026-08-10 for calendar reasons alone, and any worker in that window trips stop-and-escalate for something it did not cause |
+| [GAM-290](https://linear.app/gamitch/issue/GAM-290/t614-the-end-time-field-has-no-lower-bound-so-a-series-edit-can) | T614 | Done | T614 — The End time field has no lower bound, so a series edit can persist a meeting whose end is before its start |
 | [GAM-291](https://linear.app/gamitch/issue/GAM-291/t800-parenthomes-child-cards-scope-events-off-a-single-teamid-so-a) | T800 | Done | T800 — `ParentHome`'s child cards scope events off a single `teamId`, so a parent of a two-team child sees only one team's events |
 | [GAM-292](https://linear.app/gamitch/issue/GAM-292/t801-dashboard-viewssql-carries-two-wrong-comments-that-constitution) | T801 | Done | T801 — `dashboard_views.sql` carries two wrong comments that constitution item 10 forbids fixing in place |
 | [GAM-293](https://linear.app/gamitch/issue/GAM-293/t802-resolvedstudentidentityteamid-is-written-and-never-read) | T802 | Done | T802 — `ResolvedStudentIdentity.teamId` is written and never read |
