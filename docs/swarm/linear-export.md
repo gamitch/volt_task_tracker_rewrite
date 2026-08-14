@@ -4,9 +4,9 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-14T10:51:42.478Z from team `Gamitch`.
+Exported 2026-08-14T11:21:05.071Z from team `Gamitch`.
 
-- **375** issues (242 archived)
+- **376** issues (242 archived)
 - **71** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
@@ -52,7 +52,7 @@ Exported 2026-08-14T10:51:42.478Z from team `Gamitch`.
 | [GAM-329](https://linear.app/gamitch/issue/GAM-329/the-linear-declaration-gate-cannot-validate-also-fixes-or-fall-back) | — | Backlog | tier/fast | The Linear declaration gate cannot validate `Also-fixes:` or fall back locally — its job has no checkout |
 | [GAM-330](https://linear.app/gamitch/issue/GAM-330/linear-api-calls-have-no-timeout-scriptslinearclientmjs-sets-no) | — | Backlog | tier/fast | Linear API calls have no timeout — `scripts/linear/client.mjs` sets no `AbortSignal` |
 | [GAM-331](https://linear.app/gamitch/issue/GAM-331/verify-importmetamain-is-true-in-the-supabase-edge-runtime-after-the) | — | Backlog | gate/unverified tier/fast | Verify `import.meta.main` is true in the Supabase Edge Runtime after the next `linear-dispatch` deploy |
-| [GAM-333](https://linear.app/gamitch/issue/GAM-333/a-dispatched-run-can-push-a-branch-but-cannot-open-a-pr-agentsmd) | — | Backlog | tier/fast | A dispatched run can push a branch but cannot open a PR — `AGENTS.md` records two walls and there are three |
+| [GAM-333](https://linear.app/gamitch/issue/GAM-333/a-dispatched-run-can-push-a-branch-but-usually-cannot-open-a-pr-8-of) | — | Backlog | tier/fast | A dispatched run can push a branch but usually cannot open a PR — 8 of 13 stranded, and the 5 that succeeded authored as `claude[bot]`, not as the PAT |
 | [GAM-334](https://linear.app/gamitch/issue/GAM-334/the-declaration-gate-cannot-express-second-half-of-a-two-pr-row-so) | — | Backlog | provenance/other tier/fast | The declaration gate cannot express "second half of a two-PR row", so every workflow-touching row will go red on the PR that completes it |
 | [GAM-336](https://linear.app/gamitch/issue/GAM-336/two-unguarded-lines-in-the-archived-team-scope-fix-reinstate-a-data) | — | Backlog | area/w3 provenance/checker tier/standard | Two unguarded lines in the archived-team scope fix reinstate a data-correctness MAJOR if deleted |
 | [GAM-337](https://linear.app/gamitch/issue/GAM-337/ending-a-meeting-can-report-failure-for-a-meeting-that-actually-ended) | — | Backlog | Improvement area/w3 tier/standard | Ending a meeting can report failure for a meeting that actually ended — the coach is told to retry an action that succeeded |
@@ -394,5 +394,6 @@ Exported 2026-08-14T10:51:42.478Z from team `Gamitch`.
 | [GAM-366](https://linear.app/gamitch/issue/GAM-366/every-heavy-dispatch-run-finishes-with-under-16-minutes-of-headroom) | — | Done | Every HEAVY dispatch run finishes with under 16 minutes of headroom, and two on one row finished with none — `timeout-minutes: 120` is a cliff, not a bound |
 | [GAM-371](https://linear.app/gamitch/issue/GAM-371/public-routesspects-asserts-no-horizontal-overflow-but-only-at-412px) | — | Done | `public-routes.spec.ts` asserts no horizontal overflow but only at 412px, so it passed through the entire GAM-271 login-card bug |
 | [GAM-375](https://linear.app/gamitch/issue/GAM-375/three-gam-371-run-log-commits-are-on-main-unreviewed-revert-them-so) | — | Done | Three GAM-371 run-log commits are on `main` unreviewed — revert them so the branch's own PR lands the file properly |
+| [GAM-376](https://linear.app/gamitch/issue/GAM-376/record-the-2026-08-14-owner-driven-session-what-landed-what-the) | — | Done | Record the 2026-08-14 owner-driven session: what landed, what the process caught, and where the session itself was wrong |
 
 Full descriptions, relations and timestamps are in `linear-export.json`.
