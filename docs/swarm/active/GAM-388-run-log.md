@@ -238,3 +238,17 @@ code half only; deploy half escalated to the owner.
   **If this line is the last one in this file, the run died holding this
   subagent** — packet r2 is gated and complete on disk, and any partial source
   edit is in the working tree only, uncommitted. Re-dispatch from the packet.
+
+- **worker-implementer VERDICT: complete, self-reported** — 2026-08-14. Subagent
+  returned; the run did not die holding it. Reported SHA
+  `c84427aa6b9a740e63671a27fd4353ac6e8bdcf8`, four files, +224/-19. Reported all
+  six gates green (2463 tests, +5 over a 2458 baseline it established itself at
+  the parent commit) and both mutations matching the packet's predictions
+  exactly — A red on criterion 1 only, B red on criterion 4 only with criterion 5
+  green, each `1 failed | 30 passed`, exit 1, run in its own disposable worktree.
+  It filed no dispute.
+
+  **This is the worker's own account and is not yet evidence** (item 21: a
+  completion report states a SHA, and existence is verified rather than
+  assumed; the Definition of Done forbids self-certification). Orchestrator
+  verification follows.
