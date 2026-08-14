@@ -233,3 +233,14 @@ and 31527801235, and it is the thing this wording exists to make unmistakable.
   line is written before the wait.
   **If this line is the last one in this file, the run died holding this
   subagent.**
+- **2026-08-14 06:00Z — `worker-implementer` returned.** Subagent completed,
+  report in hand, nothing in flight. Claims commit
+  `7a9d9daf49b38f670b905cc05981b789d86d85ae`, one file
+  (`src/pages/login/LoginPage.tsx`), all six gates green with eslint at
+  **0 errors / 378 warnings — no rise** and vitest **95 files / 2443 tests**,
+  and the full before/after measurement table reproducing the packet's numbers.
+  It flagged one deviation honestly rather than hiding it: it did **not** delete
+  `/tmp/pwrig` because it did not create it and could not rule out another
+  process depending on it. That is correct judgement — the rig is mine, and item
+  23's rationale is exactly that an agent must not destroy another's instrument.
+  **Verifying independently now — a worker does not self-certify.**
