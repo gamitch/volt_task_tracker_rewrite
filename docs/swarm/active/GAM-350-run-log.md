@@ -77,3 +77,38 @@ Dispatched from Linear. Branch `claude/gam-350-playwright-dependency`, base
   trap for anyone who still has a global install and runs it out of habit, so
   it is documented at the command's own doc site rather than left to be
   rediscovered.
+- **12:08Z — gates run on `a151607`, clean tree, via `gate-run` with
+  `--require-clean`. VERDICT: PASS — 5 of 6. Five, not six, and I am saying
+  five.**
+
+  ```
+  GATE RUN — a151607 on claude/gam-350-playwright-dependency — tree clean
+    1 tsc              exit 0  PASS
+    2 vite build       exit 0  PASS
+    3 format:check     exit 0  PASS
+    4 eslint           exit 0  PASS       0 errors, 379 warnings
+    5 vitest (full)    exit 0  PASS       95 files / 2458 tests  baseline 2458 (+0)
+    6 vitest (scoped)      –  SKIP        no scope derivable from the diff
+  ```
+
+  Gate 6 has no defensible scope because the change touches no `src/` file —
+  that is the expected shape for a dependency declaration, not a dodge.
+  Baseline 2458 was **measured, not assumed**: a separate clone at the merge
+  base `6e8a791`, `npm ci` then `npx vitest run` → 95 files / 2458 tests,
+  exit 0. The suite is unmoved, which is the right result — vitest never
+  collected `tests/e2e*`.
+- **12:09Z — a discrepancy chased rather than quoted.** Gate 4 reported 379
+  warnings where `gate-run`'s own SKILL.md documents a standing 377. I ran
+  `npx eslint .` at the merge base: **also 379, 0 errors.** So this change adds
+  no warnings, and the skill's figure has drifted by 2 on `main` independently
+  of me. Left unfixed here deliberately — it is a `.claude/skills/**` doc
+  number with nothing to do with this row, and folding it into a scoped PR is
+  the staging habit item 22 exists to prevent — so it is filed as its own row
+  under item 20 rather than left in this log, where nobody triages it.
+  Consequence if ignored: anyone following the skill's instruction to pass
+  `--max-warnings 377` gets a spurious FAIL on a clean tree.
+- **12:09Z — CI checked for collisions.** No `.github/workflows/**` file
+  mentions playwright, so the six workflows running `npm ci` gain one package
+  and, per the no-lifecycle-scripts finding, no browser download. Nothing under
+  `.github/workflows/**` needs editing — which is just as well, since a
+  dispatched run cannot push there.
