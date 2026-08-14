@@ -4,10 +4,10 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-13T11:37:43.643Z from team `Gamitch`.
+Exported 2026-08-14T01:22:04.005Z from team `Gamitch`.
 
-- **365** issues (242 archived)
-- **68** not yet completed or cancelled
+- **366** issues (242 archived)
+- **67** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
 ## Open
@@ -61,7 +61,6 @@ Exported 2026-08-13T11:37:43.643Z from team `Gamitch`.
 | [GAM-339](https://linear.app/gamitch/issue/GAM-339/three-near-identical-supabase-write-error-copy-helpers-and-a-fourth) | — | Backlog | Improvement area/w3 tier/standard | Three near-identical Supabase write-error copy helpers, and a fourth call site already needs one — share the classification, not the words |
 | [GAM-340](https://linear.app/gamitch/issue/GAM-340/student-teams-has-no-writer-so-a-re-teamed-student-keeps-receiving) | — | Backlog | area/w5 tier/unreviewed | `student_teams` has no writer, so a re-teamed student keeps receiving their former team's events |
 | [GAM-341](https://linear.app/gamitch/issue/GAM-341/no-assertion-guards-the-my-student-ids-test-in-the-new-events-rls) | — | Backlog | area/w5 tier/unreviewed | No assertion guards the `my_student_ids()` test in the new events RLS policies — removing it leaves the suite green |
-| [GAM-344](https://linear.app/gamitch/issue/GAM-344/e2e-w3-run-a-meeting-schedule-attendance-participation-percent) | — | In Progress | area/w3 provenance/other tier/heavy | E2E — W3 Run a meeting: schedule → attendance → participation % |
 | [GAM-346](https://linear.app/gamitch/issue/GAM-346/e2e-w5-home-dashboards-what-each-role-lands-on-and-what-they-can-act) | — | Backlog | area/w5 provenance/other tier/unreviewed | E2E — W5 Home dashboards: what each role lands on, and what they can act on |
 | [GAM-347](https://linear.app/gamitch/issue/GAM-347/e2e-w6-calendar-and-subscribe-a-student-subscribes-and-the-feed-stays) | — | Backlog | area/w6 provenance/other tier/unreviewed | E2E — W6 Calendar and subscribe: a student subscribes and the feed stays current |
 | [GAM-348](https://linear.app/gamitch/issue/GAM-348/e2e-w7-roster-and-invites-adding-people-changing-them-and-inviting-a) | — | Backlog | area/w7 provenance/other tier/unreviewed | E2E — W7 Roster and invites: adding people, changing them, and inviting a parent |
@@ -71,7 +70,7 @@ Exported 2026-08-13T11:37:43.643Z from team `Gamitch`.
 | [GAM-352](https://linear.app/gamitch/issue/GAM-352/checkinresult-crashes-to-a-blank-page-on-an-unvalidated-200-check-in) | — | Backlog | area/w1 provenance/e2e-personas tier/unreviewed | CheckinResult crashes to a blank page on an unvalidated 200 check-in payload |
 | [GAM-353](https://linear.app/gamitch/issue/GAM-353/selfcheckoffdialog-is-unreachable-in-the-unmodified-seed-fixtures) | — | Backlog | area/w1 provenance/e2e-personas tier/unreviewed | SelfCheckoffDialog is unreachable in the unmodified seed fixtures |
 | [GAM-354](https://linear.app/gamitch/issue/GAM-354/the-harness-has-no-stand-in-for-the-checkin-token-edge-function-the) | — | Backlog | area/w1 provenance/e2e-personas tier/unreviewed | The harness has no stand-in for the checkin-token Edge Function the kiosk calls |
-| [GAM-355](https://linear.app/gamitch/issue/GAM-355/five-pre-existing-persona-suite-failures-are-stale-against-shipped) | — | Backlog | area/w1 provenance/e2e-personas tier/unreviewed | Five pre-existing persona-suite failures are stale against shipped fixes, not real regressions |
+| [GAM-355](https://linear.app/gamitch/issue/GAM-355/five-pre-existing-persona-suite-failures-are-stale-against-shipped) | — | Todo | area/w1 provenance/e2e-personas tier/unreviewed | Five pre-existing persona-suite failures are stale against shipped fixes, not real regressions |
 | [GAM-356](https://linear.app/gamitch/issue/GAM-356/the-student-meetings-view-labels-a-student-with-no-participation-rate) | — | Backlog | area/w4 provenance/e2e-personas tier/unreviewed | The student meetings view labels a student with no participation rate "Participation: null%" and announces it as 0% |
 | [GAM-357](https://linear.app/gamitch/issue/GAM-357/rpt-0506s-csv-builders-ship-in-the-bundle-and-no-user-path-reaches) | — | Backlog | area/w4 provenance/e2e-personas tier/unreviewed | RPT-05/06's CSV builders ship in the bundle and no user path reaches them — no export control exists on any reports tab |
 | [GAM-358](https://linear.app/gamitch/issue/GAM-358/the-active-students-kpi-tiles-per-team-breakdown-counts-a-dual-team) | — | Backlog | area/w4 provenance/e2e-personas tier/unreviewed | The Active students KPI tile's per-team breakdown counts a dual-team student twice while its own headline counts them once |
@@ -383,6 +382,8 @@ Exported 2026-08-13T11:37:43.643Z from team `Gamitch`.
 | [GAM-335](https://linear.app/gamitch/issue/GAM-335/shadow-mode-computes-its-intended-action-from-the-post-automation) | — | Done | Shadow mode computes its intended action from the post-automation state, so an ordinary declared merge always scores MISMATCH — the 10-MATCH exit criterion is unreachable |
 | [GAM-342](https://linear.app/gamitch/issue/GAM-342/e2e-w1-check-in-a-student-arrives-and-gets-counted) | — | Done | E2E — W1 Check in: a student arrives and gets counted |
 | [GAM-343](https://linear.app/gamitch/issue/GAM-343/e2e-w2-run-an-outreach-event-create-rsvp-attend-complete-hours-land) | — | Done | E2E — W2 Run an outreach event: create → RSVP → attend → complete → hours land |
+| [GAM-344](https://linear.app/gamitch/issue/GAM-344/e2e-w3-run-a-meeting-schedule-attendance-participation-percent) | — | Done | E2E — W3 Run a meeting: schedule → attendance → participation % |
 | [GAM-345](https://linear.app/gamitch/issue/GAM-345/e2e-w4-hours-and-goal-accounting-the-same-students-numbers-agree-on) | — | Done | E2E — W4 Hours and goal accounting: the same student's numbers agree on every screen |
+| [GAM-366](https://linear.app/gamitch/issue/GAM-366/every-heavy-dispatch-run-finishes-with-under-16-minutes-of-headroom) | — | Done | Every HEAVY dispatch run finishes with under 16 minutes of headroom, and two on one row finished with none — `timeout-minutes: 120` is a cliff, not a bound |
 
 Full descriptions, relations and timestamps are in `linear-export.json`.

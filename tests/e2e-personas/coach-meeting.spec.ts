@@ -93,20 +93,31 @@ test.describe('MTG-02 Schedule meetings dialog', () => {
     await scope.click();
 
     const optionLabels = await page.getByRole('option').allInnerTexts();
+    // FINDING 1 (GAM-344 Task 1, replaces the earlier comment describing a
+    // guard that no longer exists): GAM-305 (legacy T615) landed
+    // `excludeArchivedTeams` (`ScheduleMeetingsDialog.tsx:854`), so the
+    // archived `Volt Legacy 2201` is now correctly absent from this list.
+    // Kept exact, not loosened, so a regression that re-admits an archived
+    // team into the scope picker turns this red again.
+    //
+    // GAM-355 merge note: both branches removed this entry independently and
+    // identically. Keeping GAM-355's mechanism detail here so the next reader
+    // does not misdiagnose which line does the work -- `Volt Legacy 2201` is
+    // `teams.archived = true` in `seed.sql`, and the exclusion happens at
+    // `:854-855` and `:861`: `excludeArchivedTeams` narrows `allTeamIds`,
+    // which seeds the initial `selectedTeamIds`. `:885` does the OPPOSITE (it
+    // re-includes an archived team that is already selected) and `:1236`
+    // renders such a team `disabled`; neither is why this option is absent.
     expect(optionLabels.map((t) => t.trim())).toEqual([
       'Select all',
       'Volt Robotics 9911',
       'Volt Junior 4402',
-      // Regression guard for GAM-305: `Volt Legacy 2201` is `teams.archived =
-      // true` in `seed.sql` and is filtered out of this list. The exclusion
-      // happens at `ScheduleMeetingsDialog.tsx:854-855` and `:861` —
-      // `excludeArchivedTeams` narrows `allTeamIds`, which seeds the initial
-      // `selectedTeamIds`. (`:885` does the opposite — it re-includes an
-      // archived team that is already selected — and `:1236` renders such a
-      // team disabled; neither of those is the reason this option is absent.)
     ]);
     await capture(page, '11-coach-team-scope-open');
 
+    // Only `Volt Junior 4402` is left to deselect -- `Volt Legacy 2201` is no
+    // longer offered at all (see the FINDING 1 comment above), so there is
+    // nothing to click there any more.
     await page.getByRole('option', { name: 'Volt Junior 4402' }).click();
     await page.keyboard.press('Escape');
     await expect(scope).toHaveText('Volt Robotics 9911');
@@ -122,6 +133,13 @@ test.describe('MTG-02 Schedule meetings dialog', () => {
 
     const scope = dialog.getByRole('combobox').first();
     await scope.click();
+    // GAM-344 Task 1: the `Volt Legacy 2201` deselect click is dropped --
+    // GAM-305's `excludeArchivedTeams` means that option is no longer offered
+    // at all (see FINDING 1's comment above, in the team-scope-dropdown
+    // test). Measured by the gate in the browser: options are exactly
+    // `["Select all", "Volt Robotics 9911", "Volt Junior 4402"]`, and
+    // deselecting only `Volt Junior 4402` still leaves `Volt Robotics 9911`
+    // selected, so the `event.team_ids` assertion below still holds unchanged.
     await page.getByRole('option', { name: 'Volt Junior 4402' }).click();
     await page.keyboard.press('Escape');
 
