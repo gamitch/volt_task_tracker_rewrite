@@ -4,7 +4,7 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-14T10:13:49.460Z from team `Gamitch`.
+Exported 2026-08-14T10:14:21.345Z from team `Gamitch`.
 
 - **373** issues (242 archived)
 - **72** not yet completed or cancelled
@@ -83,7 +83,7 @@ Exported 2026-08-14T10:13:49.460Z from team `Gamitch`.
 | [GAM-368](https://linear.app/gamitch/issue/GAM-368/student-checkinspects216-pins-hardcoded-calendar-dates-jul-14-sun-aug) | — | Backlog | area/w1 provenance/e2e-personas tier/unreviewed | `student-checkin.spec.ts:216` pins hardcoded calendar dates (`Jul 14`, `Sun, Aug 23`) against a `current_date`-relative seed, so it goes red as the calendar moves |
 | [GAM-369](https://linear.app/gamitch/issue/GAM-369/coach-meetingspects88-is-still-titled-lists-every-team-after-it-was) | — | Backlog | area/w1 provenance/e2e-personas tier/unreviewed | `coach-meeting.spec.ts:88` is still titled "lists every team" after it was changed to assert the archived team is excluded |
 | [GAM-370](https://linear.app/gamitch/issue/GAM-370/the-same-login-card-overflow-ships-on-three-more-full-screen-cards) | — | Backlog | Bug tier/standard | The same login-card overflow ships on three more full-screen cards — `/accept-invite` measured at 40px on a 320px phone |
-| [GAM-371](https://linear.app/gamitch/issue/GAM-371/public-routesspects-asserts-no-horizontal-overflow-but-only-at-412px) | — | Todo | Improvement tier/fast | `public-routes.spec.ts` asserts no horizontal overflow but only at 412px, so it passed through the entire GAM-271 login-card bug |
+| [GAM-371](https://linear.app/gamitch/issue/GAM-371/public-routesspects-asserts-no-horizontal-overflow-but-only-at-412px) | — | In Progress | Improvement tier/fast | `public-routes.spec.ts` asserts no horizontal overflow but only at 412px, so it passed through the entire GAM-271 login-card bug |
 | [GAM-372](https://linear.app/gamitch/issue/GAM-372/the-layout-measurement-skill-documents-three-environment-facts-that) | — | Backlog | Improvement tier/fast | The `layout-measurement` skill documents three environment facts that are all false in a dispatched container, and its script exits 2 |
 | [GAM-373](https://linear.app/gamitch/issue/GAM-373/re-measure-t072s-liveconsoletsx1277-the-convention-it-was-changed-to) | — | Backlog | Improvement tier/fast | Re-measure T072's `LiveConsole.tsx:1277` — the convention it was changed to satisfy is now known to be inert under a shrink-to-fit parent |
 

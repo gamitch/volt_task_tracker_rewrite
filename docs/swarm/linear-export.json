@@ -1,6 +1,6 @@
 {
   "meta": {
-    "exportedAt": "2026-08-14T10:13:49.460Z",
+    "exportedAt": "2026-08-14T10:14:21.345Z",
     "team": "Gamitch",
     "teamKey": "GAM",
     "issueCount": 373,
@@ -6833,8 +6833,8 @@
       "identifier": "GAM-371",
       "legacyId": null,
       "title": "`public-routes.spec.ts` asserts no horizontal overflow but only at 412px, so it passed through the entire GAM-271 login-card bug",
-      "state": "Todo",
-      "stateType": "unstarted",
+      "state": "In Progress",
+      "stateType": "started",
       "archived": false,
       "labels": [
         "Improvement",
