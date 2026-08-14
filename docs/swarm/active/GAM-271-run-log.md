@@ -125,3 +125,12 @@ and 31527801235, and it is the thing this wording exists to make unmistakable.
   criterion 3 exists solely to catch the 247px collapse — and a Least confident
   decisions list (not required at STANDARD; included because the gate attacks it
   first and it is free).
+- **2026-08-14 05:07Z — DISPATCHED `checker-premise`** on
+  `docs/swarm/active/GAM-271-packet.md`, round 1 of the two-round cap (item 19a).
+  Light-to-full scope per item 19b: the *premise* is already measured, but the
+  *prescription* is mine rather than the issue's, so it has never been reviewed
+  by anyone who did not write it. Dispatched with `run_in_background: false`;
+  this line is written before the wait, deliberately.
+  **If this line is the last one in this file, the run died holding this
+  subagent** — that is the 31354278407 / 31385764526 / 31514339272 /
+  31523233268 / 31527801235 failure, and nothing else looks like it.
