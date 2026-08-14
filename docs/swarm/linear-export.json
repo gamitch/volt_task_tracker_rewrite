@@ -1,6 +1,6 @@
 {
   "meta": {
-    "exportedAt": "2026-08-14T10:14:21.345Z",
+    "exportedAt": "2026-08-14T10:18:06.330Z",
     "team": "Gamitch",
     "teamKey": "GAM",
     "issueCount": 373,
@@ -5176,8 +5176,8 @@
       "identifier": "GAM-290",
       "legacyId": "T614",
       "title": "T614 — The End time field has no lower bound, so a series edit can persist a meeting whose end is before its start",
-      "state": "Todo",
-      "stateType": "unstarted",
+      "state": "In Progress",
+      "stateType": "started",
       "archived": false,
       "labels": [
         "area/w3",

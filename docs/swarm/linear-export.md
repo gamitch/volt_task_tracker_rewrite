@@ -4,7 +4,7 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-14T10:14:21.345Z from team `Gamitch`.
+Exported 2026-08-14T10:18:06.330Z from team `Gamitch`.
 
 - **373** issues (242 archived)
 - **72** not yet completed or cancelled
@@ -37,7 +37,7 @@ Exported 2026-08-14T10:14:21.345Z from team `Gamitch`.
 | [GAM-282](https://linear.app/gamitch/issue/GAM-282/t606-a-single-meeting-cannot-have-its-own-location-this-week-were-in) | T606 | Backlog | area/w3 tier/heavy | T606 — A single meeting cannot have its own location ("this week we're in the shop") |
 | [GAM-284](https://linear.app/gamitch/issue/GAM-284/t608-collapse-the-three-surviving-narrow-copies-of-the-method-shape) | T608 | Backlog | area/w3 tier/unreviewed | T608 — Collapse the THREE surviving narrow copies of the `method` shape — `selfCheckoff.ts`'s fork plus two more T603 could not reach — and fix the module doc that T603 made false |
 | [GAM-286](https://linear.app/gamitch/issue/GAM-286/t610-item-10-names-two-different-rules-depending-on-which-part-of-the) | T610 | Backlog | area/w3 tier/unreviewed | T610 — "Item 10" names two different rules depending on which part of the constitution you read |
-| [GAM-290](https://linear.app/gamitch/issue/GAM-290/t614-the-end-time-field-has-no-lower-bound-so-a-series-edit-can) | T614 | Todo | area/w3 tier/unreviewed | T614 — The End time field has no lower bound, so a series edit can persist a meeting whose end is before its start |
+| [GAM-290](https://linear.app/gamitch/issue/GAM-290/t614-the-end-time-field-has-no-lower-bound-so-a-series-edit-can) | T614 | In Progress | area/w3 tier/unreviewed | T614 — The End time field has no lower bound, so a series edit can persist a meeting whose end is before its start |
 | [GAM-297](https://linear.app/gamitch/issue/GAM-297/t512-workflowsmd-reports-three-different-open-row-totals-60-42-36-item) | T512 | Backlog | area/w2 tier/unreviewed | T512 — `WORKFLOWS.md` reports three different open-row totals (~60, 42, 36); item 29 moved the source to the Linear export |
 | [GAM-300](https://linear.app/gamitch/issue/GAM-300/t807-two-loaders-still-apply-the-greatestx-1-floor-t509-removed-and) | T807 | Backlog | area/w5 tier/unreviewed | T807 — Two loaders still apply the `greatest(x, 1)` floor T509 removed, and three row types still declare `participation_pct` non-nullable |
 | [GAM-306](https://linear.app/gamitch/issue/GAM-306/t616-no-event-records-who-created-it-so-outreach-detail-permanently) | T616 | Backlog | area/w3 tier/unreviewed | T616 — No event records who created it, so outreach detail permanently reads "Unknown creator" |
