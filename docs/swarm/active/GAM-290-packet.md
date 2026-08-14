@@ -230,12 +230,18 @@ not what GAM-290 ordered. Leave it; it is named in §4.
   The worker must not add a *separate* create-path mechanism — one helper, two
   call sites.
 
-**Item 20 follow-ups the orchestrator files (not the worker):** (a) the
-`event_sessions` interval `CHECK` constraint plus an audit for
-already-persisted inverted rows; (b) the `OutreachEventDialog` ordering guard;
-(c) the `chicagoWallTimeToUtcIso` spring-forward offset bug measured in §3.1,
-which persists a valid 07:00–08:00 meeting on 2026-03-08 as a zero-length
-session an hour late.
+**Item 20 follow-ups — FILED 2026-08-14, before this row moved:**
+
+| Row | Work | Tier |
+| -- | -- | -- |
+| **GAM-377** | `OutreachEventDialog` ordering guard — the write path that genuinely reaches `v_planned_rsvp_hours` | HEAVY |
+| **GAM-378** | `chicagoWallTimeToUtcIso` spring-forward offset bug — found to be **triplicated** across three dialogs, not one site as §3.1 implied | HEAVY |
+| **GAM-379** | `event_sessions` interval `CHECK` constraint **plus an audit** for already-persisted inverted rows | HEAVY, item 18 opus |
+
+All three follow `.claude/skills/linear-task-writing` per item 30, and each
+carries a Verification note recording what re-verification against `main`
+contradicted — including two errors in this packet's own text (see §1's
+`check (` parenthetical, and §3.1's single-site framing of the DST bug).
 - **`.github/workflows/**`** — not in Allowed Files, and a dispatched run cannot
   push it (`AGENTS.md` § "Two walls"). Checked at packet time, per that section.
 

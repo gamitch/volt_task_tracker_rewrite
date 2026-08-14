@@ -209,3 +209,27 @@ a dispatched run hits".
   *drops* seconds rather than preserving them. The function is correct either
   way and degrades in the conservative direction. NIT 3 is inherited from my own
   packet §3.1 wording, not the worker's.
+- **2026-08-14 11:48Z — three item-20 follow-ups FILED and read back.**
+  `GAM-377` (outreach ordering guard, `w2`), `GAM-378` (the
+  `chicagoWallTimeToUtcIso` spring-forward bug, `w3`), `GAM-379`
+  (`event_sessions` interval `CHECK` + audit, `w3`). All three in `Todo`,
+  `tier/heavy`, priority Medium, written through the `linear-task-writing`
+  skill per item 30 rather than from memory.
+  **Filed BEFORE this row moves, deliberately.** GAM-290's own description
+  records the failure this avoids: D017 assigned a filing to the foreman,
+  T611's packet relayed it to the orchestrator unrecorded, and *neither filed
+  it* — GAM-290 exists only because a conformance check asked whether the row
+  actually existed. The checker made filing a condition of closing.
+  Verifying my own claims before writing (item 30c) found two more errors, both
+  mine: (1) the DST bug is **triplicated** — `ScheduleMeetingsDialog.tsx:478`,
+  `EditMeetingSessionDialog.tsx:177`, `OutreachEventDialog.tsx:835`, byte-for-byte
+  identical — where my packet §3.1 implied a single site, and the
+  `EditMeetingSessionDialog` copy feeds an *ordering guard* as well as a payload;
+  (2) my §1 parenthetical "no `check (` in `20260717000000_scheduling_attendance.sql`"
+  is false — there are six, one on `event_sessions` itself — though the claim it
+  supported (no constraint compares `starts_at`/`ends_at`) is true. Both
+  corrections are carried in the filed issues' Verification notes rather than
+  quietly fixed.
+  I also confirmed the outreach dialog is genuinely unguarded before claiming it:
+  `OutreachEventDialog.tsx:1200` is `title.trim() !== '' && sessionsPayload.length > 0`
+  — the same presence-only shape the meetings dialog had before this fix.
