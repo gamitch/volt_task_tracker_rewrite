@@ -148,3 +148,34 @@ a dispatched run hits".
   sensitive. Both premise-gate rounds independently confirmed the override is
   not triggered. **If this line is the last one in this file, the run died
   holding this subagent** and no implementation exists.
+- **2026-08-14 11:20Z — `worker-implementer` VERDICT: work delivered.**
+  Commits `a9e8545` (fix) and `329193d` (prettier for gate 3). 148K tokens, 107
+  tool calls.
+  **Existence verified independently before recording (item 21) — not taken on
+  the worker's word.** `git diff --name-only 825ce1a HEAD` returns exactly the
+  two Allowed Files plus my own two `docs/swarm/active/` files; no forbidden
+  path. The committed *blob* (`git show HEAD:…`) carries `computeEndTimeError`
+  at `:534`, `endTimeError` wired at `:1080`, and both `isValid` branches gated
+  at `:1103-1107` — edit behind `!timeFieldsTouched ||`, create unconditionally,
+  which is the trap the gate flagged. Tree clean, HEAD moved.
+  Helper compares minutes-since-midnight and **never** calls
+  `chicagoWallTimeToUtcIso` — verified by reading the committed function, not
+  the report. End field carries both `min={startTime}` and `status`, with a
+  comment recording that the two own disjoint cases.
+  **Mutation proof (criterion 5):** `<=` flipped to `>=`, AC1 turned **red**
+  with a real assertion failure and **exit code 1**; mutation reverted by
+  editing the operator back rather than `git checkout --` (the T323 failure
+  mode this repo has hit), then 94/94 green, exit 0. Fix was committed *before*
+  the mutation, per item 26's fast-tier working rule.
+  **Gates:** first run caught a real `format:check` failure (exit 1) and the
+  worker reported it rather than hiding it; after `prettier --write`, all six
+  green at `329193d` — tsc 0, build 0, format 0, eslint 0 (379 warnings, 0
+  errors), full suite 2458 tests vs a 2446 baseline it established itself at the
+  merge-base in a disposable worktree, scoped run green.
+  Two disclosures worth keeping: the worker declined to quote a gate-6 baseline
+  because its own baseline covered one file and the gate covers the folder, and
+  it left the residual `!timeFieldsTouched` propagation path open as the packet
+  instructed rather than "fixing" it.
+- **2026-08-14 11:22Z — `checker-reviewer` DISPATCHED**, blocking
+  (`run_in_background: false`). **If this line is the last one in this file, the
+  run died holding this subagent** and the work is unreviewed.
