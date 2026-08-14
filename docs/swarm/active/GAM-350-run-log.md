@@ -112,3 +112,29 @@ Dispatched from Linear. Branch `claude/gam-350-playwright-dependency`, base
   and, per the no-lifecycle-scripts finding, no browser download. Nothing under
   `.github/workflows/**` needs editing — which is just as well, since a
   dispatched run cannot push there.
+- **12:12Z — item 20 follow-up filed: [GAM-384](https://linear.app/gamitch/issue/GAM-384/gate-run-documents-a-377-warning-ceiling-but-main-measures-379-so-the)**,
+  the drifted `gate-run` warning ceiling, written through the
+  `linear-task-writing` skill per item 30 and filed to **Backlog** — promotion
+  to `Todo` is the owner's signal and only the owner's (item 28a). A comment in
+  this log would not have been triaged; that is the whole point of item 20.
+- **12:14Z — PR [#190](https://github.com/gamitch/volt_task_tracker_rewrite/pull/190)
+  opened**, `Closes GAM-350` as its first body line, `Ignore GAM-384` for the
+  row this PR merely refers to so merging cannot move it.
+- **12:16Z — gates re-run on the shipping commit `eda6aac`, clean tree:
+  identical to `a151607` — 5 of 6 PASS, 0 errors / 379 warnings, 95 files /
+  2458 tests, baseline (+0), gate 6 SKIPPED.** Re-run because the quoted
+  verdict must describe the commit that ships, not an earlier one; four doc
+  commits landed after the first run.
+- **12:16Z — GAM-350 moved `In Progress → In Review` and read back.** Never
+  `Done`: the merge closes it, not me (item 28e).
+
+## Outcome
+
+Premise held and was measured before anything changed. One line of production
+change, three false doc comments corrected, no source touched. Every acceptance
+criterion measured in a clean clone with no global `playwright`, the row's own
+mutation replayed red-then-green, 5 of 6 gates green on the shipping commit.
+
+**No subagent was dispatched.** The row is FAST under item 26, and item 26
+forbids manufacturing the coordination it retired; there is no dispatch line in
+this log without a matching verdict because there is no dispatch line at all.
