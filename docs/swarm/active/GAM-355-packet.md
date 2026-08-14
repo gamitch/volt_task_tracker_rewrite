@@ -28,7 +28,8 @@ from scratch, with each spec run **in isolation**. Evidence is in
 
 ### 1a. The one that is worse than stale
 
-`student-parent.spec.ts:66` **passes in the full suite and fails in
+`student-parent.spec.ts:66` **passes in the full suite (on the ~half of runs
+where `outreach-lifecycle.spec.ts:149` fails — see AC6) and fails in
 isolation**, and the green is the wrong answer. It grabs
 `page.getByRole('button', { name: 'Sign up' }).first()` and then queries
 `rsvps` for one hardcoded `session_id` (`5e550000-…-000000000008`). When
@@ -97,7 +98,8 @@ round-1 gate, which deleted exactly that line and watched the test pass
 boundary, `status`, `notes`. Those are the point of the test and none of them
 is stale.
 
-**`events.created_by` is still `NULL`. Do not change lines 172-175.** The
+**`events.created_by` is still `NULL`. Do not change lines 169-175** — the
+FINDING 2 comment is 169-173 and the two assertions are 174-175. The
 earlier version of this packet asked you to run it and decide; that question is
 answered — the gate created a meeting as the coach on a fresh seed and read the
 row back: `team_ids={7ea11000-…-0001}, created_by=<null>, counts_participation=t,
@@ -123,7 +125,12 @@ format string, `` `${value.toFixed(1)} / ${max.toFixed(1)} h (${hoursPercent}%)`
 `goal_hours = 100`. The **hours** value is not stable — `confirmed_hours` is
 recomputed from `now()` at every reseed (`3.9999991025` at the time of the
 gate's run, not the `3.9999983633333334` the spec's own comment claims), so do
-not pin to a literal. That stale comment should be corrected too.
+not pin to a literal.
+
+The spec's comment at `student-parent.spec.ts:28-32` should be corrected too,
+and it is more wrong than one number: its claim that `StudentHome.tsx` *"rounds
+the PERCENTAGE through `round1` but passes the hours straight into the label
+(lines ~1483 and ~1485)"* is now false in every part, both line refs included.
 
 **AC4 — `student-parent.spec.ts:121` does the same for the parent view.** Same
 rename, same substance. The parent-side test currently asserts
@@ -156,10 +163,26 @@ The §7.1 fallback (a before/after `rsvps` diff by `student_id`) is **withdrawn*
 — it is weaker, because it would no longer prove *which* session the click
 targeted, which is the whole point of AC5.
 
+**This locator is the gate's measured starting point, not a substitute for
+running it.** Its first three lines are byte-identical to what the gate
+executed; the `click()` line is a condensed form of the gate's
+visible-then-click pair (sound, because Playwright's `click()` auto-waits, but
+not the exact code that was run). If it does not resolve, report what you saw
+rather than reshaping the assertion around it.
+
 **The rewritten test must also be re-runnable without a reseed.** Add a
 `test.beforeEach` to `student-parent.spec.ts` that deletes only its own row,
-mirroring the in-repo idiom at `coach-meeting.spec.ts:62-64`:
-`execAdmin("delete from rsvps where student_id = '…' and session_id = '5e550000-0000-4000-8000-000000000008'")`.
+mirroring the in-repo idiom at `coach-meeting.spec.ts:62-64`. Note that
+`execAdmin` is **not** currently imported by this file — add it to the existing
+`'./personaHarness'` import on line 6:
+
+```ts
+test.beforeEach(() => {
+  execAdmin(`delete from rsvps where student_id = '${SEED.studentPriya}'
+               and session_id = '5e550000-0000-4000-8000-000000000008'`);
+});
+```
+
 Measured necessary: without it, a second run on the same database fails at the
 test's own `expect(before).toHaveLength(0)`.
 
@@ -279,7 +302,9 @@ recording: the declared doubts were not where the packet was weakest.
   is sufficient and was measured green.
 - **§7.3 — SOUND on both surfaces.** One shared format string; `100.0` is
   reliable, the hours value is not.
-- **§7.4 — WRONG, and not for the reason declared.** The two RSVP writers are
+- **§7.4 — decision SOUND, supporting run-log claim FALSE** (the gate's own
+  round-1 verdict on it was UNRESOLVED, not wrong). The *decision* — that these
+  two are out of scope — stands, and AC6 still relies on it. The two RSVP writers are
   genuinely separate code paths (`submitRsvpChange` vs
   `upsertExpectedAttendeeRsvps`), so the declared falsifier does not fire — but
   the underlying claim failed anyway: `outreach-lifecycle:149` is a
@@ -353,10 +378,10 @@ The gate queried the database after a run in which line 233 failed with
 ```
 
 `status` and `responded_by` are exactly what lines 234-235 assert. The spec
-polls only for the `events` row (`:222`) and then reads `rsvps` synchronously
+polls only for the `events` row (`:217`) and then reads `rsvps` synchronously
 (`:232`), while `reconcileExpectedAttendeeRsvps` runs after
 `createOutreachEvent` and `insertSessions`
-(`src/lib/supabase/loaders/outreach.ts:1626-1640`). The fix is a poll, not a
+(`src/lib/supabase/loaders/outreach.ts:1627-1643`). The fix is a poll, not a
 product change.
 
 **This is not the worker's problem** — it is recorded here so the follow-up row

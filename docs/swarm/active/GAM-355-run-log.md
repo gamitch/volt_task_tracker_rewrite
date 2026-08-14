@@ -219,3 +219,41 @@ subagent** — that is the failure shape the constitution's delegation rule and
   re-auditing settled ground. `run_in_background: false`.
   *If this line is the last one in this file, the run died holding this
   subagent.*
+- **`checker-premise` round 2 VERDICT: DISPATCH.** Verdict seen and recorded —
+  the dispatch above did not orphan. Scoped as instructed (5 tool calls, no
+  suite re-run): no BLOCKER, no MAJOR, all three round-1 MAJORs confirmed fully
+  fixed. It also empirically verified AC7's new measurement command —
+  `git status --porcelain -- ':!tests/e2e-personas/screenshots'` returns **0**
+  lines against the 37 dirty PNGs — rather than taking my word that the
+  pathspec does what it says.
+
+  Four fold-in edits, all applied before the worker is dispatched:
+  1. **§8 cited the wrong line for the `events` poll — `:222` is the sessions
+     assertion; the poll is `:217`.** An unverified line number *inside the
+     paragraph correcting an unverified claim*, which is item 19c's failure
+     class arriving twice in a row. Fixed, and the `outreach.ts` span widened
+     from `1626-1640` to `1627-1643` so it no longer truncates the call.
+  2. AC5's `beforeEach` had an elided `student_id = '…'` and silently required
+     an import that does not exist — `execAdmin` is not in
+     `student-parent.spec.ts`'s import line. Both resolved in the packet; a
+     literal `…` pasted into SQL would have failed all 7 tests with an opaque
+     `invalid input syntax for type uuid`.
+  3. AC2's "lines 172-175" started mid-comment; corrected to 169-175 with the
+     comment/assertion split named.
+  4. AC5 now says the locator is *"the gate's measured starting point, not a
+     substitute for running it"* and admits the click line is a condensed form
+     of what was actually executed — the gate's own point that over-specifying
+     invites transcription in place of verification.
+
+  Polish also taken: §7.4's label softened from WRONG to "decision SOUND,
+  supporting claim FALSE" (the *decision* to keep those two out of scope
+  stands, and AC6 depends on it); §1a's "passes in the full suite" qualified as
+  contingent on `outreach-lifecycle:149` failing; and AC3 now names the three
+  false things in the spec's own comment rather than calling it merely stale.
+  **Definition of Ready satisfied — item 19's gate has returned DISPATCH.**
+- **DISPATCHED `worker-implementer`** on the gated packet, default (sonnet)
+  tier — item 18's four opus triggers are all absent: no migration, no RLS or
+  security definer, no metric-view SQL, no auth/session/role logic. Two test
+  files, no `src/**`. `run_in_background: false`.
+  *If this line is the last one in this file, the run died holding this
+  subagent.*
