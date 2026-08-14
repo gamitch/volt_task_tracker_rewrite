@@ -42,11 +42,13 @@ team.
 
 **What this packet's writer does and does not do to population 2.** Step 2.4
 opens a membership for their *current* team, which gives them a correct
-participation row. It does **not** close the stale one — the close in step 3
-targets the *previous* `students.team_id`, which for these students is already
-their current team, so it matches nothing. The stale row therefore **survives,
-and from the application it is indistinguishable from a legitimate dual
-membership** (Trap B). Net effect: such a student gains a correct row *and*
+participation row. It does **not** close the stale one. For these students the
+roster team is unchanged by an ordinary edit, so step 3 does not run at all; and
+even when it does, the close targets the *previous* `students.team_id`, for which
+**no `student_teams` row exists** (that is the shape of population 2 — a row for
+the team they left, none for the team they are on). The stale row therefore
+**survives, and from the application it is indistinguishable from a legitimate
+dual membership** (Trap B). Net effect: such a student gains a correct row *and*
 keeps an incorrect one, where before they had only the incorrect one. That is an
 improvement, not a repair, and it is deliberate — see LCD #1.
 
@@ -66,22 +68,40 @@ this list** (AGENTS.md "Two walls", wall 1). No file under `supabase/`,
 
 **Why the third file is here, and exactly what you may do to it.** Round 1's
 gate implemented this packet's prescription verbatim and ran the suite: the two
-currently-green tests in `StudentsTab.test.tsx:1014-1110`
+currently-green tests in `StudentsTab.test.tsx:1014-1103`
 (`describe('createStudent / updateStudent (T089 real mutation, module doc #14)')`)
 fail with `TypeError: client.from(...).upsert is not a function` and
 `client.from(...).select is not a function`. Their fake clients are
-**table-agnostic** — `vi.fn(() => ({ insert: insertSpy }))` at :1029 and
-`vi.fn(() => ({ update: updateSpy }))` at :1078 — so they answer the same shape
-for `students` and `student_teams` alike and expose neither `upsert` nor a
-`select` on the second `from()`. Any correct implementation of this packet
-breaks them.
+**table-agnostic** — `vi.fn(() => ({ insert: insertSpy }))` at :1031 and
+`vi.fn(() => ({ update: updateSpy }))` at :1079 — so they answer the same shape
+for every table. Any correct implementation of this packet breaks them.
 
-**You are authorized to amend those two tests, and only them:** make each fake
-client dispatch on the table name, so `students` keeps its existing chain and
-`student_teams` gets its own. **Every existing assertion in those two tests —
-the `insertSpy`/`updateSpy`/`eqSpy` argument expectations and the mapped return
-value — must survive unchanged.** If you find yourself weakening one, stop: that
-is a signal the implementation is wrong, not the test.
+**There are two distinct breakages, and round 2's gate proved that fixing only
+the obvious one leaves the suite red.** Do not stop at table dispatch:
+
+1. **`createStudent`** — a *second* `from()` call, on `student_teams`, needing
+   `.upsert()`. Table dispatch alone fixes this one.
+2. **`updateStudent`** — a *new entry point on `students` itself*:
+   `.select('team_id').eq('id', id).single()`, the previous-team read-back. The
+   existing `students` fake is `vi.fn(() => ({ update: updateSpy }))` and has no
+   `select` branch at all, so **`students` keeping "its existing chain" is
+   precisely what breaks.** Round 2's gate applied the round-1 wording of this
+   paragraph literally and measured
+   `TypeError: client.from(...).select is not a function` at `students.ts:336`
+   — 1 failed | 3 passed. The remedy is to add `select` to the **`students`**
+   branch and make `selectSpy`/`eqSpy` mutually recursive so both the update
+   chain and the read-back chain resolve; that yields 34/34.
+
+**The table-aware precedent already exists in this same file** —
+`StudentsTab.test.tsx:919`, `vi.fn((table: string) => ({ select: selectSpies[table] }))`.
+Follow it.
+
+**You are authorized to amend those two tests, and only them.** **Every existing
+assertion in them — the `insertSpy`/`updateSpy`/`eqSpy` argument expectations and
+the mapped return value — must survive unchanged.** Adding a branch or a spy to a
+fake client is not weakening an assertion; deleting, loosening or skipping one
+is. If you find yourself doing the latter, stop: that is a signal the
+implementation is wrong, not the test.
 
 ## Measured premise (orchestrator, 2026-08-14, against branch base `9d84bed`)
 
@@ -171,10 +191,23 @@ new team.** That is Trap B.
 
 Send **exactly** `{ student_id, team_id, left_on: null }` with
 `{ onConflict: 'student_id,team_id' }`. **Do not include `joined_on`.**
-PostgREST's `resolution=merge-duplicates` updates only the columns present in
-the payload, so omitting `joined_on` means an existing row keeps its original
-join date while a new row takes the column's `default current_date`. Including
-it would silently reset the join date of every membership touched by an
+
+**Measured by round 2's gate through a real `postgrest/postgrest` container
+bound to a scratch cluster — not taken from the documentation.** Against a row
+seeded `joined_on = 2026-01-05, left_on = 2026-06-30`, the prescribed payload
+generated:
+
+```sql
+ON CONFLICT("student_id","team_id") DO UPDATE SET "left_on" = EXCLUDED."left_on",
+  "student_id" = EXCLUDED."student_id", "team_id" = EXCLUDED."team_id"
+-- after: joined_on = 2026-01-05 (PRESERVED), left_on = NULL (REACTIVATED)
+```
+
+and the counterfactual — the same request *with* `joined_on` in the payload —
+put `"joined_on" = EXCLUDED."joined_on"` into the `DO UPDATE SET` list and reset
+the date to `2026-08-14`. So omitting the column is what preserves an existing
+row's join date, while a new row still takes the column's `default current_date`.
+Including it would silently reset the join date of every membership touched by an
 unrelated edit.
 
 **Disclosed consequence of step 2.4, which round 1's gate raised as MINOR-4.**
@@ -192,6 +225,9 @@ no ACTIVE row exists" guard, for two reasons:
   reconciling it toward the roster is what this whole issue asks for. A student
   the roster says is on team X *should* have an active membership in X — that is
   precisely the participation gap being closed.
+  **This is a positive claim only — "is on X", never "and only X".** That is why
+  it does not contradict Trap B: it authorizes *opening* X, never *closing*
+  anything else.
 
 Say this in a code comment so the next reader does not "fix" it.
 
@@ -227,13 +263,23 @@ string. Not `current_date`: you cannot send a SQL expression through PostgREST,
 only a JSON value.
 
 UTC is chosen over America/Chicago deliberately, against LCD #5's own worry.
-`src/lib/format/dates.ts:41` pins `timeZone: 'UTC'` for date-only values and
-calls it *"REQUIRED, not decoration"*, and `ScheduleMeetingsDialog.tsx:353`
-derives date-only strings the same way. Introducing a second, Chicago-derived
-date convention for one column would be the larger inconsistency. The drift is
-inert: every consumer of `left_on` in the repo tests `left_on is null` and
-nothing performs date arithmetic on it (verified by the gate across all `.ts`,
-`.tsx` and `.sql`). If a consumer ever *does* read the date, revisit this.
+**The precedent for deriving *today* this way is
+`ScheduleMeetingsDialog.tsx:369` and `OutreachEventDialog.tsx:699,710`**, all
+`new Date().toISOString().slice(0, 10)`. Introducing a second, Chicago-derived
+date convention for one column would be the larger inconsistency.
+
+**State the drift honestly rather than hiding it: a close stamped between 19:00
+and midnight Chicago time records the following day.** It is inert — every
+consumer of `left_on` in the repo tests `left_on is null` and nothing performs
+date arithmetic on it (verified by the gate across all `.ts`, `.tsx` and `.sql`).
+If a consumer ever *does* read the value, revisit this.
+
+*Round 2 correction, recorded because the packet was wrong:* this section
+previously cited `src/lib/format/dates.ts:41` as authority. It is not.
+`dates.ts:21-24` pins `timeZone: 'UTC'` when **formatting an existing date-only
+string**, so a UTC-parsed date does not roll *back* a day for a UTC-negative
+viewer — the opposite direction from deriving today off a wall clock. It is
+authority *against* this class of error, not for it.
 
 ## Acceptance criteria
 
@@ -264,6 +310,20 @@ existing coverage for `createStudent`/`updateStudent` is in
      This last one is the only shape that distinguishes the two designs, and it
      is the `scratch-postgres` skill's own standing rule — assert post-write row
      state, not the SQL you issued.
+
+   **The stateful fake must expose `.neq()` even though the correct
+   implementation never calls it**, and must also carry `students` doubles for
+   the read-back and the update. Otherwise criterion 9's third mutation dies with
+   `TypeError: ...neq is not a function` instead of failing on the intended
+   assertion — a misdirecting red that this repo already has a documented
+   convention against (`students.test.ts:38-46`: the mutation's failure must
+   *"genuinely come from the intended `eqSpy` assertion going red, not from an
+   unrelated crash"*).
+
+   Round 2's gate built this criterion and ran it against both implementations:
+   all three assertions pass for the prescribed writer and **all three fail for
+   the forbidden `.neq` one**, 3c yielding the diff `"team-C": "active"` →
+   `"team-C": "closed"`. It is no longer vacuous.
 4. **Trap A regression test:** re-joining a previously-left team goes through
    the upsert path with `left_on: null` and `onConflict: 'student_id,team_id'`,
    and `.insert(...)` is **never** called on `student_teams`. *Only the call
@@ -313,24 +373,42 @@ still the right place for the next reader to push.
    unrecoverable from the UI, while an extra row is visible and repairable by a
    targeted backfill. **What would still make it wrong:** the owner deciding the
    roster's team field is authoritative and single-valued.
-2. **Reconciling on unchanged-team edits (step 2.4).** *Round 1 challenged this
-   as written and it changed the packet* — §2a now discloses that an
+2. **Reconciling on unchanged-team edits (step 2.4).** *Round 1 challenged this,
+   round 2 withdrew the challenge after measuring it.* §2a discloses that an
    unconditional upsert reopens a deliberately-closed membership when the roster
-   still names that team, and defends it rather than guarding it (the suggested
-   guard does not actually prevent the case). **What would make it wrong:** a
-   real workflow where "closed but still the primary team" means *suspended, do
-   not count* — I found no such workflow, and no UI can produce that state today.
+   still names that team, and defends it rather than guarding it. The gate
+   enumerated all four reachable seed states and ran both variants: the proposed
+   guard ("upsert only if no ACTIVE row exists") changes the final row state in
+   **zero** of them — it is true precisely when the row is closed, so it opens
+   the gate for exactly the case it was meant to block. **What would make it
+   wrong:** a real workflow where "closed but still the primary team" means
+   *suspended, do not count* — none exists, and no UI can produce that state.
 3. **Reading `students.team_id` back rather than threading the previous team
    from `StudentsTab.tsx:1226`,** which already has `editTarget.teamId`.
-   *Round 1 was right that my stated reason was wrong* — it was "that would pull
-   `StudentsTab.tsx` into Allowed Files", and its test file is now in there
-   anyway. **The decision stands on a better reason: the read-back is more
-   correct.** Threading trusts the browser's possibly-stale copy of the row; if
-   the UI's `editTarget` predates another edit, threading closes the *wrong
-   team*, silently and unrecoverably. The read-back gets the true previous value
-   from the database at write time. It costs one round trip. **What would make
-   it wrong:** evidence that the round trip is a real latency problem, or that
-   `UpdateStudentFn` gaining a third parameter is cheaper than I think.
+   *Round 1 was right that my stated reason was wrong*; **round 2 then measured
+   the replacement reason and found that wrong too, in my favour.** The decision
+   stands and round 2's gate formally withdrew its own cheaper-path suggestion.
+
+   The corrected mechanism: threading does **not** close the wrong team. With
+   the database already moved A→B by a second staff member while Staff 1's
+   browser still holds `editTarget.teamId = 'A'`, the gate measured —
+
+   - *Staff 1 edits an unrelated field:* threading sees `previous === payload`
+     (both from the same stale snapshot), skips the close entirely, and leaves
+     `[A:active, B:active]` — a spurious dual membership. Read-back:
+     `[A:active, B:closed]`.
+   - *Staff 1 moves the student to C:* threading closes A, which is already
+     closed, so it matches nothing and leaves `[A:closed, B:active, C:active]`
+     — **B ACTIVE with nobody on it, which is population 2 re-created by the
+     very code meant to eliminate it.** Read-back: `[A:closed, B:closed,
+     C:active]`.
+
+   Threading fails to close *any* team; it does not close the wrong one. The
+   read-back produces the roster-consistent state in both scenarios, for one
+   round trip. Threading would also still require `StudentsTab.tsx` **source**
+   (call site `:1226`) in Allowed Files, which this packet excludes — so the
+   round-1 cost argument was not fully moot either. **What would make it wrong:**
+   evidence that the round trip is a real latency problem.
 4. **Accepting non-atomicity rather than escalating for an RPC migration.**
    *Round 1 confirmed this*, with the `UPDATE 0` caveat now recorded in §3.
    **What would make it wrong:** a measured failure mode where the membership
@@ -355,3 +433,24 @@ still the right place for the next reader to push.
 | No gate baselines | MINOR | **Fixed** — 2458 / 235 / 34, measured on this branch |
 | `met01` `e.team_ids` cited at :113 | NIT | **Fixed** — :114 |
 | Acceptance preamble overstated `students.test.ts` coverage | NIT | **Fixed** — preamble rewritten |
+
+## Round 2 gate: `DISPATCH`
+
+No BLOCKER, no MAJOR. Round 1's BLOCKER and both MAJORs were verified closed **by
+execution** — the gate implemented the prescription, ran the suite (`tsc` exit 0,
+2458 passed, `StudentsTab.test.tsx` 34 passed), and ran the rewritten criterion 3
+against the forbidden implementation to confirm it now fails. It also **withdrew
+both of its own round-1 findings that this packet had declined** (the step-2.4
+guard, proven a no-op; the read-back, proven more correct than threading).
+
+Folded in before dispatch:
+
+| Finding | Severity | Disposition |
+| -- | -- | -- |
+| Amendment instruction named the wrong failing call — it is `students.select()` (the read-back, the FIRST `from()`), so "`students` keeps its existing chain" is what breaks | MINOR | **Fixed** — both breakages spelled out, `:919` precedent cited |
+| Criterion 3's stateful fake must expose `.neq()` and `students` doubles, or mutation 3 dies on a `TypeError` | MINOR | **Fixed** — requirement and rationale added |
+| §4 cited `dates.ts:41`, which is authority *against* this derivation, and misquoted it | MINOR | **Fixed** — real precedents cited, drift window stated |
+| LCD #3's mechanism wrong — threading leaves a stale ACTIVE row, it does not close the wrong team | MINOR | **Fixed** — measured scenarios written in |
+| `:1029`/`:1078`/`1014-1110` stale by one or two lines | NIT | **Fixed** — `:1031`, `:1079`, `1014-1103` |
+| Non-sequitur on why the close matches nothing for population 2 | NIT | **Fixed** |
+| §2a claimed from docs rather than measured | — | **Upgraded** — real PostgREST result and generated SQL quoted |

@@ -128,3 +128,12 @@ so this file is the only thing that survives.
   Folding MINOR-1..4 + both NITs in before dispatching the worker. MINOR-1 is
   load-bearing: my amendment instruction named the wrong failing call — it is
   `students.select()` (the read-back, the FIRST `from()`), not the second.
+- **22:40Z — all 6 round-2 findings folded into the packet.** Packet is now
+  gate-passed (DISPATCH) and ready for the worker. Verified no stale `:1029`,
+  `:1078`, `1014-1110` or `dates.ts:41` citations remain.
+- **22:41Z — DISPATCHED `worker-implementer`** with `model: "opus"` (item 18 —
+  the rows written are role/permission scope input), `run_in_background: false`.
+  **If this line is the last one in this file, the run died holding this
+  subagent** — the packet was gated but nothing was implemented, and the branch
+  carries planning artifacts only. The next line is the worker's verdict and
+  commit SHA.
