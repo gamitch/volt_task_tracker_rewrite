@@ -99,6 +99,15 @@ test.describe('MTG-02 Schedule meetings dialog', () => {
     // archived `Volt Legacy 2201` is now correctly absent from this list.
     // Kept exact, not loosened, so a regression that re-admits an archived
     // team into the scope picker turns this red again.
+    //
+    // GAM-355 merge note: both branches removed this entry independently and
+    // identically. Keeping GAM-355's mechanism detail here so the next reader
+    // does not misdiagnose which line does the work -- `Volt Legacy 2201` is
+    // `teams.archived = true` in `seed.sql`, and the exclusion happens at
+    // `:854-855` and `:861`: `excludeArchivedTeams` narrows `allTeamIds`,
+    // which seeds the initial `selectedTeamIds`. `:885` does the OPPOSITE (it
+    // re-includes an archived team that is already selected) and `:1236`
+    // renders such a team `disabled`; neither is why this option is absent.
     expect(optionLabels.map((t) => t.trim())).toEqual([
       'Select all',
       'Volt Robotics 9911',
