@@ -4,10 +4,10 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-14T04:07:59.505Z from team `Gamitch`.
+Exported 2026-08-14T07:04:52.159Z from team `Gamitch`.
 
-- **369** issues (242 archived)
-- **69** not yet completed or cancelled
+- **373** issues (242 archived)
+- **73** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
 ## Open
@@ -33,7 +33,7 @@ Exported 2026-08-14T04:07:59.505Z from team `Gamitch`.
 | [GAM-250](https://linear.app/gamitch/issue/GAM-250/t332-the-login-shell-has-slight-overflow-and-weak-landmarks) | T332 | Backlog | tier/unreviewed | T332 — The login shell has slight overflow and weak landmarks |
 | [GAM-251](https://linear.app/gamitch/issue/GAM-251/t333-the-migration-attached-all-16-imported-events-to-a-new-inactive) | T333 | Backlog | tier/unreviewed | T333 — ~~The migration attached all 16 imported events to a NEW inactive season~~ — **DATA HALF FIXED BY THE OWNER IN SQL.** Narrowed to: the ETL will do it again on the next import |
 | [GAM-264](https://linear.app/gamitch/issue/GAM-264/t600-aggregateparticipationrows-and-aggregateparticipationforstudent) | T600 | Backlog | area/w3 tier/unreviewed | T600 — `aggregateParticipationRows` and `aggregateParticipationForStudent` are the same MET-01 arithmetic maintained in two files |
-| [GAM-271](https://linear.app/gamitch/issue/GAM-271/t507-the-login-card-overflows-the-viewport-on-every-phone-narrower) | T507 | Backlog | tier/unreviewed | T507 — The login card overflows the viewport on every phone narrower than ~400px |
+| [GAM-271](https://linear.app/gamitch/issue/GAM-271/t507-the-login-card-overflows-the-viewport-on-every-phone-narrower) | T507 | In Review | tier/standard | T507 — The login card overflows the viewport on every phone narrower than ~400px |
 | [GAM-282](https://linear.app/gamitch/issue/GAM-282/t606-a-single-meeting-cannot-have-its-own-location-this-week-were-in) | T606 | Backlog | area/w3 tier/heavy | T606 — A single meeting cannot have its own location ("this week we're in the shop") |
 | [GAM-284](https://linear.app/gamitch/issue/GAM-284/t608-collapse-the-three-surviving-narrow-copies-of-the-method-shape) | T608 | Backlog | area/w3 tier/unreviewed | T608 — Collapse the THREE surviving narrow copies of the `method` shape — `selfCheckoff.ts`'s fork plus two more T603 could not reach — and fix the module doc that T603 made false |
 | [GAM-286](https://linear.app/gamitch/issue/GAM-286/t610-item-10-names-two-different-rules-depending-on-which-part-of-the) | T610 | Backlog | area/w3 tier/unreviewed | T610 — "Item 10" names two different rules depending on which part of the constitution you read |
@@ -57,9 +57,9 @@ Exported 2026-08-14T04:07:59.505Z from team `Gamitch`.
 | [GAM-334](https://linear.app/gamitch/issue/GAM-334/the-declaration-gate-cannot-express-second-half-of-a-two-pr-row-so) | — | Backlog | provenance/other tier/fast | The declaration gate cannot express "second half of a two-PR row", so every workflow-touching row will go red on the PR that completes it |
 | [GAM-336](https://linear.app/gamitch/issue/GAM-336/two-unguarded-lines-in-the-archived-team-scope-fix-reinstate-a-data) | — | Backlog | area/w3 provenance/checker tier/standard | Two unguarded lines in the archived-team scope fix reinstate a data-correctness MAJOR if deleted |
 | [GAM-337](https://linear.app/gamitch/issue/GAM-337/ending-a-meeting-can-report-failure-for-a-meeting-that-actually-ended) | — | Backlog | Improvement area/w3 tier/standard | Ending a meeting can report failure for a meeting that actually ended — the coach is told to retry an action that succeeded |
-| [GAM-338](https://linear.app/gamitch/issue/GAM-338/the-on-screen-promise-that-retrying-an-end-meeting-wont-record) | — | In Progress | Improvement area/w3 tier/fast | The on-screen promise that retrying an end-meeting "won't record anything twice" is guarded by no test — removing `ignoreDuplicates: true` keeps the suite green |
+| [GAM-338](https://linear.app/gamitch/issue/GAM-338/the-on-screen-promise-that-retrying-an-end-meeting-wont-record) | — | In Review | Improvement area/w3 tier/fast | The on-screen promise that retrying an end-meeting "won't record anything twice" is guarded by no test — removing `ignoreDuplicates: true` keeps the suite green |
 | [GAM-339](https://linear.app/gamitch/issue/GAM-339/three-near-identical-supabase-write-error-copy-helpers-and-a-fourth) | — | Backlog | Improvement area/w3 tier/standard | Three near-identical Supabase write-error copy helpers, and a fourth call site already needs one — share the classification, not the words |
-| [GAM-340](https://linear.app/gamitch/issue/GAM-340/student-teams-has-no-writer-so-a-re-teamed-student-keeps-receiving) | — | Backlog | area/w5 tier/unreviewed | `student_teams` has no writer, so a re-teamed student keeps receiving their former team's events |
+| [GAM-340](https://linear.app/gamitch/issue/GAM-340/student-teams-has-no-writer-so-any-student-added-since-the-2026-07-21) | — | Backlog | area/w5 tier/unreviewed | `student_teams` has no writer, so any student added since the 2026-07-21 backfill has no membership row and returns zero rows from `v_student_participation` |
 | [GAM-341](https://linear.app/gamitch/issue/GAM-341/no-assertion-guards-the-my-student-ids-test-in-the-new-events-rls) | — | Backlog | area/w5 tier/unreviewed | No assertion guards the `my_student_ids()` test in the new events RLS policies — removing it leaves the suite green |
 | [GAM-346](https://linear.app/gamitch/issue/GAM-346/e2e-w5-home-dashboards-what-each-role-lands-on-and-what-they-can-act) | — | Backlog | area/w5 provenance/other tier/unreviewed | E2E — W5 Home dashboards: what each role lands on, and what they can act on |
 | [GAM-347](https://linear.app/gamitch/issue/GAM-347/e2e-w6-calendar-and-subscribe-a-student-subscribes-and-the-feed-stays) | — | Backlog | area/w6 provenance/other tier/unreviewed | E2E — W6 Calendar and subscribe: a student subscribes and the feed stays current |
@@ -83,6 +83,10 @@ Exported 2026-08-14T04:07:59.505Z from team `Gamitch`.
 | [GAM-367](https://linear.app/gamitch/issue/GAM-367/outreach-lifecyclespects233-reads-the-coach-rsvp-fan-out-before-it-is) | — | Backlog | area/w2 provenance/e2e-personas tier/unreviewed | `outreach-lifecycle.spec.ts:233` reads the coach RSVP fan-out before it is written, and its own pass turns `reports-accounting.spec.ts:333` red |
 | [GAM-368](https://linear.app/gamitch/issue/GAM-368/student-checkinspects216-pins-hardcoded-calendar-dates-jul-14-sun-aug) | — | Backlog | area/w1 provenance/e2e-personas tier/unreviewed | `student-checkin.spec.ts:216` pins hardcoded calendar dates (`Jul 14`, `Sun, Aug 23`) against a `current_date`-relative seed, so it goes red as the calendar moves |
 | [GAM-369](https://linear.app/gamitch/issue/GAM-369/coach-meetingspects88-is-still-titled-lists-every-team-after-it-was) | — | Backlog | area/w1 provenance/e2e-personas tier/unreviewed | `coach-meeting.spec.ts:88` is still titled "lists every team" after it was changed to assert the archived team is excluded |
+| [GAM-370](https://linear.app/gamitch/issue/GAM-370/the-same-login-card-overflow-ships-on-three-more-full-screen-cards) | — | Backlog | Bug tier/standard | The same login-card overflow ships on three more full-screen cards — `/accept-invite` measured at 40px on a 320px phone |
+| [GAM-371](https://linear.app/gamitch/issue/GAM-371/public-routesspects-asserts-no-horizontal-overflow-but-only-at-412px) | — | Backlog | Improvement tier/fast | `public-routes.spec.ts` asserts no horizontal overflow but only at 412px, so it passed through the entire GAM-271 login-card bug |
+| [GAM-372](https://linear.app/gamitch/issue/GAM-372/the-layout-measurement-skill-documents-three-environment-facts-that) | — | Backlog | Improvement tier/fast | The `layout-measurement` skill documents three environment facts that are all false in a dispatched container, and its script exits 2 |
+| [GAM-373](https://linear.app/gamitch/issue/GAM-373/re-measure-t072s-liveconsoletsx1277-the-convention-it-was-changed-to) | — | Backlog | Improvement tier/fast | Re-measure T072's `LiveConsole.tsx:1277` — the convention it was changed to satisfy is now known to be inert under a shrink-to-fit parent |
 
 ## Closed and cancelled
 
