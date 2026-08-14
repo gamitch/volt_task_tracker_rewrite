@@ -13,9 +13,12 @@
  *   npx playwright test -c tests/e2e-harness/playwright.personas.config.ts
  *
  * `playwright/test` (not `@playwright/test`) is imported for the same reason
- * the root config documents: this sandbox's globally installed `playwright`
- * package bundles the runner, and `package.json` is not modified to add a
- * dependency for it.
+ * the root config documents: `./test` is a declared export of the
+ * `playwright` package, which bundles the runner. What changed under GAM-350
+ * is the second half of that reason — `playwright` is now a real, exactly
+ * pinned devDependency, so this import resolves from a clean `npm ci` with
+ * nothing installed globally. It previously did not, and the suite ran only
+ * on hosts that happened to carry the package.
  */
 import { defineConfig, devices } from 'playwright/test';
 

@@ -55,31 +55,36 @@
  * `src/pages/home/ParentHome.test.tsx`, `tests/rls/assertions.sql`).
  * ---------------------------------------------------------------------
  *
- * `playwright/test` (not `@playwright/test`) is imported below because
- * this sandbox's globally-installed `playwright` package (`/opt/node22/
- * lib/node_modules/playwright`, pre-installed Chromium at
- * `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`) bundles the full test
- * runner under its own `test.js`/`test.mjs` entry point -- the same real
- * mechanism T074/T075 already relied on for live-browser verification in
- * this project. Per this task's Allowed Files (`tests/e2e/**`,
- * `playwright.config.ts` only), `package.json` is NOT modified to add
- * `@playwright/test`/`playwright` as a project dependency.
+ * `playwright/test` (not `@playwright/test`) is imported below, and that
+ * specifier is correct rather than merely tolerated: `./test` is a declared
+ * export of the `playwright` package itself
+ * (`{"import":"./test.mjs","require":"./test.js"}`), which bundles the full
+ * runner. `@playwright/test` is a thin wrapper that depends on this same
+ * package, so importing `playwright/test` skips a level of indirection
+ * rather than reaching around one.
  *
- * Module resolution note: this repo's `package.json` sets `"type":
- * "module"`, so this config file loads as real ESM, and Node's ESM
+ * GAM-350 corrected the part of this note that had gone stale. This block
+ * used to say `package.json` is NOT modified and to describe a symlink,
+ * `node_modules/playwright -> /opt/node22/lib/node_modules/playwright`, as
+ * the resolution mechanism. **`playwright` is now a real devDependency**,
+ * pinned exactly, so ordinary resolution finds it and no symlink, global
+ * install, or `NODE_PATH` is involved. Do not recreate that symlink: it
+ * silently shadows the pinned version with whatever the host carries, which
+ * is the coupling GAM-350 was filed to remove.
+ *
+ * The version is pinned exactly (`1.62.1`, not `^1.62.1`) where the rest of
+ * this repo uses caret ranges, because the runner and the browser build are
+ * a matched pair: browsers are supplied out of band (`PLAYWRIGHT_BROWSERS_PATH`,
+ * `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`), so a floated minor would look for a
+ * Chromium revision nobody downloaded. Bump the runner and the browsers
+ * together, deliberately.
+ *
+ * Module resolution note, kept because it is a measured fact about Node and
+ * costs a debugging session to rediscover: this repo's `package.json` sets
+ * `"type": "module"`, so this config loads as real ESM, and Node's ESM
  * resolver (unlike CommonJS `require`) does NOT honor `NODE_PATH` at all --
- * confirmed empirically (a `NODE_PATH=/opt/node22/lib/node_modules`
- * environment variable alone reproducibly fails with `ERR_MODULE_NOT_FOUND`
- * for this exact `import` line). The mechanism this task actually uses
- * instead: a single symlink, `node_modules/playwright ->
- * /opt/node22/lib/node_modules/playwright` (created via plain `ln -s`, not
- * tracked by git -- `node_modules/` is already gitignored, and this task
- * never edits `package.json`/`package-lock.json`), so ordinary Node module
- * resolution finds the real global `playwright` package (which bundles its
- * own nested `playwright-core` dependency) starting from this file's own
- * directory, the same way it would for any other real local dependency.
- * See this task's worker output for the exact `ln -s` command and the
- * before/after resolution proof.
+ * confirmed empirically, `NODE_PATH=/opt/node22/lib/node_modules` alone
+ * reproducibly failed with `ERR_MODULE_NOT_FOUND` for this exact import.
  */
 import { defineConfig, devices } from 'playwright/test';
 
