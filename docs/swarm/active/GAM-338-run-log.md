@@ -50,3 +50,30 @@ Tier at dispatch: `tier/fast`. Labels: Improvement, fast, w3.
      exists to pin the trio as one test, not because a mutation was found
      for it.
   All work is test-only; zero lines of production change ship in this PR.
+- 2026-08-14: Discovered a stale, orphaned remote branch
+  `origin/claude/gam-338-retry-idempotency-test` (base `bfdbb52`, an earlier
+  commit than this run's `d5488c5` base) from a prior, apparently-abandoned
+  attempt at this same issue — consistent with the "died holding a subagent"
+  failure class this dispatch warns about. Its diff vs. its own merge base
+  also deletes unrelated `docs/swarm/active/GAM-355-*` records and edits
+  `tests/e2e-personas/*.spec.ts`, neither in scope for GAM-338 — looks like
+  drift from a bad rebase, not clean work. Did not touch, merge, or delete
+  that branch (destructive and out of scope for this run); noting it here for
+  a human to clean up.
+- 2026-08-14: Baseline measured directly (no packet-supplied baseline
+  existed): `git worktree add /tmp/gam338-baseline d5488c5` (this run's own
+  merge base), `npm ci`, `npx vitest run` → 95 files / 2443 tests full suite;
+  `npx vitest run src/lib/supabase/loaders/endMeeting.test.ts` → 18 tests.
+  Worktree removed after measuring.
+- 2026-08-14: Ran `gate-run` skill (`.claude/skills/gate-run/scripts/gates.py
+  --require-clean`) twice. First run (commit `eb12d77`) found gate 3
+  (format:check) FAIL — `npx prettier --write` on the test file fixed one
+  line-wrap (2 insertions/1 deletion, no logic change); committed as
+  `72f062c`. Second run, scoped correctly to
+  `src/lib/supabase/loaders/endMeeting.test.ts` (my first attempt had
+  mismatched a directory-wide scope against the single-file baseline —
+  corrected): **all six gates PASS** at `72f062c`, tree clean. Full suite
+  95 files / 2446 tests (baseline 2443, +3); scoped file 21 tests (baseline
+  18, +3). eslint 0 errors / 378 warnings (no new warning in the changed
+  file itself — confirmed with a direct `npx eslint` run against it, zero
+  output).
