@@ -134,3 +134,36 @@ and 31527801235, and it is the thing this wording exists to make unmistakable.
   **If this line is the last one in this file, the run died holding this
   subagent** — that is the 31354278407 / 31385764526 / 31514339272 /
   31523233268 / 31527801235 failure, and nothing else looks like it.
+- **2026-08-14 05:24Z — `checker-premise` round 1 returned: REVISE** (4 MAJOR,
+  4 MINOR, 1 NIT; no BLOCKER — it confirmed the prescription works, having run
+  it in three of its own worktrees). Subagent completed and its verdict is in
+  hand; nothing left in flight. It confirmed every citation (lines 272/275, the
+  `SizeValue` props on both Stack and Card, all five overflow numbers, the
+  ancestor chain byte-for-byte, and the 247px collapse to the pixel). **The four
+  findings that change the work:**
+  1. **MAJOR — "Both lines are load-bearing" is FALSE, and it was my claim.**
+     Line 272 *alone* — leaving the Card exactly as it is — gives 0 overflow at
+     all five widths, card 400 at 414/768/1280/1920, and identical results in
+     the reset panel and all three banner states. Line 275 is not load-bearing
+     in any state the gate could produce. **Adopting the one-line fix.**
+  2. **MAJOR — my eslint baseline was stale.** The packet quoted "0 errors / 364
+     warnings" from `RESUME-HERE.md:110` (2026-08-04). Measured on the branch
+     point in two independent trees: **378**. `MACHINE-SETUP.md:112` says
+     measure, do not quote — I quoted. A worker taking 364 literally would have
+     reported a phantom 14-warning regression.
+  3. **MAJOR — the measurement route must be named in the packet.** The same
+     environment drift I hit; the worker would have hit it with no stated way
+     through, making criteria 2–5 unreachable.
+  4. **MAJOR — T072 pattern inversion.** `verification-log.md:2095`/`:2220`
+     record `width={N}` + `maxWidth="100%"` as an established pairing with
+     **`LoginPage.tsx` named as the exemplar**; T072 shipped a change to
+     `LiveConsole.tsx:1277` purely to conform to it. The one-line fix
+     *preserves* that pairing — the pairing starts working the moment the stack
+     is constrained — so this conflict disappears rather than needing a waiver.
+     This is the strongest argument for the one-line form and I had missed it.
+  Also: my least-confident #3 was right by luck (the reset rig measures the
+  *idle* panel, so no banner state was actually covered — the gate measured all
+  three and they are fine); three sibling pages carry the byte-identical defect
+  (item 20 follow-ups owed); and `tests/e2e/public-routes.spec.ts:62-73`
+  **already** asserts no overflow on `/login` in a real browser, blind here only
+  because its narrowest project is Pixel 7 at 412px.
