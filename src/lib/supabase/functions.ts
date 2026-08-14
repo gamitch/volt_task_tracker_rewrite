@@ -52,6 +52,18 @@
  *   - Any other thrown value (defensive catch-all; should not happen per
  *     `@supabase/functions-js`'s documented error classes): `code: 'UNKNOWN'`
  *     with the same fallback copy as an unparsable `FunctionsHttpError` body.
+ *   - `FunctionsHttpError` whose body is unparsable AND whose status is 404:
+ *     rethrown as `code: 'FUNCTION_NOT_DEPLOYED'` instead of the generic
+ *     `UNKNOWN` above. Status 404 alone is NOT a safe signal that the
+ *     function was never deployed -- `checkin-token/index.ts:424` itself
+ *     returns 404 for `SESSION_NOT_FOUND`, via `errorResponse`, which DOES
+ *     parse into the shape above and so takes the `if (parsed)` branch, never
+ *     reaching this one. Only a 404 whose body does NOT parse into that
+ *     shape -- the flat `{"code":"NOT_FOUND","message":"..."}` the Supabase
+ *     gateway itself returns for a function that does not exist on the
+ *     project -- reaches this branch. Do not "simplify" this back to a bare
+ *     status check; that would reintroduce the exact ambiguity this
+ *     paragraph documents.
  *
  * Same T086 "no-crash-when-unconfigured" posture as `loader.ts`'s
  * `createLoader`/`runMutation` fix: `getClient()` is called inside a `try`
@@ -84,6 +96,21 @@ const NETWORK_ERROR_MESSAGE = "Couldn't reach the server. Check your connection 
  */
 const UNKNOWN_EDGE_FUNCTION_ERROR_MESSAGE =
   "Couldn't complete this action. Check your connection and try again.";
+
+/** Code rethrown when the Edge Function itself is absent from the project
+ * (a deployment fault, permanent) rather than having rejected the call (a
+ * normal, transient outcome). Callers that can render a distinct state for
+ * "this dependency was never deployed" match on this. */
+export const FUNCTION_NOT_DEPLOYED_CODE = 'FUNCTION_NOT_DEPLOYED';
+
+/** Fixed DES-16 copy for `FUNCTION_NOT_DEPLOYED_CODE`. SHARED fallback for
+ * every `invokeEdgeFunction` caller -- also read verbatim on coach/admin-only
+ * screens (`InviteParentDialog.tsx`, `StudentsTab.tsx`), not just this
+ * packet's kiosk caller -- so it may not name any one audience (coach,
+ * admin, or student) and states a remedy rather than a user action, since
+ * there genuinely isn't one. */
+const FUNCTION_NOT_DEPLOYED_MESSAGE =
+  "This feature isn't available yet. It needs to be turned on for this site.";
 
 /** Verified verbatim against `send-invite/index.ts` line 97 and
  * `checkin/index.ts` line 94's shared copy for the "no session" case. */
@@ -137,6 +164,14 @@ async function toEdgeFunctionError(raw: unknown): Promise<SupabaseLoaderError> {
     const parsed = await tryParseEdgeFunctionErrorBody(raw);
     if (parsed) {
       return { code: parsed.code, message: parsed.message, cause: raw };
+    }
+    const status: unknown = (raw.context as { status?: unknown } | null)?.status;
+    if (typeof status === 'number' && status === 404) {
+      return {
+        code: FUNCTION_NOT_DEPLOYED_CODE,
+        message: FUNCTION_NOT_DEPLOYED_MESSAGE,
+        cause: raw,
+      };
     }
     return { code: 'UNKNOWN', message: UNKNOWN_EDGE_FUNCTION_ERROR_MESSAGE, cause: raw };
   }

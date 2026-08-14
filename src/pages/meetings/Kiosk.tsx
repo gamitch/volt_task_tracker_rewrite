@@ -206,7 +206,14 @@
  *    shop-TV display, not an interactive form), so a distinct error banner
  *    with nothing actionable to offer would add noise without adding
  *    capability; the polling loop itself already retries automatically
- *    every ~45s regardless of state.
+ *    every ~45s regardless of state. GAM-388: one narrow exception --
+ *    `errorCode === FUNCTION_NOT_DEPLOYED_CODE` (`functions.ts`'s
+ *    discriminator for a 404 whose body does not parse into the deployed
+ *    functions' `{ error: { code, message } }` shape, distinct from
+ *    `checkin-token/index.ts:424`'s own, parseable 404 for
+ *    `SESSION_NOT_FOUND`) is a permanent deployment fault, not a transient
+ *    one, so it gets its own honest Banner instead of folding into Empty --
+ *    the display stays passive either way; no retry control is added.
  *  - Populated/success: `token`/`tally`/`sessionTitle` all non-null --
  *    renders the real QR/short-code/tally-number/title content.
  */
@@ -233,6 +240,13 @@ import {
   loadKioskSessionTitle as loadKioskSessionTitleFromSupabase,
   loadKioskTally as loadKioskTallyFromSupabase,
 } from '../../lib/supabase/loaders/kiosk';
+// GAM-388: `FUNCTION_NOT_DEPLOYED_CODE` and `isSupabaseLoaderError` -- deep
+// imports, not the `../../lib/supabase` barrel, since that barrel
+// (`index.ts:40`) only re-exports `invokeEdgeFunction` from `./functions`
+// and is Forbidden to edit for this packet. `Kiosk.tsx` already deep-imports
+// `../../lib/supabase/loaders/kiosk` above, so this is the established idiom.
+import { FUNCTION_NOT_DEPLOYED_CODE } from '../../lib/supabase/functions';
+import { isSupabaseLoaderError } from '../../lib/supabase/loader';
 
 // ---------------------------------------------------------------------------
 // Ground-truth constants (PRD MTG-06 / hmac.ts's header comment -- cited in
@@ -339,12 +353,20 @@ export async function notWiredLoadKioskSessionTitle(): Promise<KioskSessionTitle
 // testable (e.g. with fake timers) regardless of what `load` resolves to.
 // ---------------------------------------------------------------------------
 
+/**
+ * GAM-388: returns `errorCode` alongside `value` so a caller can distinguish
+ * a permanent dependency-missing fault (`FUNCTION_NOT_DEPLOYED_CODE`) from a
+ * genuinely empty resolve, without changing the existing DES-12 Empty
+ * rendering -- `value` still becomes `null` on every rejection, exactly as
+ * before.
+ */
 function usePolling<T>(
   sessionId: string,
   load: (sessionId: string) => Promise<T | null>,
   intervalMs: number,
-): T | null {
+): { value: T | null; errorCode: string | null } {
   const [value, setValue] = useState<T | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   // Keeps the effect below from needing `load` in its dependency array (so
   // passing a fresh inline default function on every render never resets
   // the interval), while still always calling the latest `load` passed in.
@@ -358,12 +380,24 @@ function usePolling<T>(
       loadRef
         .current(sessionId)
         .then((result) => {
-          if (isMounted) setValue(result);
+          if (isMounted) {
+            setValue(result);
+            setErrorCode(null);
+          }
         })
-        .catch(() => {
-          // DES-12 "Error" bucket -- see module doc: folded into the same
-          // `null`/"not available" rendering as a genuine empty resolve.
-          if (isMounted) setValue(null);
+        .catch((err: unknown) => {
+          // DES-12 "Error" bucket -- see module doc: still folded into the
+          // same `null`/"not available" rendering as a genuine empty
+          // resolve. `errorCode` additionally surfaces the rejection's own
+          // `code` (via the established `isSupabaseLoaderError` guard --
+          // the rejection is a plain object, not an `Error` subclass) so a
+          // caller can render a distinct state for the one permanent case
+          // (`FUNCTION_NOT_DEPLOYED_CODE`) without this hook's own
+          // "still renders Empty" behaviour changing.
+          if (isMounted) {
+            setValue(null);
+            setErrorCode(isSupabaseLoaderError(err) ? err.code : null);
+          }
         });
     }
 
@@ -376,35 +410,45 @@ function usePolling<T>(
     };
   }, [sessionId, intervalMs]);
 
-  return value;
+  return { value, errorCode };
 }
 
 /** ~45s-refreshing QR/short-code seam (MTG-06). GAP #1 -- T103 real default
  * (`loaders/kiosk.ts`'s `loadKioskDisplayToken`, calling the new
- * `checkin-token` Edge Function). See module doc GAP #1. */
+ * `checkin-token` Edge Function). See module doc GAP #1.
+ *
+ * GAM-388: the only one of these three hooks whose caller needs the
+ * rejection's `errorCode` (to distinguish "the `checkin-token` function was
+ * never deployed" from "no session right now"), so this is the one hook
+ * that returns `usePolling`'s full `{ value, errorCode }` pair rather than
+ * just `.value`. */
 export function useKioskDisplayToken(
   sessionId: string,
   loadDisplayToken: KioskDisplayTokenLoader = loadKioskDisplayTokenFromSupabase,
-): KioskDisplayToken | null {
+): { value: KioskDisplayToken | null; errorCode: string | null } {
   return usePolling(sessionId, loadDisplayToken, KIOSK_REFRESH_INTERVAL_MS);
 }
 
 /** ~45s-refreshing tally seam. GAP #2 -- T103 real default
- * (`loaders/kiosk.ts`'s `loadKioskTally`). See module doc GAP #2. */
+ * (`loaders/kiosk.ts`'s `loadKioskTally`). See module doc GAP #2. Public
+ * signature unchanged (GAM-388) -- this caller has no distinct rendering for
+ * a dependency-missing tally, so only `.value` is returned. */
 export function useKioskTally(
   sessionId: string,
   loadTally: KioskTallyLoader = loadKioskTallyFromSupabase,
 ): KioskTallyState | null {
-  return usePolling(sessionId, loadTally, KIOSK_REFRESH_INTERVAL_MS);
+  return usePolling(sessionId, loadTally, KIOSK_REFRESH_INTERVAL_MS).value;
 }
 
 /** ~45s-refreshing session-title seam. GAP #2 -- T103 real default
- * (`loaders/kiosk.ts`'s `loadKioskSessionTitle`). See module doc GAP #2. */
+ * (`loaders/kiosk.ts`'s `loadKioskSessionTitle`). See module doc GAP #2.
+ * Public signature unchanged (GAM-388), same reasoning as `useKioskTally`
+ * above. */
 export function useKioskSessionTitle(
   sessionId: string,
   loadSessionTitle: KioskSessionTitleLoader = loadKioskSessionTitleFromSupabase,
 ): KioskSessionTitle | null {
-  return usePolling(sessionId, loadSessionTitle, KIOSK_REFRESH_INTERVAL_MS);
+  return usePolling(sessionId, loadSessionTitle, KIOSK_REFRESH_INTERVAL_MS).value;
 }
 
 // ---------------------------------------------------------------------------
@@ -440,9 +484,17 @@ export function KioskPage({
   // PII to student names/emails, which never appear on this screen).
   const safeSessionId = sessionId ?? '';
 
-  const token = useKioskDisplayToken(safeSessionId, loadDisplayToken);
+  const { value: token, errorCode: tokenErrorCode } = useKioskDisplayToken(
+    safeSessionId,
+    loadDisplayToken,
+  );
   const tally = useKioskTally(safeSessionId, loadTally);
   const sessionTitle = useKioskSessionTitle(safeSessionId, loadSessionTitle);
+  // GAM-388: distinguishes "the checkin-token Edge Function was never
+  // deployed" (a permanent dependency-missing fault) from "no session right
+  // now" (normal) -- see module doc's Error bullet and `functions.ts`'s own
+  // module doc for the full discriminator.
+  const isCheckinUnavailable = tokenErrorCode === FUNCTION_NOT_DEPLOYED_CODE;
 
   if (!sessionId) {
     return (
@@ -465,6 +517,20 @@ export function KioskPage({
     <Center axis="both" height="100vh" width="100%">
       <VStack gap={8} hAlign="center" padding={8} maxWidth={960}>
         <Heading level={1}>{sessionTitle?.title ?? FALLBACK_SESSION_TITLE}</Heading>
+
+        {isCheckinUnavailable && (
+          // GAM-388: the one narrow exception to the passive-display Error
+          // bullet above -- a permanent dependency-missing fault gets its
+          // own honest state instead of silently presenting as "no session
+          // right now" forever. Addressed to the student at the display
+          // (unlike `functions.ts`'s shared fallback copy), so "Ask a
+          // coach" is correct here.
+          <Banner
+            status="warning"
+            title="Check-in codes are unavailable"
+            description="This kiosk's check-in service isn't set up yet. Ask a coach to check you in."
+          />
+        )}
 
         <HStack gap={10} hAlign="center" vAlign="center" wrap="wrap">
           <VStack gap={2} hAlign="center">
