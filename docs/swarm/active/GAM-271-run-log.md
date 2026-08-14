@@ -299,3 +299,21 @@ and 31527801235, and it is the thing this wording exists to make unmistakable.
 - **2026-08-14 06:30Z — verification-log entry written** (item 24). No ledger
   row: item 29 freezes `task-ledger.md` and forbids editing a Status there for
   new work, even for a row carrying a legacy `Tnnn`.
+- **2026-08-14 06:38Z — PR creation REFUSED by credentials.** `gh pr create`
+  returned `HTTP 401: Bad credentials` from the GraphQL API. Same wall
+  `GAM-342` (`30bbc12`) and `GAM-345` hit; not a new failure and not worked
+  around — `AGENTS.md` § "Two walls" says do not attempt another channel.
+  The body is preserved as `docs/swarm/active/GAM-271-pr-body.md`, leading with
+  the fix and its measurements rather than burying the undeliverable half.
+  **The branch is pushed and complete** — local and remote both at `27e0f98`,
+  working tree clean, 14 commits ahead of `main` with the source change in
+  `7a9d9da`. An owner or a scoped session opens the PR from that body so CI
+  still runs on it.
+- **2026-08-14 06:40Z — issue moved `In Progress → In Review`** (item 28e —
+  never `Done`; the merge closes it, not the author), with a comment naming the
+  branch, the commit, the preserved PR body and the four follow-ups.
+- **2026-08-14 06:41Z — RUN COMPLETE. No subagent in flight.** Both dispatches
+  this run — `checker-premise` (two rounds) and `worker-implementer` — returned,
+  were waited on with `run_in_background: false`, and every verdict is recorded
+  above with a line of its own. No dispatch line in this file is unmatched by a
+  verdict line.
