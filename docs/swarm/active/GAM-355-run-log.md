@@ -49,3 +49,36 @@ subagent** — that is the failure shape the constitution's delegation rule and
   production source file is expected to change. Recorded so a wrong call is
   visible and correctable rather than silent.
 - **Run log created and pushed** — this file, as the first file write.
+- **Harness brought up.** `tests/e2e-harness/start.sh` needs root here (the
+  scratch cluster `chown`s its data dir), and this container had no
+  `node_modules`, no Playwright and no browser. Environment work, all outside
+  the repo: `sudo bash tests/e2e-harness/start.sh`, `npm ci`,
+  `npm i -g playwright@1.62.1`, `npx playwright install chromium --with-deps`,
+  and symlinks `node_modules/playwright{,-core}` → the global install so the
+  config's `import 'playwright/test'` resolves. One further adaptation worth
+  recording: `npm run preview` binds **`::1` only** by default here, while the
+  config's `baseURL` is `http://127.0.0.1:4174`, so `webServer` never saw its
+  own server come up and timed out at 180s. Pre-starting the preview with
+  `--host 127.0.0.1` lets `reuseExistingServer` find it. **No repo file was
+  changed for any of this.**
+- **BASELINE MEASURED on `main` @ `896e8df`, fresh seed, full suite, one run:
+  32 passed / 6 failed, exit 1** (4.2m). This is the premise measurement item
+  26 requires a gate to *run* rather than read — and **the premise as filed does
+  not hold**:
+
+  | Issue's claimed failure | Measured on `896e8df` |
+  | -- | -- |
+  | `coach-meeting.spec.ts:88` team-scope dropdown | **FAILS** — as filed |
+  | `coach-meeting.spec.ts:115` meeting round-trips | **FAILS** — as filed |
+  | `student-parent.spec.ts:66` FINDING 4 (RSVP write) | **PASSES** — contradicts the filing |
+  | `student-parent.spec.ts:27` FINDING 3 (hours float) | **FAILS** — as filed |
+  | `student-parent.spec.ts:121` FINDING 3, parent view | **FAILS** — as filed |
+  | *(not in the issue)* `outreach-lifecycle.spec.ts:149` | **FAILS** — new, unfiled |
+  | *(not in the issue)* `student-checkin.spec.ts:182` | **FAILS** — new, unfiled |
+
+  So the filed set of five is **4 right, 1 wrong, and 2 missing**. The issue
+  itself says *"Re-verify before acting"*; this is that re-verification, and it
+  moved the answer. Counts differ from the filed 21/5 and 27/5 for a legitimate
+  reason — specs from GAM-343 and GAM-345 have merged since — but the
+  *membership* of the failing set is the part that matters and it has changed.
+  Investigation continues before any packet is written.
