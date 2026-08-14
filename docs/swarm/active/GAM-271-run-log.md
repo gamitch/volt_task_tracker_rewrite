@@ -79,3 +79,43 @@ and 31527801235, and it is the thing this wording exists to make unmistakable.
   constrained ancestor `.astryx-center` at `rect=390`. The `maxWidth="100%"`
   resolves against a 400px box the card itself sized, so it is a no-op exactly
   as filed. **The issue is accurate in every particular; proceeding.**
+- **2026-08-14 04:50Z — the issue's candidate direction is WRONG, and only a
+  measurement that ran could have shown it.** Experiment in an isolated
+  worktree `/tmp/gam271-exp` on `claude/gam-271-experiment` (item 23 — never the
+  shared tree), second dev server on :5174. Applying the issue's literal
+  suggestion — `maxWidth={400}` + `width="100%"` **on the Card alone** — gives
+  `overflow: 0` at all five widths **and is a regression**: the card measures
+  **247px at every viewport, including 414 and 1280**, where it was 400px
+  before. `width:100%` resolves against the `VStack`, which is itself
+  shrink-to-fit with `max-width:none`, so parent and child collapse together to
+  min-content. **This is T325's deleted-buttons trap in a new costume — the
+  number got better while the thing got worse** — and it was caught only
+  because the rig records the card's own rect alongside the overflow figure.
+  Had the packet carried the issue's wording verbatim, a worker would have
+  shipped a login card that shrinks by 38% on every desktop.
+- **2026-08-14 04:56Z — MEASURED prescription (this is what the packet carries).**
+  The cap has to go where it can actually resolve: on the **stack**, because
+  `hAlign="center"` means the stack does not stretch its children and the stack
+  itself is shrink-to-fit. `VStack width="100%" maxWidth={400}` +
+  `Card width="100%" maxWidth={400}`:
+
+  | viewport | before | after | card rect before → after |
+  | -- | -- | -- | -- |
+  | 320 | 40px | **0px** | 400 → 320 |
+  | 360 | 20px | **0px** | 400 → 360 |
+  | 375 | 13px | **0px** | 400 → 375 |
+  | 390 | 5px | **0px** | 400 → 390 |
+  | 414 | 0px | **0px** | 400 → **400** |
+  | 768 / 1280 / 1920 | 0px | **0px** | 400 → **400** (byte-identical) |
+
+  Desktop is unchanged at every width — the fix is inert above 400px, which is
+  the property the collapsing variant lacked. **Both content states of the card
+  were measured, not just the default one:** the "Forgot password" reset panel
+  behaves identically (320: 40px → 0px, 414/1280: 400px card preserved), with
+  its heading and input asserted present at each width. Presence paired with
+  every number throughout (3 buttons / 2 inputs on the login panel, reset
+  heading + 1 input on the reset panel).
+- **2026-08-14 04:58Z — experiment torn down.** `/tmp/gam271-exp` worktree and
+  branch `claude/gam-271-experiment` removed, :5174 server stopped. Nothing
+  from the rig is committed — it is an instrument, not a test (T131/T142
+  convention).
