@@ -21,3 +21,24 @@ Dispatched from Linear. Branch `claude/gam-350-playwright-dependency`, base
   **not** reduced — mutation replayed, six gates run, clean-checkout
   measurement taken, result through a PR. What FAST removes is coordination,
   which item 26 explicitly declines to manufacture.
+- **11:58Z — premise measured on this branch; it HOLDS, and is wider than the
+  row states.** `grep -n playwright package.json` → no match.
+  `node_modules/playwright`, `node_modules/@playwright`,
+  `node_modules/playwright-core` → all absent. In *this* container
+  `/opt/node22/lib/node_modules/playwright` is **also** absent, so the import
+  resolves nowhere at all — a stronger reproduction than the row's, which had
+  the global present. **Wider:** the row's table lists only the personas
+  surface, but the *root* suite imports the same specifier —
+  `playwright.config.ts:84` and `tests/e2e/{public-routes,protected-route-redirects}.spec.ts`.
+  14 files in total. One declaration fixes both suites.
+- **11:59Z — the two facts that decide the design, measured from the published
+  tarballs rather than recalled.** (a) `playwright@1.62.1`'s `package.json` has
+  **no `scripts` field at all** — no `install`/`postinstall`, and the tarball
+  ships no `install.js`; same for `playwright-core@1.62.1`. So declaring it
+  cannot trigger a browser download, which is the row's one hard constraint,
+  satisfied by construction rather than by an env var. (b) `playwright` really
+  does export `./test` (`{"types":"./test.d.ts","import":"./test.mjs",
+  "require":"./test.js"}`). **So the deliberate specifier the row asks me to
+  engage with is correct** — `playwright/test` is a supported entry point of a
+  real package. The decision that was made was sound; only the matching
+  dependency entry was never added. No specifier change; no `@playwright/test`.
