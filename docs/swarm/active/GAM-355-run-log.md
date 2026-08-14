@@ -279,3 +279,53 @@ subagent** — that is the failure shape the constitution's delegation rule and
   AC1-AC7. `run_in_background: false`.
   *If this line is the last one in this file, the run died holding this
   subagent.*
+- **`checker-reviewer` VERDICT: PASS, one MINOR + two NITs.** Verdict seen and
+  recorded — the dispatch above did not orphan. It ran rather than read: three
+  reseeds, isolated and full-suite runs, direct `psql` reads, and **four
+  mutation experiments in its own worktree** (`/tmp/gam355-mut`, own bundle on
+  port 4185, removed after — item 23 honoured).
+
+  It independently confirmed every worker claim: typecheck 0; 7 and 5 passed in
+  isolation; 36/2 exit 1 on the full suite; FINDING 2's assertions verbatim;
+  nothing outside the two Allowed Files. It also proved AC5's order-independence
+  the only way that counts — in its full-suite run `outreach-lifecycle` inserted
+  its RSVP at `02:23:59` and this spec's click still landed on
+  `5e55…0008 / Library STEM Night` at `02:25:20`. That is the exact interference
+  that made the old test lie, now defeated.
+
+  **Mutation proofs that the rewritten tests have teeth**, which is the evidence
+  I most wanted: forcing the RSVP write to `status:'maybe'` turned AC5 red
+  (`Expected "going" / Received "maybe"`); forcing `respondedBy` to another id
+  turned it red via RLS. Reverting the student-side format string to the
+  pre-GAM-303 raw float turned the student test red
+  (`Received "6.499999118888889 / 100.0 h (6.5%)"`) while the parent test stayed
+  green — the partial-fix scenario §7.5 declared as a doubt, caught.
+
+  **The worker's declared deviation was not merely defensible — it was
+  necessary, and my packet was wrong.** `hoursVsGoalPercent` is
+  `Math.min(100, round1(...))`, so a decimal percentage is reachable by
+  construction, and the checker observed `(6.5%)` live. Pinning to the packet's
+  measured `4%`, as I specified, would have shipped a test that is red on
+  today's database. Recorded because I over-fitted a locator to one observation
+  in the same packet where I warned the worker not to.
+
+  **I am escalating the MINOR to MAJOR and sending the work back.** The checker
+  offered that grading explicitly — *"if the orchestrator reads AC3's
+  screen-vs-database sentence as a hard requirement of a positive comparison,
+  escalate to MAJOR."* I do, and I wrote that sentence. Its demonstration is
+  decisive: with the formatter mutated to `(value / 2).toFixed(1)` the page
+  rendered **`3.2 / 100.0 h`** against a database value of
+  **`6.4999991188888889`**, and **both rewritten hours tests stayed green**. A
+  student's own hours halved on screen, undetected. The test being replaced did
+  compare screen to database (`toContain(String(raw))`); the rewrite kept only
+  the negative half. Passing that as MINOR-with-a-follow-up would make this task
+  a net loss on the one property it is named for — and item 26's trigger
+  question, "can a mistake here lie to a user about their own data", is the
+  reason this row was tiered HEAVY in the first place. The fix is one line, the
+  checker showed `confirmed_hours` is stable within a run (identical across two
+  reads 20s apart) so a strict comparison is not flaky, and attempt 2 of 3 is
+  free.
+- **DISPATCHED `worker-implementer` (attempt 2 of 3)** for the one-line
+  strengthening. `run_in_background: false`.
+  *If this line is the last one in this file, the run died holding this
+  subagent.*
