@@ -136,3 +136,7 @@ subagent** — that is the failure shape the constitution's delegation rule and
     hardcoded labels track the day the harness was seeded — Aug 13 when the
     spec was written, Aug 14 today. A calendar-dated test against a
     relative-dated seed goes red on its own the next morning.
+- **Packet written** — `docs/swarm/active/GAM-355-packet.md`. Two Allowed Files
+  (`coach-meeting.spec.ts`, `student-parent.spec.ts`), seven acceptance
+  criteria, five declared least-confident decisions (item 19d). No `src/**` in
+  scope: every underlying fix has already shipped.

@@ -1,0 +1,229 @@
+# Task packet — GAM-355
+
+**Tier:** HEAVY (packet → `checker-premise` → worker → `checker-reviewer`).
+**Branch:** `claude/gam-355-stale-persona-failures`.
+**Repository path:** `/home/runner/work/volt_task_tracker_rewrite/volt_task_tracker_rewrite`
+(the shared tree — no worktree; see §6).
+
+---
+
+## 1. What is wrong
+
+Three persona tests were written as *witnesses to bugs*. All three bugs have
+since been fixed and merged. The tests still assert the broken behaviour, so
+they are red against a correct application, and one of them is red-or-green
+depending on which other spec ran first.
+
+Every claim below was measured on `main` @ `896e8df`, on a cluster reseeded
+from scratch, with each spec run **in isolation**. Evidence is in
+`docs/swarm/active/GAM-355-run-log.md`.
+
+| Test | Asserts today | Reality | Fix that shipped |
+| -- | -- | -- | -- |
+| `coach-meeting.spec.ts:88` | archived `Volt Legacy 2201` is offered in the scope picker | it is filtered out | GAM-305 |
+| `coach-meeting.spec.ts:115` | same — clicks that option at line 126 | option absent; 90s timeout | GAM-305 |
+| `student-parent.spec.ts:27` | student hours render as a raw float | render is `4.0 / 100.0 h (4%)` | GAM-303 |
+| `student-parent.spec.ts:121` | parent view, same | same | GAM-303 |
+| `student-parent.spec.ts:66` | an RSVP "never reaches the database" | it writes `rsvps` | GAM-304 |
+
+### 1a. The one that is worse than stale
+
+`student-parent.spec.ts:66` **passes in the full suite and fails in
+isolation**, and the green is the wrong answer. It grabs
+`page.getByRole('button', { name: 'Sign up' }).first()` and then queries
+`rsvps` for one hardcoded `session_id` (`5e550000-…-000000000008`). When
+`outreach-lifecycle.spec.ts` runs first it creates an outreach event whose
+opportunity takes that first slot, so the click RSVPs to a *different* session,
+the query finds nothing, and "no write happened" is satisfied by looking at a
+row the user never touched. Fixing only the premise and leaving `.first()`
+in place re-arms exactly this.
+
+Measured write, fresh seed, spec isolated:
+`session_id=5e550000-0000-4000-8000-000000000008, status=going,
+responded_by=a0000000-0000-4000-8000-000000000003` (Priya's own profile).
+
+---
+
+## 2. Allowed Files — the complete list
+
+- `tests/e2e-personas/coach-meeting.spec.ts`
+- `tests/e2e-personas/student-parent.spec.ts`
+
+**Nothing else.** In particular **do not** touch `src/**` (every underlying fix
+has already shipped — a source change here means you have misread the task),
+`tests/e2e-harness/**`, `docs/swarm/**`, `.claude/**`, or `.github/workflows/**`
+(that last one is unpushable from a dispatched run at all — `AGENTS.md`
+§ "Two walls").
+
+If you believe a file outside this list must change, **stop and report it**
+rather than changing it. Under item 20 a deferral becomes a filed row, not a
+comment.
+
+---
+
+## 3. Acceptance criteria
+
+Each is measurable today, against fixtures that exist today.
+
+**AC1 — `coach-meeting.spec.ts:88` passes.** The expected option list becomes
+exactly `['Select all', 'Volt Robotics 9911', 'Volt Junior 4402']`. The
+comment at lines 100-104 is a stale regression guard for FINDING 1 and must be
+replaced with one recording that GAM-305 shipped, that `teams.archived` is
+`true` for `Volt Legacy 2201` in `seed.sql`, and that the picker now excludes
+it (`ScheduleMeetingsDialog.tsx:277,885`; `:1236` disables an archived team
+that is nonetheless already selected). The test must still prove the *narrowing*
+half: after deselecting `Volt Junior 4402` the combobox reads
+`Volt Robotics 9911`.
+
+**AC2 — `coach-meeting.spec.ts:115` passes end to end.** Drop the
+`Volt Legacy 2201` click (line 126). **Keep every post-write row assertion
+exactly as it is** — `type`, `location_name`, `season_id`, `team_ids`,
+`counts_participation`, `counts_volunteer_hours`, the session date, the
+`23:30:00Z` / `01:45:00Z` boundary, `status`, `notes`. Those are the point of
+the test and none of them is stale.
+*One thing you must report rather than guess:* lines 172-174 assert
+`event.created_by` is `null` (FINDING 2). The test has never reached that line
+in a current run, so nobody knows whether it still holds. Run it, and if
+`created_by` now records the coach, flip the two assertions to
+`toBe(PERSONAS.coach.profileId)` and **say so explicitly in your report** — that
+is a shipped fix nobody has noticed.
+
+**AC3 — `student-parent.spec.ts:27` asserts the shipped behaviour.** Rename it
+so it no longer claims hours are a raw float; it is now a regression guard for
+GAM-303. It must assert that the label is a *rounded* figure and that it does
+**not** contain the raw float from `confirmedHours()`. Do not weaken it to
+"some text is visible" — the whole value of this test is that it compares the
+screen against `v_student_hours`. Note the goal now renders `100.0`, not `100`,
+so the old `/\/ 100 h \(/` selector matches nothing; pick a selector that
+survives a goal of `100.0` and does not depend on a specific hours value.
+
+**AC4 — `student-parent.spec.ts:121` does the same for the parent view.** Same
+rename, same substance. The parent-side test currently asserts
+`toContain(String(raw))`; that must invert.
+
+**AC5 — `student-parent.spec.ts:66` asserts the write, and is
+order-independent.** Rename it: the RSVP does reach the database. It must
+assert the row that is actually written — `status` and `responded_by` — for
+the session the click actually targeted, and it must **not** use
+`getByRole('button', { name: 'Sign up' }).first()` against an unqualified list.
+Pin the click to the seeded session so that a spec running before this one
+cannot change which button `.first()` finds. Prove the fix: this test passes
+both in isolation *and* in the full suite.
+
+**AC6 — both specs are green in both invocations.** Fresh seed + spec alone,
+and fresh seed + full suite. After your change the **only** remaining failures
+in the full suite are `outreach-lifecycle.spec.ts:149` and
+`student-checkin.spec.ts:182`, which are out of scope and are being filed
+separately. Report both exit codes and both pass/fail counts.
+
+**AC7 — `git status` shows exactly the two Allowed Files modified**, plus
+nothing else you created. Report the commit SHA (item 21 — a clean tree is not
+a committed one).
+
+---
+
+## 4. How to run it
+
+The harness is **already up** in this container and you do not need to rebuild
+the app bundle (these specs exercise the served bundle, and you are changing no
+source):
+
+```bash
+# Reseed between runs — several of these specs write, and a dirty database
+# is how a rerun disagrees with itself:
+sudo -n bash tests/e2e-harness/stop.sh
+sudo -n bash tests/e2e-harness/start.sh
+sudo chown runner:runner .env.e2e
+
+# One spec:
+npx playwright test -c tests/e2e-harness/playwright.personas.config.ts \
+  tests/e2e-personas/student-parent.spec.ts
+
+# Everything:
+npx playwright test -c tests/e2e-harness/playwright.personas.config.ts
+```
+
+Environment notes, all already done — do not redo them and do not "fix" them
+in the repo: `npm ci` has run; `playwright@1.62.1` is installed globally and
+symlinked into `node_modules/`; Chromium is installed; a preview server is
+serving `dist-e2e` on `127.0.0.1:4174` (started with `--host 127.0.0.1`, because
+`npm run preview` binds `::1` only here and the config's `baseURL` is
+`127.0.0.1`). **If the preview dies, restart it with that flag** rather than
+editing the config.
+
+Query the database directly when you need to check a row:
+
+```bash
+psql -h 127.0.0.1 -p 55432 -U postgres -d scratch -X -q -c "select …"
+```
+
+---
+
+## 5. Evidence you must report
+
+Per the constitution's Evidence Requirements: files inspected, commands run,
+relevant output, pass/fail, exact failure reason if any, and the commit SHA.
+Quote the real pass/fail counts and exit codes — not a summary of them. Do not
+report a criterion green that you have not watched turn green.
+
+---
+
+## 6. Worktree
+
+Work in the shared tree at the path above. This is an explicit exception to the
+usual isolation habit and the reason is item 23's own logic: you are running
+**no mutation experiment** — you change two test files and run them. The
+services the suite needs (PostgreSQL on 55432, the API on 54321, the preview on
+4174) are container-level and are not duplicated by a worktree, and only one
+editing agent runs against this tree at a time. If you find yourself wanting to
+revert application source to see a test go red, **stop and say so** — that is a
+mutation and it needs its own worktree.
+
+---
+
+## 7. Least confident decisions (item 19d)
+
+1. **That AC5's "pin the click to the seeded session" is achievable through the
+   UI at all.** I have not read `StudentHome.tsx`'s "Sign-up opportunities"
+   markup, so I do not know whether the Sign up buttons carry anything
+   distinguishing — an accessible name including the event title, a row
+   container that can be filtered by text. **What would make it wrong:** the
+   buttons are identical and unnameable, in which case the honest fix is to
+   assert against *whichever* session the click targeted (read it back from
+   `rsvps` by `student_id` with a before/after diff) rather than a hardcoded
+   `session_id`. Either satisfies AC5's intent; I am prescribing the first and
+   the second may be the only one that exists.
+
+2. **That deleting line 126 is the whole of AC2.** The dialog defaults to all
+   teams selected and the test narrows by deselecting two. With only two teams
+   offered, deselecting one leaves `Volt Robotics 9911` and `team_ids` should
+   still be `[SEED.teamFrc]`. **What would make it wrong:** the picker's
+   "Select all" default or its `selectableTeams` union at
+   `ScheduleMeetingsDialog.tsx:885` still includes the archived team in the
+   *selected* set even though it is not *offered* — in which case `team_ids`
+   would arrive with a third id and the assertion at line 156 fails for a real
+   reason. That would be a product finding, not a test fix, and it stops the
+   task.
+
+3. **That the hours label is stable enough to assert on precisely.** I have
+   one measurement of one render: `4.0 / 100.0 h (4%)`. **What would make it
+   wrong:** the `.0` on the goal is incidental formatting that differs by
+   season configuration, or the whole label is assembled differently on the
+   parent surface than on the student one. A selector over-fitted to that one
+   string re-creates exactly the brittleness this task is cleaning up.
+
+4. **That `outreach-lifecycle.spec.ts:149` and `student-checkin.spec.ts:182`
+   are genuinely out of scope.** Both reproduce in isolation and neither is
+   named in GAM-355. **What would make it wrong:** the outreach failure and
+   this task's RSVP work share a code path — if the coach-side fan-out at
+   `outreach-lifecycle.spec.ts:233` and the student-side RSVP write at
+   `student-parent.spec.ts:66` are the same writer, then "the RSVP writes" and
+   "the fan-out writes nothing" cannot both be true of one mechanism, and one
+   of my two conclusions is wrong.
+
+5. **That no `src/**` change is needed.** Every one of the three bugs has a
+   shipped fix I traced to a real line. **What would make it wrong:** the
+   rewritten assertions, which are stricter than the current ones, catch a
+   *partial* fix — e.g. hours round on the student home and not on the parent
+   home. Then the correct outcome is a red test and a filed row, not a relaxed
+   assertion.
