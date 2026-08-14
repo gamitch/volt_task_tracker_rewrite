@@ -424,3 +424,33 @@ subagent** — that is the failure shape the constitution's delegation rule and
   that would close them, so the row could not be worked.
 - **Verification-log entry appended** (item 24 — recording and the work land in
   the same delivery, not as a later catch-up).
+- **PR COULD NOT BE OPENED — a credential wall, recorded rather than routed
+  around.** This run can `git push` (verified: `origin/claude/gam-355-stale-persona-failures`
+  is at `de00818`, byte-equal to local, and every log push above landed) but it
+  **cannot create a pull request**. Measured, not assumed:
+
+  | Credential | `GET /repos/...` | `POST /repos/.../pulls` |
+  | -- | -- | -- |
+  | `GH_TOKEN` env | 401 | — |
+  | `GITHUB_TOKEN` env | 401 | — |
+  | token embedded in the `origin` URL | 401 (expired ~02:21Z) | — |
+  | `http.extraheader` token git actually uses | **200** | **403** `Resource not accessible by personal access token` |
+
+  Tried through both `gh pr create` (GraphQL) and the REST endpoint directly;
+  same refusal. `GET /pulls?head=…` confirms **no PR exists** for this branch,
+  so nothing was half-created. This is the same shape as `AGENTS.md`
+  § "Two walls" #1 — a permission boundary doing its job — and the response
+  there is the response here: **preserve the undeliverable half as an artifact,
+  lead with it, and hand it over.** The PR body is committed verbatim as
+  `docs/swarm/active/GAM-355-pr-body.md`; it opens with `Closes GAM-355` as its
+  first line (item 28f) and needs no editing.
+
+  **What an owner or a scoped session must do:** open a PR from
+  `claude/gam-355-stale-persona-failures` into `main`, title
+  *"Five stale persona tests rewritten against the fixes that shipped
+  (GAM-355)"*, body = that file. The branch name already carries the identifier,
+  so the merge closes GAM-355 through the team automation whether or not the
+  magic word survives (item 28f, first table row).
+- **GAM-355 moved `In Progress → In Review`** (item 28e — never `Done`; the
+  merge closes it, not the author), with the wall stated on the issue so it is
+  visible where the owner will look rather than only in this log.
