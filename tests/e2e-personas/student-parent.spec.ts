@@ -49,6 +49,11 @@ test.describe('student home', () => {
     const label = (await progress.innerText()).trim();
     expect(label).toMatch(/^\d+\.\d \/ 100\.0 h \(\d+(\.\d)?%\)$/);
     expect(label).not.toContain(String(raw));
+    // The shape and the negative check above are not enough on their own —
+    // a formatter that renders a rounded but WRONG number (half of `raw`,
+    // say) would still satisfy both. Tie the rendered leading figure to the
+    // database value itself.
+    expect(label.split(' ')[0]).toBe(raw.toFixed(1));
     await capture(page, '21-student-hours-float');
   });
 
@@ -140,6 +145,9 @@ test.describe('parent home', () => {
     const label = (await progress.innerText()).trim();
     expect(label).toMatch(/^\d+\.\d \/ 100\.0 h \(\d+(\.\d)?%\)$/);
     expect(label).not.toContain(String(raw));
+    // Same positive tie-back as the student-side test: the rendered leading
+    // figure must equal the database value, not just look plausible.
+    expect(label.split(' ')[0]).toBe(raw.toFixed(1));
     await capture(page, '25-parent-hours-float');
   });
 });
