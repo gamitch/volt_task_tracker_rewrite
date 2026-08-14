@@ -790,7 +790,8 @@ describe('makeOnEndMeeting retry-idempotency (GAM-338)', () => {
     // workflow (`endMeeting.ts` module doc #1: "post-completion attendance
     // corrections are a normal workflow for this team", PRD DATA-02).
     const correctedRow = setup.attendance.get(attendanceKey('session-real-mtg', 'student-mark-a'));
-    if (!correctedRow) throw new Error('expected the first onEndMeeting call to have written a row');
+    if (!correctedRow)
+      throw new Error('expected the first onEndMeeting call to have written a row');
     correctedRow.status = 'present';
     correctedRow.recordedBy = 'coach-1';
 
