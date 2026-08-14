@@ -12368,3 +12368,140 @@ re-filed: **GAM-350** (`playwright` unresolvable from a clean checkout),
 **GAM-351** (`vite preview` binds IPv6-only while the config polls `127.0.0.1`
 — this is what makes `webServer` time out at 180s), **GAM-362**/**GAM-365**
 (the eslint/`playwright-report` interaction).
+
+---
+
+## GAM-271 (T507) — the login card stops overflowing narrow phones, and the fix is one line the issue did not propose (STANDARD tier)
+
+**Tier: STANDARD** (constitution item 26), stated and defended per that item's last
+paragraph. No write path or destructive operation, no schema/RLS/migration, no
+metric SQL, no auth/session/role-resolution logic — a layout prop on one
+presentational component. **Item 25's second obligation applies directly here:**
+tier follows genuine complexity, not a topic that sounds sensitive, and "login"
+sounds sensitive. Not FAST, because FAST's fifth condition is a named mutation
+that turns a **test** red, and jsdom performs no layout — the evidence form is a
+browser measurement instead. The worker ran on its pinned default (sonnet); item
+18's four override triggers are all absent.
+
+### The premise held, measured rather than read
+
+Every number in the issue reproduced exactly, in real Chrome against the real dev
+server, with presence paired to each figure (3 buttons / 2 inputs):
+
+| viewport | 320 | 360 | 375 | 390 | 414 | 768 / 1280 / 1920 |
+| -- | -- | -- | -- | -- | -- | -- |
+| **before** | 40px | 20px | 13px | 5px | 0px | 0px |
+| **after** | **0px** | **0px** | **0px** | **0px** | **0px** | **0px** |
+| card rect before | 400 | 400 | 400 | 400 | 400 | 400 |
+| card rect after | 320 | 360 | 375 | 390 | **400** | **400** |
+
+Mechanism confirmed from the computed ancestor chain, not inferred: the card was
+`rect=400 css-width=400px max-width=100%`, its parent `.astryx-stack vertical`
+was itself 400px with `max-width: none`, and the first genuinely constrained
+ancestor was `.astryx-center` at 390px. `100%` resolved against a box the card
+had just sized — a circular constraint, hence inert.
+
+### The issue's own candidate fix was measured and rejected
+
+The filing suggested `maxWidth={400}` + `width="100%"` **on the Card**, while
+warning "measure it, do not assume it." That warning earned its keep. Applied, it
+zeroes the overflow **and collapses the card to 247px at every viewport,
+including 414 and 1280**, where it is 400px today: `hAlign="center"` stops the
+stack stretching its children and the stack is itself shrink-to-fit, so both
+collapse to min-content. **The overflow number improves while the screen gets
+worse** — T325's deleted-buttons trap in a new costume, caught only because the
+rig records the card's own rect beside the overflow figure.
+
+### What shipped — one line
+
+```diff
+-      <VStack gap={6} hAlign="center">
++      <VStack gap={6} hAlign="center" width="100%" maxWidth={400}>
+```
+
+Plus one comment above the `<Card>`. **The `Card` line is unchanged.**
+
+**This is not a reversal of T072, it is T072's convention switching on.** The
+premise gate proved it by deleting the Card's `maxWidth="100%"` under this fix:
+the overflow returns in full, 40 / 20 / 13 / 5 / 0. So after the change that prop
+is not inert-but-preserved — it is **the clamp**, with line 272 supplying the
+percentage basis it never had. `verification-log.md:2095`/`:2220` named
+`LoginPage.tsx` as the exemplar of the `width={N}` + `maxWidth="100%"` pairing;
+the pairing was never wrong, it simply cannot work under a shrink-to-fit parent.
+T072's own site (`LiveConsole.tsx:1277`) sits in a constrained
+`HStack wrap="wrap"`, which is why it works there. **Definition of Ready item 5
+does not fire — nothing is reversed.** The comment exists because line 275 is now
+live code that reads as dead, and the next person to read this bug's title will
+want to delete it.
+
+### The premise gate ran both rounds and changed the work twice
+
+Round 1 **REVISE** (4 MAJOR / 4 MINOR / 1 NIT), round 2 **DISPATCH** (2 MINOR /
+4 NIT). Item 19a's cap was not reached. Three of the author's own claims were
+false and the gate caught all three:
+
+1. **"Both lines are load-bearing and each was measured without the other."**
+   False — line 272 alone is the whole fix. The orchestrator replayed this in its
+   own worktree before accepting it.
+2. **"eslint baseline 0 errors / 364 warnings."** Quoted from
+   `RESUME-HERE.md:110` (2026-08-04) rather than measured. **The true figure is
+   378**, confirmed in four independent trees. `MACHINE-SETUP.md:112` says
+   measure, do not quote.
+3. **"the Card-only form collapses with or without the stack change."** False —
+   with the stack change it gives 0 overflow and a 400px card. Five words that
+   contradicted the packet's own table twenty lines above.
+
+Item 19c predicted this shape exactly: roughly half of a gate's findings are the
+author's own unverified claims. Three of four MAJORs here were.
+
+### Mutation proof, since no test can carry this
+
+**jsdom performs no layout**, so no unit test can see a 40px overflow or its
+return. No test was written, and that is the honest call rather than an omission
+— a test asserting the rendered prop would be a guard in appearance only (T325's
+three vacuous candidates, T330, T401). The evidence is instead a real mutation,
+run against the **committed** fix (item 26's "commit before mutating"): reverting
+**only** the `VStack` props in a throwaway worktree, leaving the comment and Card
+in place, restored the defect exactly — **40 / 20 / 13 / 5 / 0**.
+
+A guard *is* possible and is filed rather than skipped:
+`tests/e2e/public-routes.spec.ts:62-73` already asserts no horizontal overflow on
+`/login` in a real browser and stayed green through this entire bug, because its
+narrowest project is Pixel 7 at **412px** and the card was 400. See GAM-371.
+
+### Gates
+
+At `cf9c130`, `--require-clean`, run independently by worker, premise gate and
+orchestrator with matching figures: `tsc` **0** · `vite build` **0** ·
+`format:check` **0** · eslint **0 errors / 378 warnings — no rise** · vitest
+**95 files / 2443 tests** (baseline 2443, +0) · scoped `src/pages/login/`
+**9 tests** (baseline 9, +0). **All six pass.** `.env.local` absent.
+
+### Rig
+
+Throwaway, in `/tmp`, nothing committed, `package.json` and `package-lock.json`
+unmodified — the T131/T142 convention. **The `layout-measurement` skill's
+documented environment does not exist in a dispatched container:** no
+`/opt/node22`, no `/opt/pw-browsers`, no `playwright` in `node_modules`, and
+`scripts/measure.cjs` exits 2. The working route is `playwright-core` installed
+outside the repo driving the system `/usr/bin/google-chrome` (151.0.7922.108).
+The skill's own "verify these rather than trusting them — they drift" is what
+saved the run. Filed as GAM-372.
+
+### Filed, not fixed here (item 20)
+
+- **GAM-370** — the identical defect on three more full-screen cards.
+  `/accept-invite` **measured at 40 / 20 / 13 / 5 / 0**; `AccessDeniedPage.tsx:90`
+  and `NoAccessPage.tsx:313` are byte-identical but guard-rendered and could not
+  be reached to measure; `CheckinResult.tsx:740` uses `width={420}` and needs its
+  own measurement.
+- **GAM-371** — a narrow-viewport project for `public-routes.spec.ts`, which
+  would have caught this automatically and provably reddens pre-fix.
+- **GAM-372** — the `layout-measurement` skill's stale environment facts.
+  Cross-linked to the pre-existing **GAM-350**, which shares the root cause and
+  would not close it.
+- **GAM-373** — re-measure T072's `LiveConsole.tsx:1277`, the one site changed to
+  satisfy a convention now known to be conditional on its parent.
+
+The frozen ledger (item 29) gets no row: `GAM-271` carries a legacy `T507` but
+item 29 forbids editing a Status there for new work.
