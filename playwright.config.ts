@@ -139,5 +139,17 @@ export default defineConfig({
       name: 'mobile-dark',
       use: { ...devices['Pixel 7'], colorScheme: 'dark' },
     },
+    // GAM-371: the 2x2 matrix above bottoms out at Pixel 7 (412px wide),
+    // which is 92px narrower than iPhone 15 but still wider than the actual
+    // floor. GAM-271's login-card overflow (40px at 320, 0px at 414) fell
+    // entirely inside that gap, so the "fits the viewport with no
+    // horizontal overflow" assertion never ran at a width that could catch
+    // it. 320 is the smallest width GAM-271 measured -- add it once here
+    // rather than widen an existing project, so this stays additive and the
+    // 2x2 matrix above is untouched.
+    {
+      name: 'mobile-narrow-320',
+      use: { ...devices['Pixel 7'], viewport: { width: 320, height: 568 }, colorScheme: 'light' },
+    },
   ],
 });
