@@ -189,3 +189,26 @@ and 31527801235, and it is the thing this wording exists to make unmistakable.
   rather than looping. Dispatched blocking; this line is written before the wait.
   **If this line is the last one in this file, the run died holding this
   subagent.**
+- **2026-08-14 05:43Z — `checker-premise` round 2 returned: DISPATCH** (2 MINOR,
+  4 NIT; no BLOCKER, no MAJOR). Subagent completed, verdict in hand, nothing in
+  flight. All four round-1 MAJORs verified discharged rather than taken on my
+  word. **The gate's best finding of the run, and it inverts my mental model:**
+  it attacked the T072 argument by deleting the Card's `maxWidth="100%"` under
+  the one-line fix and the page **re-breaks — 40 / 20 / 13 / 5 / 0 returns**,
+  stack correctly capped at 320 but the card at 400 escaping it. So after the
+  fix that prop is not "preserved but inert", it is **strictly load-bearing**:
+  line 272 supplies a real percentage basis and `maxWidth="100%"` is the clamp
+  that produces the 320/360/375/390 card. The pairing is switched **on**, not
+  inverted — no reversal, no Definition-of-Ready-item-5 waiver owed. It also
+  checked T072's own patch site, `LiveConsole.tsx:1277`, and found it sits in a
+  genuinely constrained `HStack wrap="wrap"`, so the pairing works there for the
+  same reason it was inert here. The argument holds at both ends.
+  It also caught a **false "Measured:" claim I introduced in revision 2** — I
+  wrote that the Card-only form collapses "with or without the stack change",
+  and with the stack change it does not (0 overflow, card 400 at 414/1280).
+  Five words that contradicted my own table twenty lines above. Exactly the
+  claim class this gate exists for.
+  Gate's own six-gate run on the one-line fix: tsc 0 · build 0 · prettier clean
+  · eslint **0 errors / 378 warnings, no rise** · vitest **95 files / 2443
+  tests, exit 0**. It also proved the packet's rig route works from an empty
+  directory (`npm i playwright-core` exit 0, harness returned real numbers).
