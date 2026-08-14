@@ -367,3 +367,43 @@ item 16, and whose answer changes the file.
   deploy**, a dispatch would have burned a run discovering that. Urgency is
   carried by priority `Urgent`, which is what the owner sorts on, not by a queue
   promotion that was never mine to make.
+
+## PR
+
+- **PR body written, declaration-gate checked, pushed** — 2026-08-14,
+  `docs/swarm/active/GAM-388-pr-body.md`. `check.mjs` → `OK  declaration closes
+  GAM-388`, exit 0. Written **before** attempting the API call, per the
+  `pr-body` skill, which is why this run loses nothing by failing to open it.
+
+  Two corrections the gate script forced, both worth recording:
+  1. First draft named GAM-388 *and* GAM-395 on line 1 →
+     `AMBIGUOUS_DECLARATION`, exit 1. Line 1 takes exactly one identifier.
+  2. I then used `Also-fixes: GAM-396` to satisfy it. That passed, and I
+     removed it anyway: this PR **files** GAM-396, it does not fix it, and a
+     line that reads as a fix claim is wrong even when the parser tolerates it.
+
+- **`Closes GAM-388` on line 1 is forced by the machinery, and the PR says so
+  out loud.** I intended a *contributing* magic word (`Part of GAM-388`) so the
+  merge would link without closing — item 28f documents that as the safeguard
+  for exactly this case. It is unusable here: the `Linear declaration` gate is
+  wired into branch protection and requires the literal `Closes GAM-nnn` anchor
+  at position 0, so a contributing word **blocks the merge**. The two mechanisms
+  cannot both be satisfied. Resolved the way item 27 prescribes — close the row,
+  declare **Partial**, name the row that completes it — and the PR body carries
+  a ⚠ note asking the reviewer to reopen GAM-388 if they would rather it stay
+  open until the deploy lands. Flagged rather than left for the owner to
+  discover that a closed row implies working kiosk check-in.
+
+- **PR NOT opened — this run cannot.** `gh` returns `HTTP 401: Bad credentials`;
+  `GH_TOKEN` and `GITHUB_TOKEN` are both present and both rejected by the API;
+  the push authenticated via an `http.extraheader` set by `actions/checkout`,
+  and the REST call with that same header returns **`Resource not accessible by
+  personal access token`**. This is the boundary GAM-333 records and the
+  `pr-body` skill anticipates ("a dispatched run frequently cannot open its own
+  pull request"). I tried the run's own push credential once and stopped; I did
+  not go looking for another channel.
+
+  **Action for the owner: open the PR from the artifact.** Branch
+  `claude/gam-388-checkin-token-deploy` is pushed and green; body is
+  `docs/swarm/active/GAM-388-pr-body.md`, to be pasted **verbatim** — line 1 is
+  parsed and indentation breaks it.
