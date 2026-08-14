@@ -3,9 +3,10 @@
 **T614 — The End time field has no lower bound, so a series edit can persist a
 meeting whose end is before its start**
 
-Tier: **HEAVY** (item 26 — write path + the corrupted value feeds metric SQL).
+Tier: **HEAVY** (item 26 — **write path**; corrected in round 2, the original
+"feeds metric SQL" half was false and is retracted in §1).
 Author: orchestrator. Gate: `checker-premise` must return **DISPATCH** before
-any worker sees this (item 19).
+any worker sees this (item 19). Round 1: REVISE — see §8.
 
 ## 1. Defect
 
