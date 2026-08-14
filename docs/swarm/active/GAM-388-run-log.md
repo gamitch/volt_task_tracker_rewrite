@@ -179,3 +179,21 @@ code half only; deploy half escalated to the owner.
   (`tests/e2e-harness/server.mjs:503`) already returns a flat-bodied 404 for
   `checkin-token`, so the new Banner will render there too (MINOR 2 — no
   assertion breaks; Playwright is not one of the six gates).
+
+- **packet revised to r2** — 2026-08-14. All nine gate findings applied: shared
+  error copy re-authored for an unknown audience (MAJOR 2); the single wrong
+  mutation replaced by **two** mutations with individually correct expected-red
+  sets (MAJOR 1); `context` narrowed through a real runtime check because it is
+  declared `any` (MINOR 1); persona-harness consequence recorded as known and
+  accepted (MINOR 2); criterion 4 made falsifiable (MINOR 3); the dropped
+  criteria 1-3/5 quoted verbatim since GAM-388 is not yet in the export
+  (MINOR 4); `npm ci` added as step zero (MINOR 5); `isSupabaseLoaderError`
+  named and the test made to import `FUNCTION_NOT_DEPLOYED_CODE` (MINOR 6);
+  module-doc citation corrected to `:201-209` (NIT).
+
+- **checker-premise DISPATCHED (round 2 of 2)** — 2026-08-14, item 19a cap.
+  Dispatched with `run_in_background: false`; the orchestrator is blocking now.
+  **If this line is the last one in this file, the run died holding this
+  subagent** — packet r2 exists, no worker was dispatched, and no source file
+  has been modified. A third REVISE escalates to the human owner (item 19a); it
+  does not loop.
