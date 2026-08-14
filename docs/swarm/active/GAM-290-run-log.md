@@ -41,3 +41,20 @@ a dispatched run hits".
     adds a `CHECK` constraint on `event_sessions`, which would be a migration and
     would trigger the `model: "opus"` override.
 - **2026-08-14 10:15Z — branch created**, run log written, first push.
+- **2026-08-14 10:20Z — packet written**, `docs/swarm/active/GAM-290-packet.md`.
+  Author-verified citations before submitting (item 19c): the End `TimeInput` is
+  at `:1376-1381` with no `min`; `isValid` at `:1045-1048` compares nothing;
+  Astryx `min`/`status` are real props (`astryx-api.md:1747`/`:1755`), so the
+  issue's prescription is feasible under item 2.
+  **Packet's central finding: the issue's own prescription is incomplete.**
+  `min={startTime}` bounds what may be *entered into* the End field, but the
+  recorded reproduction touched only **Start**, leaving an already-set End
+  unvalidated — so `min` alone leaves the reported defect live. Prescription is
+  therefore a submit-time ordering guard mirroring `EditMeetingSessionDialog`'s
+  already-shipped `computeFieldErrors` (`:300-323`), with `min` kept as a
+  secondary affordance. Five Least confident decisions declared (item 19d), the
+  first being that this central finding is *reasoned, not measured*.
+- **2026-08-14 10:22Z — `checker-premise` DISPATCHED** (round 1 of the two-round
+  cap, item 19a), `run_in_background: false`, blocking. **If this line is the
+  last one in this file, the run died holding this subagent** — no verdict was
+  ever received and nothing below it happened.
