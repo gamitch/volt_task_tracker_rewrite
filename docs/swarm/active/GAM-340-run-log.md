@@ -103,3 +103,28 @@ so this file is the only thing that survives.
   file, the run died holding this subagent** — the revised packet was never
   re-gated and no worker ran. A third REVISE escalates to the human owner rather
   than looping. The next line is the verdict.
+- **22:35Z — VERDICT round 2: `DISPATCH`** (subagent returned; the run did not
+  die holding it). No BLOCKER, no MAJOR — 4 MINOR, 2 NIT to fold in. The gate
+  **executed** the round-1 fixes rather than reading them:
+  * **Criterion 3 now works.** It rebuilt the rewritten criterion and ran it
+    against the forbidden `.neq` implementation from round 1: all three
+    assertions go red, including the row-state diff showing team C flipped
+    `active → closed`. The criterion that guarded nothing now catches the exact
+    design it exists to forbid.
+  * **BLOCKER fix verified deliverable** — it implemented the round-2
+    prescription and amended only the two T089 tests: `tsc` exit 0, full suite
+    **2458 passed**, `StudentsTab.test.tsx` **34 passed**, every existing
+    assertion intact.
+  * **Both of my declined findings were withdrawn by the gate.** (1) Its own
+    step-2.4 guard was proven a no-op across all four reachable states — "true
+    precisely when the row is closed, so it opens the gate for exactly the case
+    it was meant to block." (2) The threading race is **real**, and my argument
+    was *understated but wrong about the mechanism*: threading does not close
+    the wrong team, it **fails to close any team and re-creates population 2**
+    from the very code meant to prevent it. Read-back kept, reasoning corrected.
+  * **§2a measured through a real PostgREST container**, not the docs: omitting
+    `joined_on` keeps it out of `DO UPDATE SET` (join date preserved); including
+    it resets the date. Both directions.
+  Folding MINOR-1..4 + both NITs in before dispatching the worker. MINOR-1 is
+  load-bearing: my amendment instruction named the wrong failing call — it is
+  `students.select()` (the read-back, the FIRST `from()`), not the second.
