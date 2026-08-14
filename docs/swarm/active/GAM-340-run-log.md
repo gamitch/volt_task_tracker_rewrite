@@ -52,3 +52,8 @@ so this file is the only thing that survives.
   student's legitimate second team, converting a participation-gap fix into a
   participation-loss bug. Five Least confident decisions declared (item 19d).
   Allowed Files checked for `.github/workflows/**` at packet time: none present.
+- **22:07Z — DISPATCHED `checker-premise` (round 1 of max 2, item 19a)** on
+  `docs/swarm/active/GAM-340-packet.md`, `run_in_background: false`, model opus.
+  **If this line is the last one in this file, the run died holding this
+  subagent** — the packet was never gated, no worker ran, and nothing was
+  implemented. Waiting for the verdict now; the next line is the verdict.
