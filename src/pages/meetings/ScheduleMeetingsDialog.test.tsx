@@ -29,6 +29,7 @@ import {
   buildEventSessionsPayload,
   chicagoWallTimeToUtcIso,
   computeConfirmLabel,
+  computeEndTimeError,
   computeMeetingSeriesReconcilePlan,
   computeScheduleSessionDates,
   generateCustomSessionDates,
@@ -413,6 +414,48 @@ describe('buildEventSessionsPayload (Known Context/Traps #1)', () => {
         notes: '',
       },
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GAM-290 (packet §3.1) -- the pure end-time-ordering guard, tested directly
+// (no DOM), including the DST case criterion 4c requires: a UTC-instant
+// comparison would false-block this exact pair on this exact date.
+// ---------------------------------------------------------------------------
+
+describe('computeEndTimeError (GAM-290 packet §3.1)', () => {
+  it('returns undefined when either time is unset -- two undefined values are not an error', () => {
+    expect(computeEndTimeError(undefined, undefined)).toBeUndefined();
+    expect(computeEndTimeError('18:00', undefined)).toBeUndefined();
+    expect(computeEndTimeError(undefined, '20:00')).toBeUndefined();
+  });
+
+  it('returns undefined for a valid pair (end strictly after start)', () => {
+    expect(computeEndTimeError('18:00', '20:00')).toBeUndefined();
+  });
+
+  it('errors on an equal pair (the sibling uses <=, not <; AC2)', () => {
+    expect(computeEndTimeError('18:00', '18:00')).toBe(
+      'End time must be after the start time.',
+    );
+  });
+
+  it('errors on an inverted pair, using the sibling EditMeetingSessionDialog.tsx:319 exact copy string', () => {
+    expect(computeEndTimeError('22:00', '00:30')).toBe(
+      'End time must be after the start time.',
+    );
+  });
+
+  it('compares wall-clock minutes-since-midnight, NOT UTC (packet §3.1 DST proof, AC4c): a valid 07:00-08:00 Chicago pair on the 2026-03-08 spring-forward date is NOT an error, even though chicagoWallTimeToUtcIso collapses both wall times onto the same UTC instant on that date', () => {
+    // The measurement this guards against, reproduced directly against the
+    // file's own conversion function: both wall times collapse to the same
+    // UTC instant on this date, which is exactly why a UTC-instant compare
+    // would falsely equal-or-invert this valid pair.
+    expect(chicagoWallTimeToUtcIso('2026-03-08', '07:00')).toBe(
+      chicagoWallTimeToUtcIso('2026-03-08', '08:00'),
+    );
+    // The wall-clock guard is unaffected by that collapse.
+    expect(computeEndTimeError('07:00', '08:00')).toBeUndefined();
   });
 });
 
@@ -1106,6 +1149,141 @@ describe('<ScheduleMeetingsDialog /> submit + cancel behavior', () => {
     // not persist across the close/re-open cycle.
     expect(findButtonByText('Create 0 meetings')).toBeDefined();
     expect(findButtonByText('Create 1 meeting')).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GAM-290 -- create-mode acceptance criteria 4b/4c (packet §6). §3.4: the
+// create branch of `isValid` is gated UNCONDITIONALLY (unlike edit mode's
+// `!timeFieldsTouched || …` carve-out) -- without this describe block a
+// worker could gate only the edit branch and pass every other criterion.
+// ---------------------------------------------------------------------------
+
+describe('<ScheduleMeetingsDialog /> GAM-290 create mode (packet §3.4, AC4b/4c)', () => {
+  it('AC4b: an inverted pair (22:00/00:30, moved via Start past a settled End) disables Create and shows the error', () => {
+    act(() => {
+      root.render(<ScheduleMeetingsDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
+    });
+    const dateInput = getFieldControl('Date') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(dateInput, '2026-07-22');
+    });
+    const startTimeInput = getFieldControl('Start time') as HTMLInputElement;
+    const endTimeInput = getFieldControl('End time') as HTMLInputElement;
+    // Order matters (packet §3.5 trap): End's own `min` is bound to the
+    // CURRENT `startTime`, so committing '00:30' into End requires Start to
+    // already be <= '00:30' at the moment End is typed -- typing '00:30'
+    // straight into End while Start still holds its 6:00 PM default would be
+    // silently rejected by `min` (out of range), never reaching `endTime` or
+    // firing the ordering guard for that path (this is the packet's own
+    // "do not type an invalid End" trap; this test does not do that).
+    act(() => {
+      setNativeInputValue(startTimeInput, '12:00 AM'); // 00:00 -- Start has no `min`.
+    });
+    act(() => {
+      setNativeInputValue(endTimeInput, '12:30 AM'); // 00:30 -- in range (min is now 00:00).
+    });
+    // NOW move Start past the already-settled End -- the load-bearing path
+    // (mirrors AC1, in create mode): 22:00 start, 00:30 end left untouched.
+    act(() => {
+      setNativeInputValue(startTimeInput, '10:00 PM'); // 22:00.
+    });
+    expect(endTimeInput.value).toBe('12:30 AM'); // End's committed value never re-checked.
+    const confirmButton = findButtonByText('Create 1 meeting');
+    expect(confirmButton).toBeDefined();
+    expect(confirmButton?.disabled).toBe(true);
+    expect(container.textContent).toContain('End time must be after the start time.');
+  });
+
+  it('AC4b: an equal pair (18:00/18:00) disables Create and shows the error', () => {
+    act(() => {
+      root.render(<ScheduleMeetingsDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
+    });
+    const dateInput = getFieldControl('Date') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(dateInput, '2026-07-22');
+    });
+    // Defaults are 6:00 PM (start) / 8:00 PM (end) -- move Start to match
+    // End's own default value, an EQUAL pair, via the Start field only.
+    const startTimeInput = getFieldControl('Start time') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(startTimeInput, '8:00 PM'); // 20:00, same as the untouched End default.
+    });
+    const confirmButton = findButtonByText('Create 1 meeting');
+    expect(confirmButton).toBeDefined();
+    expect(confirmButton?.disabled).toBe(true);
+    expect(container.textContent).toContain('End time must be after the start time.');
+  });
+
+  it('AC4b: a valid pair still produces the unchanged buildEventSessionsPayload sessions output', async () => {
+    const onCreateMeetings = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          onCreateMeetings={onCreateMeetings}
+          teams={TEST_TEAMS}
+        />,
+      );
+    });
+    const dateInput = getFieldControl('Date') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(dateInput, '2026-07-22');
+    });
+    const startTimeInput = getFieldControl('Start time') as HTMLInputElement;
+    const endTimeInput = getFieldControl('End time') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(startTimeInput, '7:00 PM'); // 19:00.
+    });
+    act(() => {
+      setNativeInputValue(endTimeInput, '9:00 PM'); // 21:00 -- valid, end after start.
+    });
+    const confirmButton = findButtonByText('Create 1 meeting');
+    expect(confirmButton?.disabled).toBe(false);
+
+    clickButton(confirmButton as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(onCreateMeetings).toHaveBeenCalledTimes(1);
+    const payload = onCreateMeetings.mock.calls[0][0] as CreateMeetingsPayload;
+    // No regression to `buildEventSessionsPayload`'s own output for this
+    // input -- computed independently, not hardcoded.
+    expect(payload.sessions).toEqual(
+      buildEventSessionsPayload(['2026-07-22'], '19:00', '21:00', ''),
+    );
+  });
+
+  it('AC4c (DST regression): a 07:00-08:00 session on 2026-03-08 is accepted, not blocked', () => {
+    act(() => {
+      root.render(<ScheduleMeetingsDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
+    });
+    const dateInput = getFieldControl('Date') as HTMLInputElement;
+    act(() => {
+      // 2026-03-08 is the America/Chicago spring-forward date this criterion
+      // exists for -- deliberately in the past relative to this file's own
+      // pinned fake `Date` (2026-08-06), which is fine: create mode applies
+      // no future-date filter (unlike edit mode's reconcilable-session
+      // filter).
+      setNativeInputValue(dateInput, '2026-03-08');
+    });
+    const startTimeInput = getFieldControl('Start time') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(startTimeInput, '7:00 AM'); // 07:00 -- Start has no `min`.
+    });
+    const endTimeInput = getFieldControl('End time') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(endTimeInput, '8:00 AM'); // 08:00 -- valid, end after start.
+    });
+    // Accepted: enabled button, no error copy. Deliberately NOT asserting
+    // anything about the produced payload's startsAt/endsAt here (packet
+    // AC4c) -- `chicagoWallTimeToUtcIso`'s own separate spring-forward
+    // offset bug (out of scope, packet §3.1/§4) legitimately makes that
+    // payload degenerate today; this criterion is acceptance-only.
+    const confirmButton = findButtonByText('Create 1 meeting');
+    expect(confirmButton).toBeDefined();
+    expect(confirmButton?.disabled).toBe(false);
+    expect(container.textContent).not.toContain('End time must be after the start time.');
   });
 });
 
@@ -1953,5 +2131,102 @@ describe('<ScheduleMeetingsDialog /> T510 edit mode', () => {
     // leaves `startTime` undefined -- the new edit-mode `isValid` condition
     // (worker packet §3.4's "Consequence for isValid") disables the button.
     expect(findButtonByText('Save changes')?.disabled).toBe(true);
+  });
+
+  // ---------------------------------------------------------------------------
+  // GAM-290 -- criterion 1 (the one that matters, packet §6): drives the
+  // issue's own reproduction THROUGH THE START FIELD ONLY. A test that typed
+  // into End instead would pass against a `min`-only implementation and prove
+  // nothing (packet §2/§6) -- this is deliberately not that test.
+  // ---------------------------------------------------------------------------
+  it('GAM-290 AC1: moving Start past an untouched pre-existing End disables Save and shows the ordering error on the End field (Start field only)', () => {
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          initialData={EDIT_INITIAL_DATA}
+        />,
+      );
+    });
+    // EDIT_INITIAL_DATA's reconcilable sessions share one 18:00-20:00 CDT
+    // wall time by construction (this file's own comment at the divergence
+    // describe block below) -- so the prefill is '6:00 PM' / '8:00 PM',
+    // matching the packet's own reproduction shape.
+    expect((getFieldControl('Start time') as HTMLInputElement).value).toBe('6:00 PM');
+    expect((getFieldControl('End time') as HTMLInputElement).value).toBe('8:00 PM');
+    expect(findButtonByText('Save changes')?.disabled).toBe(false);
+    expect(container.textContent).not.toContain('End time must be after the start time.');
+
+    const startTimeInput = getFieldControl('Start time') as HTMLInputElement;
+    act(() => {
+      // Past the untouched End (8:00 PM) -- End is never touched in this test.
+      setNativeInputValue(startTimeInput, '9:00 PM');
+    });
+
+    // The End field's own committed value is untouched -- `min` never
+    // re-checks an already-settled value against a changed `min` prop
+    // (packet §2); the load-bearing guard is the ordering check below.
+    expect((getFieldControl('End time') as HTMLInputElement).value).toBe('8:00 PM');
+    expect(findButtonByText('Save changes')?.disabled).toBe(true);
+    expect(container.textContent).toContain('End time must be after the start time.');
+  });
+
+  it('GAM-290 AC2: an equal Start/End pair (moved via Start only) is also an error, not just an inverted one', () => {
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          initialData={EDIT_INITIAL_DATA}
+        />,
+      );
+    });
+    const startTimeInput = getFieldControl('Start time') as HTMLInputElement;
+    act(() => {
+      // Same wall-clock value as the untouched End (8:00 PM) -- an EQUAL
+      // pair, the sibling's own `<=` (not `<`) case.
+      setNativeInputValue(startTimeInput, '8:00 PM');
+    });
+    expect(findButtonByText('Save changes')?.disabled).toBe(true);
+    expect(container.textContent).toContain('End time must be after the start time.');
+  });
+
+  it('GAM-290 AC4: timeFieldsTouched === false still saves even though the displayed shared pair (derived from an already-inverted stored session) is itself invalid', () => {
+    // §3's residual/carve-out case (deliberately not "fixed" per the packet):
+    // a stored session whose OWN starts_at/ends_at is already inverted. The
+    // shared displayed pair derives from this session's own wall times
+    // (`resetForm`), so it inherits the inversion -- but the coach never
+    // touched either field, so the new guard must NOT block the save (T611's
+    // already-passed "untouched sessions reuse their own stored time"
+    // behavior, packet §3's own "Edit-mode interaction that must be
+    // preserved").
+    const ALREADY_INVERTED_SESSION: ExistingMeetingSeriesSession = {
+      sessionId: 'session-inverted',
+      sessionDate: '2026-09-14',
+      startsAt: '2026-09-14T22:00:00.000Z', // 17:00 CDT
+      endsAt: '2026-09-14T21:00:00.000Z', // 16:00 CDT -- BEFORE its own start
+      status: 'scheduled',
+    };
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          initialData={{ ...EDIT_INITIAL_DATA, sessions: [ALREADY_INVERTED_SESSION] }}
+        />,
+      );
+    });
+    // The displayed shared pair is itself invalid (5:00 PM start, 4:00 PM
+    // end) -- confirms the premise of this test, not merely asserted blind.
+    expect((getFieldControl('Start time') as HTMLInputElement).value).toBe('5:00 PM');
+    expect((getFieldControl('End time') as HTMLInputElement).value).toBe('4:00 PM');
+    // Zero interaction with either time field -- `timeFieldsTouched` stays
+    // `false`. Save must stay enabled: the guard only gates the DISPLAYED
+    // pair when it is actually in force (touched, or create mode).
+    expect(findButtonByText('Save changes')?.disabled).toBe(false);
   });
 });

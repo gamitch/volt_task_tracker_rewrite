@@ -166,7 +166,9 @@
  *  - `DateInput`: "DateInput" Props table. `label`, `value`, `onChange`,
  *    `isRequired` used.
  *  - `TimeInput`: "TimeInput" Props table. `label`, `value`, `onChange`,
- *    `isRequired` used.
+ *    `isRequired` used on both fields; `min` (verified `astryx-api.md:1747`)
+ *    and `status` (verified `astryx-api.md:1755`) additionally used on the
+ *    End field only (GAM-290, packet §3.3/§3.5).
  *  - `DateRangeInput`: "DateRangeInput" Props table. `label`, `value`,
  *    `onChange`, `presets` used (a real "Next 6 weeks" quick-pick, also
  *    doubles as this file's own DOM-testable path into weekly mode's
@@ -495,6 +497,51 @@ export function buildEventSessionsPayload(
     endsAt: chicagoWallTimeToUtcIso(date, endTime),
     notes,
   }));
+}
+
+// ---------------------------------------------------------------------------
+// GAM-290 -- pure, separately testable end-time-ordering guard (packet §3.1,
+// mirroring `EditMeetingSessionDialog.tsx:300-323`'s own "Pure, separately
+// testable validate/build functions" house pattern, that file's own `:222-227`).
+// ---------------------------------------------------------------------------
+
+/** `'HH:MM'` -> minutes since midnight. Every value this dialog's `TimeInput`s
+ * produce is already zero-padded `HH:MM` (`hasSeconds` is never set here), so
+ * this is provably equivalent to a lexical compare -- written out explicitly
+ * so a future `hasSeconds` addition cannot silently break the comparison. */
+function timeStringToMinutesSinceMidnight(time: string): number {
+  const [hourStr, minuteStr] = time.split(':');
+  return Number(hourStr) * 60 + Number(minuteStr);
+}
+
+/** Returns the sibling's exact copy string (`EditMeetingSessionDialog.tsx:319`)
+ * when both times are defined and `endTime` is not strictly after `startTime`
+ * (the sibling's `<=`, not `<` -- an equal pair is also an error), and
+ * `undefined` otherwise. Two undefined values are NOT an error: `isValid`
+ * already handles undefined-ness on its own, and duplicating that here would
+ * change unrelated behaviour (also what keeps `:1927`'s "clearing a touched
+ * time field disables Save" test green).
+ *
+ * ⚠ Compares wall-clock `HH:MM` minutes-since-midnight, NOT UTC -- this is
+ * deliberately NOT routed through `chicagoWallTimeToUtcIso` above. That
+ * function probes the America/Chicago offset at the *naive-UTC* instant,
+ * which puts the 2026-03-08 spring-forward discontinuity at wall
+ * 07:00-07:59 (`wall 07:00 -> ...T13:00:00.000Z`, `wall 08:00 ->
+ * ...T13:00:00.000Z`, collapsing onto 07:00) -- a UTC-instant comparison
+ * would therefore false-block an ordinary, valid 07:00-08:00 Chicago meeting
+ * on that date. Wall-clock minutes-since-midnight has no such exposure. That
+ * offset bug is real and out of scope here (packet §3.1/§4). */
+export function computeEndTimeError(
+  startTime: string | undefined,
+  endTime: string | undefined,
+): string | undefined {
+  if (startTime === undefined || endTime === undefined) return undefined;
+  if (
+    timeStringToMinutesSinceMidnight(endTime) <= timeStringToMinutesSinceMidnight(startTime)
+  ) {
+    return 'End time must be after the start time.';
+  }
+  return undefined;
 }
 
 /** `null` when every known team is selected (matches `events.team_ids`
@@ -1029,6 +1076,11 @@ export function ScheduleMeetingsDialog({
     return { originalTimesByDate: map, timesDivergeAcrossSessions: distinctWallTimes.size > 1 };
   }, [initialData]);
 
+  // GAM-290 (packet §3.1) -- the shared displayed pair's ordering error, if
+  // any. `undefined` whenever either time is unset (see `computeEndTimeError`'s
+  // own doc comment: "two undefined values are not an error").
+  const endTimeError = computeEndTimeError(startTime, endTime);
+
   // T510 -- rule 2 ("title/location/description always editable") would be
   // impossible for a fully-past series (zero reconcilable sessions) under the
   // create-mode rule below; in edit mode, `isValid` drops the session-count
@@ -1042,10 +1094,19 @@ export function ScheduleMeetingsDialog({
   // values before the button enables -- untouched fields never gate validity
   // on a value, since untouched sessions reuse their own stored time
   // regardless of what the shared fields currently display.
+  //
+  // GAM-290 (packet §3.4) -- BOTH branches now also gate on `endTimeError`,
+  // and NOT symmetrically: create's branch gates unconditionally (a session
+  // date always uses the shared displayed pair, so an inverted/equal pair
+  // must never be creatable), while edit's branch gates inside the existing
+  // `!timeFieldsTouched || …` shape (an untouched edit-mode save reuses each
+  // session's OWN stored time -- packet §3's "Edit-mode interaction that must
+  // be preserved" -- so the displayed pair's ordering must not block it).
   const isValid = isEditMode
     ? title.trim() !== '' &&
-      (!timeFieldsTouched || (startTime !== undefined && endTime !== undefined))
-    : title.trim() !== '' && sessionsPayload.length > 0;
+      (!timeFieldsTouched ||
+        (startTime !== undefined && endTime !== undefined && endTimeError === undefined))
+    : title.trim() !== '' && sessionsPayload.length > 0 && endTimeError === undefined;
   const confirmLabel = computeConfirmLabel(isEditMode, sessionsPayload.length);
 
   // T510 -- "already happened" disclosure (packet §4a component-changes list).
@@ -1378,6 +1439,19 @@ export function ScheduleMeetingsDialog({
                     value={endTime}
                     onChange={handleEndTimeChange}
                     isRequired
+                    // GAM-290 (packet §3.5) -- secondary entry guard: rejects an
+                    // out-of-range TYPED End before it commits. Does NOT alone
+                    // fix the issue's own reproduction (Start moved past an
+                    // already-settled End never consults `min` -- packet §2),
+                    // which is why `endTimeError`/`status` below is the load-
+                    // bearing mechanism; the two own disjoint cases and do not
+                    // both fire for the same interaction.
+                    min={startTime}
+                    status={
+                      endTimeError !== undefined
+                        ? { type: 'error', message: endTimeError }
+                        : undefined
+                    }
                   />
                 </HStack>
               </EventFormSection>
