@@ -144,3 +144,61 @@ subagent** — that is the failure shape the constitution's delegation rule and
   (round 1 of the two-round cap, item 19a), `run_in_background: false`.
   *If this line is the last one in this file, the run died holding this
   subagent* — no verdict was ever seen, and nothing below it happened.
+- **`checker-premise` round 1 VERDICT: REVISE** (MAJOR). Verdict seen and
+  recorded — the dispatch above did not orphan. The gate ran rather than read:
+  it took its own worktree (`/tmp/gate355`, item 23), authored a full candidate
+  fix for AC1-AC5, executed it, ran the full suite twice on fresh seeds, and
+  left the shared tree byte-identical. It cost ~113K tokens and 65 tool calls,
+  which item 19a prices as break-even-to-positive for one round. It was worth
+  more than that here.
+
+  **It falsified a claim of mine, and the correction matters more than the
+  packet edits.** I wrote above that `outreach-lifecycle.spec.ts:149` shows
+  *"a write path that records nothing … a candidate production defect."*
+  **That is false.** The gate queried the database after a run in which line 233
+  failed with `Received array: []`, and the row was there:
+  `student_id=57000000-…-0002, status=going, responded_by=a0000000-…-0002` —
+  exactly what lines 234-235 assert. The spec polls only for the `events` row
+  (`:222`) and then reads `rsvps` synchronously (`:232`), while
+  `reconcileExpectedAttendeeRsvps` runs after `createOutreachEvent` and
+  `insertSessions` (`src/lib/supabase/loaders/outreach.ts:1626-1640`). It is a
+  read-after-write race **in the test**. Had I filed it as I first wrote it, I
+  would have filed a production defect that does not exist — the precise failure
+  `docs/swarm/2026-08-09-tracker-migration.md` records and that this issue's own
+  last line warns about. The earlier entry is left standing rather than edited,
+  because deleting the error deletes the evidence that the check happened
+  (item 30c).
+
+  Three MAJORs against the packet, all measured:
+  1. **AC6's remaining-failure set is not deterministic.** Two full-suite runs,
+     same code, same fresh seed: run 1 left `reports-accounting.spec.ts:333` +
+     `student-checkin.spec.ts:182` red; run 2 left `outreach-lifecycle.spec.ts:149`
+     + `:182`. `outreach-lifecycle:149` and `reports-accounting:333` are a
+     **coupled pair** — when :149 passes it logs a `2.5 h` override for Priya on
+     a surviving event, and :333 then reads `6.499999118888889` against an
+     expected `4`. Exactly one of the two fails per run. A worker told to expect
+     a fixed set would chase a phantom or edit a third file.
+  2. **AC7 is unsatisfiable.** `capture()` rewrites
+     `tests/e2e-personas/screenshots/*.png` on every run, so running the suite
+     dirties the tree by construction — 37 PNGs are already modified here, by my
+     own measurement runs.
+  3. **The `outreach-lifecycle:149` filing** must be corrected before it is
+     written, per the falsification above.
+
+  Plus four MINORs and two NITs, each with the measurement behind it:
+  `coach-meeting.spec.ts:110` also clicks the archived option and must go (AC1
+  named only the option list); the exclusion actually happens at
+  `ScheduleMeetingsDialog.tsx:854-855,861`, not `:885` (which does the
+  opposite); **`events.created_by` is still `NULL` — FINDING 2 has not shipped,
+  so AC2's "run it and decide whether to flip" is answered and lines 172-175
+  stay verbatim**; and the rewritten AC5 test needs a `test.beforeEach` cleanup
+  or it fails its own `before` assertion on a second run without a reseed.
+
+  Confirmed sound: all five §1 staleness claims, the `.first()` order-dependence
+  mechanism, §7.1 (the Sign up button *can* be pinned, via
+  `role=group "Sign-up opportunities"` + `listitem` filtered on
+  `Library STEM Night`), §7.2 (no product finding hiding behind line 126),
+  §7.3 (`4.0 / 100.0 h` is stable — both surfaces share one format string,
+  `StudentHome.tsx:1643-1645` / `ParentHome.tsx:1452-1454`), and §7.5 (no
+  `src/**` change needed; the gate's candidate fix turned all 12 tests in the
+  two files green with zero source edits, `tsc --noEmit` clean).
