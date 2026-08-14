@@ -1,6 +1,6 @@
 {
   "meta": {
-    "exportedAt": "2026-08-14T10:18:06.330Z",
+    "exportedAt": "2026-08-14T10:22:54.466Z",
     "team": "Gamitch",
     "teamKey": "GAM",
     "issueCount": 373,
@@ -4795,17 +4795,17 @@
       "identifier": "GAM-271",
       "legacyId": "T507",
       "title": "T507 — The login card overflows the viewport on every phone narrower than ~400px",
-      "state": "In Review",
-      "stateType": "started",
+      "state": "Done",
+      "stateType": "completed",
       "archived": false,
       "labels": [
         "tier/standard"
       ],
-      "assignee": null,
+      "assignee": "George Mitchom",
       "blockedBy": [],
       "blocks": [],
       "createdAt": "2026-08-09T12:49:06.646Z",
-      "completedAt": null,
+      "completedAt": "2026-08-14T10:22:37.621Z",
       "canceledAt": null,
       "url": "https://linear.app/gamitch/issue/GAM-271/t507-the-login-card-overflows-the-viewport-on-every-phone-narrower",
       "description": "`LoginPage.tsx:275` renders `<Card width={400} maxWidth=\"100%\" padding={6}>`. **The author wrote the defensive** `maxWidth` **and it does nothing** — measured overflow by viewport: **320px → 40px · 360px → 20px · 375px → 13px · 390px → 5px · 414px and wider → 0**. So it affects most phones and worsens as the screen narrows; an iPhone SE is the worst case. **Presence-checked in the same run** (3 buttons, 2 inputs still rendered), so this is a real overflow and not the deleted-content artifact T325 caught. **Mechanism proven by walking the ancestor chain, not inferred:** the card is `rect=400 css-width=400px max-width=100%`, and its parent `.astryx-stack vertical` is **itself 400px with** `max-width: none` — so `100%` resolves against a box the card already sized, making the constraint a no-op. The first genuinely constrained ancestor is `.astryx-center` at 390px. **This is T325's exact mechanism on a second surface** (`maxWidth=\"100%\"` resolving against an unconstrained parent, measured there as *no change*) — see T325's verification-log entry before packeting. **Candidate direction, not a prescription:** `maxWidth={400}` + `width=\"100%\"` so the card fills the available width up to 400 rather than demanding 400 — but **measure it, do not assume it**; T325's obvious fix measured as a no-op. **No regression test is possible in jsdom** (no layout), so evidence is a before/after measurement, per the `layout-measurement` skill. **Not W2's surface** — `src/pages/login/**` belongs to no active workflow; needs an owner assignment before it is packeted. | Measured directly in Chromium; mechanism verified via the computed ancestor chain.\n\n---\n\n**Ledger provenance** — migrated verbatim from `docs/swarm/task-ledger.md`.\n\n| Field | Value |\n| -- | -- |\n| Legacy ID | `T507` |\n| Epic | Bug (responsive) — **found by the** `layout-measurement` **skill on its first run** |\n| Worker | *not yet packeted* |\n| Checker | — |\n| Attempts | 0 |\n| Deps | — |\n| Escalated | No |\n| Original status | **Filed 2026-08-05 — MEASURED in real Chromium, not read from source** |\n"

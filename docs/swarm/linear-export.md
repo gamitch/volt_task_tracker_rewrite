@@ -4,10 +4,10 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-14T10:18:06.330Z from team `Gamitch`.
+Exported 2026-08-14T10:22:54.466Z from team `Gamitch`.
 
 - **373** issues (242 archived)
-- **72** not yet completed or cancelled
+- **71** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
 ## Open
@@ -33,7 +33,6 @@ Exported 2026-08-14T10:18:06.330Z from team `Gamitch`.
 | [GAM-250](https://linear.app/gamitch/issue/GAM-250/t332-the-login-shell-has-slight-overflow-and-weak-landmarks) | T332 | Backlog | tier/unreviewed | T332 — The login shell has slight overflow and weak landmarks |
 | [GAM-251](https://linear.app/gamitch/issue/GAM-251/t333-the-migration-attached-all-16-imported-events-to-a-new-inactive) | T333 | Backlog | tier/unreviewed | T333 — ~~The migration attached all 16 imported events to a NEW inactive season~~ — **DATA HALF FIXED BY THE OWNER IN SQL.** Narrowed to: the ETL will do it again on the next import |
 | [GAM-264](https://linear.app/gamitch/issue/GAM-264/t600-aggregateparticipationrows-and-aggregateparticipationforstudent) | T600 | Backlog | area/w3 tier/unreviewed | T600 — `aggregateParticipationRows` and `aggregateParticipationForStudent` are the same MET-01 arithmetic maintained in two files |
-| [GAM-271](https://linear.app/gamitch/issue/GAM-271/t507-the-login-card-overflows-the-viewport-on-every-phone-narrower) | T507 | In Review | tier/standard | T507 — The login card overflows the viewport on every phone narrower than ~400px |
 | [GAM-282](https://linear.app/gamitch/issue/GAM-282/t606-a-single-meeting-cannot-have-its-own-location-this-week-were-in) | T606 | Backlog | area/w3 tier/heavy | T606 — A single meeting cannot have its own location ("this week we're in the shop") |
 | [GAM-284](https://linear.app/gamitch/issue/GAM-284/t608-collapse-the-three-surviving-narrow-copies-of-the-method-shape) | T608 | Backlog | area/w3 tier/unreviewed | T608 — Collapse the THREE surviving narrow copies of the `method` shape — `selfCheckoff.ts`'s fork plus two more T603 could not reach — and fix the module doc that T603 made false |
 | [GAM-286](https://linear.app/gamitch/issue/GAM-286/t610-item-10-names-two-different-rules-depending-on-which-part-of-the) | T610 | Backlog | area/w3 tier/unreviewed | T610 — "Item 10" names two different rules depending on which part of the constitution you read |
@@ -342,6 +341,7 @@ Exported 2026-08-14T10:18:06.330Z from team `Gamitch`.
 | [GAM-268](https://linear.app/gamitch/issue/GAM-268/t504-outreachlisttsxs-remaining-fixture-rsvpsrespondedby-values-are) | T504 | Done | T504 — `OutreachList.tsx`'s remaining `FIXTURE_RSVPS.respondedBy` values are `students.id`-shaped in a `profiles.id` column |
 | [GAM-269](https://linear.app/gamitch/issue/GAM-269/t505-markdaycomplete-can-still-clobber-a-concurrent-scans-method) | T505 | Done | T505 — `markDayComplete` can still clobber a concurrent scan's `method` provenance |
 | [GAM-270](https://linear.app/gamitch/issue/GAM-270/t506-markeventcompletedialogtsxs-module-doc-describes-an-updated-at) | T506 | Done | T506 — `MarkEventCompleteDialog.tsx`'s module doc describes an `updated_at` the write no longer sends |
+| [GAM-271](https://linear.app/gamitch/issue/GAM-271/t507-the-login-card-overflows-the-viewport-on-every-phone-narrower) | T507 | Done | T507 — The login card overflows the viewport on every phone narrower than ~400px |
 | [GAM-272](https://linear.app/gamitch/issue/GAM-272/t508-ending-a-meeting-writes-an-absent-row-for-every-unmarked-student) | T508 | Done | T508 — Ending a meeting writes an `absent` row for every unmarked student, including students who were never expected |
 | [GAM-273](https://linear.app/gamitch/issue/GAM-273/t509-met-01s-denominator-becomes-explicit-marks-rather-than) | T509 | Done | T509 — MET-01's denominator becomes explicit marks rather than eligibility |
 | [GAM-274](https://linear.app/gamitch/issue/GAM-274/t510-a-saved-meeting-cannot-be-edited-the-edit-button-shows-an-honest) | T510 | Done | T510 — A saved meeting cannot be edited; the Edit button shows an honest stub instead |
