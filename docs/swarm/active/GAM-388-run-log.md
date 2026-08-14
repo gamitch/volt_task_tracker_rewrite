@@ -252,3 +252,67 @@ code half only; deploy half escalated to the owner.
   completion report states a SHA, and existence is verified rather than
   assumed; the Definition of Done forbids self-certification). Orchestrator
   verification follows.
+
+## Orchestrator verification (STANDARD tier — item 26: I replay the mutation myself)
+
+- **existence verified (item 21)** — HEAD moved to `c84427a` and the work is in
+  the **committed blob**, not the working tree: `git show --stat c84427a` lists
+  exactly the four Allowed Files (+224/-19). Shared tree clean,
+  `git worktree list` shows the primary tree only. "Clean" and "committed" were
+  checked as the separate claims item 21 says they are.
+
+- **forbidden-file boundary verified** — the commit touches
+  `src/lib/supabase/functions.ts` + `.test.ts` and
+  `src/pages/meetings/Kiosk.tsx` + `.test.tsx`. Nothing else. No
+  `docs/swarm/**`, `.claude/**`, `supabase/functions/**`, `tests/**`, or
+  `.github/workflows/**`.
+
+- **diff read, not skimmed** — the 404 narrowing is placed *after* the
+  `if (parsed)` branch, which is the whole correctness argument: a parseable
+  404 (`SESSION_NOT_FOUND`) returns before ever reaching it. The module doc
+  carries the anti-regression paragraph, and the `Kiosk.tsx` Error bullet
+  records the narrow exception rather than silently contradicting the
+  passive-display decision.
+
+- **mutations replayed independently, in my own worktree** (`/tmp/gam388-orch`,
+  item 23; removed afterwards, shared tree confirmed clean):
+
+  | Mutation | Result | Matches packet? |
+  | -- | -- | -- |
+  | **A** — delete the `status === 404` narrowing | `1 failed \| 30 passed`, exit **1**; red = criterion 1 only | yes, exactly |
+  | **B** — hardcode `errorCode: null` in `usePolling`'s catch | `1 failed \| 30 passed`, exit **1**; red = criterion 4 only, criterion 5 green | yes, exactly |
+
+- **Mutation C — my own, which no packet named, and the most important one
+  here.** The entire packet exists to prevent one specific wrong
+  implementation: checking status 404 *before* parsing the body. So I wrote
+  that wrong implementation and ran it. **Criterion 2 turned red**, with
+  exactly the right diagnosis:
+
+  ```
+  × still rejects with code SESSION_NOT_FOUND (not FUNCTION_NOT_DEPLOYED) for a 404
+    whose body IS the deployed function's own parseable error shape
+    → expected { code: 'FUNCTION_NOT_DEPLOYED', …} to match object { code: 'SESSION_NOT_FOUND', …}
+  ```
+  `1 failed | 10 passed`, exit 1. This is the evidence that matters: the trap
+  test is not decorative, it actively guards the one mistake that would have
+  told a coach with a deleted session that the feature was never turned on.
+
+- **gates run independently** — `gate-run --scope src/lib/supabase/
+  --require-clean`, on the committed branch state:
+
+  ```
+  GATE RUN — aca7d55 on claude/gam-388-checkin-token-deploy — tree clean
+    1 tsc                       exit 0  PASS
+    2 vite build                exit 0  PASS
+    3 format:check              exit 0  PASS
+    4 eslint                    exit 0  PASS       0 errors, 379 warnings
+    5 vitest (full)             exit 0  PASS       95 files / 2463 tests  baseline 2458 (+5)
+    6 vitest src/lib/supabase/  exit 0  PASS       18 files / 293 tests  baseline 290 (+3)
+  VERDICT: PASS — all six gates exit 0
+  ```
+
+  **These figures match the worker's and premise-gate round 2's exactly.**
+  Three independent runs, one set of numbers — which is the point of running
+  them three times rather than quoting them once.
+
+**Orchestrator verdict: criterion 4 ACCEPTED.**
