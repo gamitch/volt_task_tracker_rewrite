@@ -114,3 +114,23 @@ the deliberate decision; the code implementing it is at 363-367).
 
 **Verdict: premise HOLDS.** The bug is real and still present. Proceeding on the
 code half only; deploy half escalated to the owner.
+
+---
+
+## Packet
+
+- **packet written** — 2026-08-14, `docs/swarm/active/GAM-388-packet.md`.
+  Scope: acceptance criterion 4 only (criteria 1-3 blocked on a deploy this
+  container cannot perform; criterion 5 is an orchestrator decision). Allowed
+  Files: `src/lib/supabase/functions.ts` + its test,
+  `src/pages/meetings/Kiosk.tsx` + its test. Checked at packet time, per
+  `AGENTS.md`: **no `.github/workflows/**` in Allowed Files**, so the packet
+  does not walk the run into the push wall at its integration boundary.
+
+- **checker-premise DISPATCHED** — 2026-08-14, item 19 gate, round 1 of a
+  maximum 2 (item 19a). Dispatched with `run_in_background: false` and the
+  orchestrator is blocking on it now.
+  **If this line is the last one in this file, the run died holding this
+  subagent** — the packet was written, no worker was ever dispatched, and no
+  source file was modified. Resume by re-reading the packet and re-running the
+  gate; nothing is half-applied.
