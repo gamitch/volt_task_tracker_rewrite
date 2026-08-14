@@ -244,3 +244,29 @@ and 31527801235, and it is the thing this wording exists to make unmistakable.
   process depending on it. That is correct judgement — the rig is mine, and item
   23's rationale is exactly that an agent must not destroy another's instrument.
   **Verifying independently now — a worker does not self-certify.**
+- **2026-08-14 06:12Z — ORCHESTRATOR VERIFICATION COMPLETE. Worker's work
+  accepted.** Nothing here is quoted from the worker; all of it was re-run.
+  - **Existence (item 21).** `7a9d9daf49b38f670b905cc05981b789d86d85ae` exists,
+    is an ancestor of HEAD, and `git show` proves the change is **in the
+    committed blob** — not merely in a clean working tree, which is T142's
+    failure and a different claim.
+  - **Diff inspected.** 4 insertions / 1 deletion in one file. Line 272 exactly
+    as prescribed; the `<Card …>` props line untouched; criterion 1a's comment
+    present verbatim. No forbidden path touched, `package.json` and
+    `package-lock.json` unmodified.
+  - **Measurement replayed** against the committed tree on a fresh server:
+    overflow **0 at 320/360/375/390/414**, card rect **320/360/375/390/400**,
+    **400px at 768/1280/1920**, reset panel 0 overflow with card 400 at
+    414/1280. Presence paired with every number. Matches the worker's table.
+  - **MUTATION PROOF — the fix is proven to be what does the work, not
+    assumed.** The fix is committed, so it could be mutated safely (item 26's
+    "commit before mutating"). In a throwaway worktree I reverted **only** the
+    VStack props, leaving the comment and the Card in place, and the original
+    defect returned exactly: **40 / 20 / 13 / 5 / 0** at 320/360/375/390/414.
+    This is the honest analogue of a red test for a defect jsdom cannot see.
+  - **Six gates, `--require-clean`, at `cf9c130`:** tsc 0 · vite build 0 ·
+    format:check 0 · eslint **0 errors / 378 warnings** · vitest **95 files /
+    2443 tests** (baseline 2443, +0) · scoped `src/pages/login/` **9 tests**
+    (baseline 9, +0). **VERDICT: PASS — all six.** These figures match the
+    worker's and the premise gate's independently, which is the point of three
+    agents running them rather than one quoting another.
