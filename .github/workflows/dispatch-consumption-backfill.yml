@@ -1,0 +1,220 @@
+name: Dispatch consumption — backfill
+
+# GAM-385. Rebuilds the consumption history of every dispatched run whose
+# artifact has not yet expired, and writes it somewhere git will keep.
+#
+# ---------------------------------------------------------------------------
+# WHY THIS IS A WORKFLOW AND NOT A SCRIPT SOMEBODY RUNS LOCALLY
+# ---------------------------------------------------------------------------
+# Downloading an Actions artifact needs an authenticated call to
+# api.github.com. The token that works there is this workflow's own
+# `GITHUB_TOKEN`; a local session has no equivalent (measured 2026-08-14: an
+# authenticated `curl` to api.github.com from a Claude session returns 403), so
+# the backfill CANNOT be driven from a developer machine or an agent session.
+# It has to run here.
+#
+# ---------------------------------------------------------------------------
+# THE CLOCK THIS EXISTS TO BEAT
+# ---------------------------------------------------------------------------
+# `claude-linear-dispatch.yml` uploads each run's execution JSON with
+# `retention-days: 30`. The workflow's first run was 2026-08-09, so the first
+# expiries land around 2026-09-08. Measured 2026-08-14: 37 runs, every one
+# still inside the window -- the entire quantitative history of the dispatch
+# loop is recoverable *today* and will not be in a month. Nothing regenerates
+# it once the artifacts go.
+#
+# ---------------------------------------------------------------------------
+# IT DOES NOT WRITE TO LINEAR BY DEFAULT, AND IT NEVER PUSHES TO `main`
+# ---------------------------------------------------------------------------
+# `post_to_linear` defaults to **false**, so the first run produces the ledger
+# and nothing else. That is deliberate: posting touches every dispatched row at
+# once, and a formatting mistake discovered after the fact would have to be
+# undone by hand across ~20 issues. Read the ledger artifact, then re-run with
+# the box ticked.
+#
+# The ledger is pushed to its own branch, never to `main`. GAM-374 measured
+# what a direct push to `main` bypasses -- the declaration gate, the human
+# merge decision and the tier declaration all at once -- and this workflow has
+# no business being the second thing that does it. The owner opens a PR from
+# the branch like any other change.
+
+on:
+  workflow_dispatch:
+    inputs:
+      post_to_linear:
+        description: 'Also post per-run comments and a rollup to each Linear row'
+        type: boolean
+        default: false
+      max_runs:
+        description: 'Cap how many dispatch runs to walk (0 = all)'
+        type: string
+        default: '0'
+
+concurrency:
+  group: dispatch-consumption-backfill
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    name: Rebuild the consumption ledger
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      actions: read # list runs and download their artifacts
+      contents: write # push the ledger branch (never `main`)
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.CLAUDE_PR_TOKEN || github.token }}
+
+      # Artifact names carry the issue identifier already
+      # (`claude-run-GAM-304-31391626696`), so stripping the prefix yields
+      # exactly the `<ISSUE>-<RUNID>.json` filename the parser expects and no
+      # Linear lookup is needed to know which row a run belongs to.
+      #
+      # Every skip is COUNTED and printed. A backfill that quietly covered 4 of
+      # 37 runs and reported success would be this repository's signature
+      # defect -- the `tier/*` filter that matched nothing, the mutation run
+      # that printed nothing, the 224 tests nobody executed.
+      - name: Download every unexpired dispatch artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          MAX_RUNS: ${{ inputs.max_runs }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          runs=0 found=0 expired=0 empty=0
+
+          gh api --paginate \
+            "repos/$REPO/actions/workflows/claude-linear-dispatch.yml/runs?per_page=100" \
+            --jq '.workflow_runs[].id' > run-ids.txt
+
+          echo "Dispatch runs listed: $(wc -l < run-ids.txt)"
+
+          while read -r run_id; do
+            [ -n "$run_id" ] || continue
+            if [ "$MAX_RUNS" != "0" ] && [ "$runs" -ge "$MAX_RUNS" ]; then break; fi
+            runs=$((runs + 1))
+
+            # `select(.expired == false)` rather than trusting the age: an
+            # artifact deleted by hand is gone regardless of the run's date.
+            mapfile -t rows < <(
+              gh api "repos/$REPO/actions/runs/$run_id/artifacts" \
+                --jq '.artifacts[] | select(.expired == false) | select(.name | startswith("claude-run-")) | "\(.id) \(.name)"' \
+                || true
+            )
+
+            if [ "${#rows[@]}" -eq 0 ]; then
+              expired=$((expired + 1))
+              continue
+            fi
+
+            for row in "${rows[@]}"; do
+              artifact_id="${row%% *}"
+              artifact_name="${row#* }"
+              target="${artifact_name#claude-run-}"
+
+              rm -rf unzipped && mkdir -p unzipped
+              if ! gh api "repos/$REPO/actions/artifacts/${artifact_id}/zip" > a.zip 2>/dev/null; then
+                echo "  download failed: $artifact_name"
+                continue
+              fi
+              if ! unzip -qo a.zip -d unzipped 2>/dev/null; then
+                echo "  unzip failed: $artifact_name"
+                continue
+              fi
+
+              payload="$(find unzipped -name '*.json' -type f | head -1)"
+              if [ -z "$payload" ]; then
+                echo "  no JSON inside: $artifact_name"
+                empty=$((empty + 1))
+                continue
+              fi
+
+              cp "$payload" "artifacts/${target}.json"
+              found=$((found + 1))
+            done
+          done < run-ids.txt
+
+          rm -f a.zip; rm -rf unzipped
+          echo "runs walked: $runs | payloads recovered: $found | runs with no live artifact: $expired | artifacts with no JSON: $empty"
+          echo "BACKFILL_FOUND=$found" >> "$GITHUB_ENV"
+          echo "BACKFILL_EXPIRED=$expired" >> "$GITHUB_ENV"
+
+      - name: Rebuild the ledger
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_DISPATCH_API_KEY }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          node scripts/dispatch-consumption-backfill.mjs \
+            --dir artifacts \
+            --out docs/swarm/dispatch-consumption.md \
+            ${{ inputs.post_to_linear && '--post' || '' }} \
+            | tee backfill.log
+
+      # The ledger is the deliverable, so it leaves this run by two independent
+      # routes. The artifact survives a push failure; the branch survives the
+      # artifact's own retention.
+      - name: Keep the ledger as an artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dispatch-consumption-ledger-${{ github.run_id }}
+          path: |
+            docs/swarm/dispatch-consumption.md
+            backfill.log
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Push the ledger to its own branch
+        if: always()
+        env:
+          BRANCH: chore/dispatch-consumption-ledger
+        run: |
+          set -euo pipefail
+          if [ ! -f docs/swarm/dispatch-consumption.md ]; then
+            echo "No ledger was written; nothing to push."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add docs/swarm/dispatch-consumption.md
+          if git diff --cached --quiet; then
+            echo "Ledger unchanged since the last backfill; nothing to push."
+            exit 0
+          fi
+          git commit -m "Rebuild the dispatch consumption ledger
+
+          Generated by .github/workflows/dispatch-consumption-backfill.yml from
+          ${BACKFILL_FOUND:-?} artifact payloads. Every dollar figure is notional
+          and is not money anyone was charged -- runs use subscription auth.
+
+          Linear-Issue: GAM-385"
+          git push -u origin "$BRANCH" --force-with-lease
+          echo "Pushed to $BRANCH. Open a PR from it -- this workflow deliberately does not touch main."
+
+      - name: Summarise
+        if: always()
+        run: |
+          {
+            echo "### Dispatch consumption backfill"
+            echo
+            echo "- payloads recovered: **${BACKFILL_FOUND:-0}**"
+            echo "- runs with no live artifact: ${BACKFILL_EXPIRED:-0}"
+            echo "- posted to Linear: ${{ inputs.post_to_linear }}"
+            echo
+            echo 'Every dollar figure is **notional** — tokens priced at API list rates.'
+            echo 'Runs authenticate with a subscription token, so no invoice follows.'
+            echo
+            if [ -f backfill.log ]; then
+              echo '```'
+              cat backfill.log
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

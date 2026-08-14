@@ -462,6 +462,44 @@ jobs:
           # enough that transcripts of every dispatch do not accumulate forever.
           retention-days: 30
 
+      # GAM-385. The artifact above is the ONLY place this run's consumption
+      # exists, and it is deleted 30 days from now. Every figure quoted in this
+      # file -- the $9.16, the $8.52/$28.58 pair -- was harvested by hand from
+      # one of those artifacts before it expired, and
+      # `docs/swarm/active/GAM-304-run-31385764526-report.md` exists solely
+      # because somebody did that rescue manually for one run.
+      #
+      # This step does it automatically, onto the Linear row the run worked,
+      # where the owner will actually find it.
+      #
+      # `if: always()` for the same reason the upload above has it: a run killed
+      # at `timeout-minutes` is precisely the run whose consumption is most
+      # worth knowing, and a cancelled step sets no outputs -- so the fallback
+      # path is repeated here rather than read from `steps.claude.outputs`.
+      # When the SDK never wrote a file at all, the script posts a comment
+      # saying the figure is UNRECOVERABLE and names the reason. It never
+      # writes a zero, which would be indistinguishable from a free run.
+      #
+      # NEVER A GATE. `dispatch-consumption.mjs` exits 0 unconditionally,
+      # matching `linear-reconcile.mjs` and `linear-escalation-notify.mjs`:
+      # bookkeeping must not be why a run that did real work is reported red.
+      #
+      # Same `env:`-not-`run:` rule as `assert-released` below --
+      # `client_payload` is attacker-controllable, so the identifier is passed
+      # through the environment and never interpolated into a shell line.
+      # No `npm ci`: the script imports only `node:fs` and
+      # `scripts/linear/client.mjs`, which uses global `fetch`.
+      - name: Record what this run consumed
+        if: always()
+        env:
+          LINEAR_API_KEY: ${{ secrets.LINEAR_DISPATCH_API_KEY }}
+          ISSUE_IDENTIFIER: ${{ github.event.client_payload.identifier }}
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file || '/home/runner/work/_temp/claude-execution-output.json' }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RUN_CONCLUSION: ${{ steps.claude.conclusion }}
+        run: node scripts/dispatch-consumption.mjs --conclusion "$RUN_CONCLUSION"
+
       # A dispatched run is otherwise a dead end: it leaves a PR and a log, and
       # no way back into the conversation that produced them. The session id
       # makes it resumable with `--resume`, which is the closest thing to the
