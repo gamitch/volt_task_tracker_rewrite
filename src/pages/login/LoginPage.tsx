@@ -269,9 +269,12 @@ export function LoginPage(): ReactNode {
 
   return (
     <Center axis="both" height="100vh" width="100%">
-      <VStack gap={6} hAlign="center">
+      <VStack gap={6} hAlign="center" width="100%" maxWidth={400}>
         <Heading level={1}>VOLT</Heading>
 
+        {/* maxWidth="100%" is the clamp that keeps this card inside narrow
+            viewports -- it works only because the VStack above sets an explicit
+            width. Do not remove either half. Measured, GAM-271. */}
         <Card width={400} maxWidth="100%" padding={6} variant="default">
           {isResetPanelOpen ? (
             <form onSubmit={handleSendReset} noValidate>
