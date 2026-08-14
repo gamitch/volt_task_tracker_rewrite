@@ -626,6 +626,241 @@ describe('makeOnEndMeeting', () => {
 });
 
 // ---------------------------------------------------------------------------
+// GAM-338 -- `makeOnEndMeeting` retry-idempotency, outcome-provable, not
+// call-shape. Criteria 5-10 above (and criterion 10 in particular) assert
+// what each call looks like and that a retry re-issues all three writes
+// without throwing -- none of them assert what happens to the DATABASE STATE
+// across two calls, because `makeMutationRecordingClient` always resolves
+// success regardless of what args were passed, so it cannot go red if
+// `endMeeting.ts:405`'s `ignoreDuplicates: true` or `:417`'s
+// `.is('check_out_at', null)` guard is deleted. `EndMeetingDialog.tsx:603`
+// promises a coach who retries "won't record anything twice" -- these tests
+// hold real per-row state and apply each mutation's real conflict/guard
+// semantics (Postgrest `ON CONFLICT ... DO NOTHING` vs. the
+// `resolution=merge-duplicates` default, and a plain `UPDATE ... WHERE
+// check_out_at IS NULL`), so a removed guard actually changes the recorded
+// outcome rather than just the call shape.
+// ---------------------------------------------------------------------------
+
+interface SemanticAttendanceRow {
+  status: AttendanceStatus;
+  method: string;
+  recordedBy: string | null;
+  checkOutAt: string | null;
+}
+
+function attendanceKey(sessionId: string, studentId: string): string {
+  return `${sessionId}:${studentId}`;
+}
+
+/**
+ * Models real Postgrest conflict/guard semantics against in-memory state,
+ * rather than only recording call arguments (contrast
+ * `makeMutationRecordingClient` above). `seedAttendance` represents a row
+ * already on the table before `onEndMeeting` is ever called -- e.g. a
+ * student's real check-in, or a coach's real post-completion correction --
+ * the case each of the three mechanisms this issue is about exists to not
+ * clobber.
+ */
+function makeSemanticAttendanceClient(): {
+  client: SupabaseClient;
+  attendance: Map<string, SemanticAttendanceRow>;
+  sessionStatus: Map<string, string>;
+  seedAttendance: (sessionId: string, studentId: string, row: SemanticAttendanceRow) => void;
+} {
+  const attendance = new Map<string, SemanticAttendanceRow>();
+  const sessionStatus = new Map<string, string>();
+
+  const fromSpy = (table: string) => {
+    if (table === 'attendance') {
+      return {
+        upsert: (
+          rows: {
+            session_id: string;
+            student_id: string;
+            status: AttendanceStatus;
+            method: string;
+            recorded_by: string | null;
+          }[],
+          opts: { onConflict: string; ignoreDuplicates?: boolean },
+        ) => {
+          for (const row of rows) {
+            const k = attendanceKey(row.session_id, row.student_id);
+            const existing = attendance.get(k);
+            if (existing && opts.ignoreDuplicates) {
+              continue; // ON CONFLICT (session_id, student_id) DO NOTHING.
+            }
+            // Insert, or ON CONFLICT ... DO UPDATE (Postgrest's default
+            // resolution=merge-duplicates when ignoreDuplicates is falsy) --
+            // only the columns this upsert supplies are touched.
+            attendance.set(k, {
+              status: row.status,
+              method: row.method,
+              recordedBy: row.recorded_by,
+              checkOutAt: existing?.checkOutAt ?? null,
+            });
+          }
+          return Promise.resolve({ data: null, error: null });
+        },
+        update: (patch: { check_out_at: string }) => {
+          let sessionId: string | undefined;
+          let studentIds: string[] = [];
+          let requireCheckOutNull = false;
+          const chain: Record<string, unknown> = {};
+          chain.eq = (column: string, value: string) => {
+            if (column === 'session_id') sessionId = value;
+            return chain;
+          };
+          chain.in = (column: string, values: string[]) => {
+            if (column === 'student_id') studentIds = values;
+            return chain;
+          };
+          chain.is = (column: string, value: unknown) => {
+            if (column === 'check_out_at' && value === null) requireCheckOutNull = true;
+            return chain;
+          };
+          chain.then = (
+            onFulfilled: (value: MutationResult) => unknown,
+            onRejected?: (reason: unknown) => unknown,
+          ) => {
+            for (const studentId of studentIds) {
+              const k = attendanceKey(sessionId ?? '', studentId);
+              const row = attendance.get(k);
+              if (!row) continue;
+              if (requireCheckOutNull && row.checkOutAt !== null) continue; // guard blocks overwrite
+              row.checkOutAt = patch.check_out_at;
+            }
+            return Promise.resolve({ data: null, error: null } as MutationResult).then(
+              onFulfilled,
+              onRejected,
+            );
+          };
+          return chain;
+        },
+      };
+    }
+    if (table === 'event_sessions') {
+      return {
+        update: (patch: { status: string }) => {
+          let id: string | undefined;
+          const chain: Record<string, unknown> = {};
+          chain.eq = (column: string, value: string) => {
+            if (column === 'id') id = value;
+            return chain;
+          };
+          chain.then = (
+            onFulfilled: (value: MutationResult) => unknown,
+            onRejected?: (reason: unknown) => unknown,
+          ) => {
+            if (id !== undefined) sessionStatus.set(id, patch.status);
+            return Promise.resolve({ data: null, error: null } as MutationResult).then(
+              onFulfilled,
+              onRejected,
+            );
+          };
+          return chain;
+        },
+      };
+    }
+    throw new Error(`unexpected table: ${table}`);
+  };
+
+  return {
+    client: { from: fromSpy } as unknown as SupabaseClient,
+    attendance,
+    sessionStatus,
+    seedAttendance: (sessionId, studentId, row) => {
+      attendance.set(attendanceKey(sessionId, studentId), row);
+    },
+  };
+}
+
+describe('makeOnEndMeeting retry-idempotency (GAM-338)', () => {
+  it('a retry does not revert a real attendance correction made between attempts, because of ignoreDuplicates: true', async () => {
+    const setup = makeSemanticAttendanceClient();
+    const onEndMeeting = makeOnEndMeeting(() => setup.client);
+
+    await onEndMeeting(SAMPLE_PAYLOAD);
+    expect(setup.attendance.get(attendanceKey('session-real-mtg', 'student-mark-a'))?.status).toBe(
+      'absent',
+    );
+
+    // Between the first attempt and the retry, a coach makes a real
+    // post-completion correction to the same row -- a normal, documented
+    // workflow (`endMeeting.ts` module doc #1: "post-completion attendance
+    // corrections are a normal workflow for this team", PRD DATA-02).
+    const correctedRow = setup.attendance.get(attendanceKey('session-real-mtg', 'student-mark-a'));
+    if (!correctedRow)
+      throw new Error('expected the first onEndMeeting call to have written a row');
+    correctedRow.status = 'present';
+    correctedRow.recordedBy = 'coach-1';
+
+    // The retry. If `ignoreDuplicates: true` were removed from the
+    // mark-absences upsert, this call would fall back to Postgrest's
+    // `resolution=merge-duplicates` default and silently overwrite the
+    // coach's correction back to "absent" -- exactly what the on-screen
+    // retry promise (`EndMeetingDialog.tsx:603`) says cannot happen.
+    await onEndMeeting(SAMPLE_PAYLOAD);
+
+    expect(setup.attendance.get(attendanceKey('session-real-mtg', 'student-mark-a'))).toEqual({
+      status: 'present',
+      method: 'coach',
+      recordedBy: 'coach-1',
+      checkOutAt: null,
+    });
+  });
+
+  it('a retry does not clobber a real checkout stamp, because of the .is(check_out_at, null) guard', async () => {
+    const setup = makeSemanticAttendanceClient();
+    // A real check-in, already on the table before either end-meeting
+    // attempt -- not written by `onEndMeeting` itself (module doc #1: the
+    // checkout leg only ever updates an existing row, it never creates one).
+    setup.seedAttendance('session-checkout-retry', 'student-checkout-real', {
+      status: 'present',
+      method: 'qr',
+      recordedBy: null,
+      checkOutAt: null,
+    });
+    const onEndMeeting = makeOnEndMeeting(() => setup.client);
+
+    const FIRST_ATTEMPT: EndMeetingPayload = {
+      sessionId: 'session-checkout-retry',
+      endsAt: '2026-08-12T20:00:00.000Z',
+      markAbsentStudentIds: [],
+      checkoutStudentIds: ['student-checkout-real'],
+    };
+    await onEndMeeting(FIRST_ATTEMPT);
+    expect(
+      setup.attendance.get(attendanceKey('session-checkout-retry', 'student-checkout-real'))
+        ?.checkOutAt,
+    ).toBe('2026-08-12T20:00:00.000Z');
+
+    // The coach retries later -- `endsAt` reflects the retry's own (later)
+    // clock read. If `.is('check_out_at', null)` were removed from the
+    // checkout update, this second call would run unconditionally and
+    // overwrite the real stamp already recorded above.
+    const RETRY: EndMeetingPayload = { ...FIRST_ATTEMPT, endsAt: '2026-08-12T20:05:00.000Z' };
+    await onEndMeeting(RETRY);
+
+    expect(
+      setup.attendance.get(attendanceKey('session-checkout-retry', 'student-checkout-real'))
+        ?.checkOutAt,
+    ).toBe('2026-08-12T20:00:00.000Z');
+  });
+
+  it('the status-flip leg is safe to retry because it re-sets the same terminal value', async () => {
+    const setup = makeSemanticAttendanceClient();
+    const onEndMeeting = makeOnEndMeeting(() => setup.client);
+
+    await onEndMeeting(SAMPLE_PAYLOAD);
+    expect(setup.sessionStatus.get('session-real-mtg')).toBe('completed');
+
+    await expect(onEndMeeting(SAMPLE_PAYLOAD)).resolves.toBeUndefined();
+    expect(setup.sessionStatus.get('session-real-mtg')).toBe('completed');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Criteria 11-12 -- `makeOnEditAttendance`.
 // ---------------------------------------------------------------------------
 
