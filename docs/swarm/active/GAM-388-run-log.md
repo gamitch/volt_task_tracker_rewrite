@@ -316,3 +316,54 @@ code half only; deploy half escalated to the owner.
   them three times rather than quoting them once.
 
 **Orchestrator verdict: criterion 4 ACCEPTED.**
+
+## Criterion 5 — decided, not deferred; and the handover rows
+
+Criterion 5 asks that the CI question be "decided and recorded, either done here
+or filed". Filing the *question* would have returned the same undecided state
+the criterion exists to end, so the decision is made and recorded:
+
+> **Add a drift *detector*, not an auto-deployer.** Deploying every function on
+> merge would give CI a `SUPABASE_ACCESS_TOKEN` with production deploy rights,
+> make every merge a production deploy, and hand a standing production
+> credential to an automation — disproportionate for one small volunteer team
+> (item 25). A detector that compares `supabase/functions/` against the
+> project's deployed function list catches exactly the condition that went
+> unnoticed here, needs only a read-scoped credential, and blocks nothing.
+> It deliberately does **not** claim to detect a *stale* deployment (same name,
+> older code): that needs a content hash the API does not expose, and claiming
+> otherwise would make the check sound stronger than it is.
+
+**I did not write the workflow file.** `.github/workflows/**` is unpushable by a
+dispatched run by design, and writing a workflow I cannot execute or verify —
+against a credential that does not exist here — would be shipping an untested
+artifact to look complete. `AGENTS.md` permits preserving one as a
+`git format-patch`; I judged that not worth it for a file whose central question
+(grant CI a Supabase credential at all, and at what scope) is the owner's under
+item 16, and whose answer changes the file.
+
+- **rows filed (item 20 — a deferral files a row, not a comment; item 30 — via
+  the `linear-task-writing` skill)**, both re-verified against current `main`
+  before writing and both carrying a `Verification note` that keeps the
+  corrections rather than deleting the evidence of the check:
+
+  | Row | Covers | State | Priority |
+  | -- | -- | -- | -- |
+  | **GAM-395** | GAM-388 criteria 1-3: deploy `checkin-token`, then verify in a browser and confirm rotation | `Backlog` | **Urgent** |
+  | **GAM-396** | GAM-388 criterion 5: the CI drift detector, with the decision above already made | `Backlog` | Medium |
+
+  GAM-395 carries the constraint that will otherwise bite: **do not add a
+  `[functions.checkin-token]` block with `verify_jwt = false`.** `config.toml:261`
+  sets that for `linear-dispatch` alone, because it is webhook-called with no
+  session. `checkin-token` reads the caller's JWT to require coach/admin
+  (`index.ts:348`, `:395`), so its *absence* from `config.toml` is correct and
+  copying the `linear-dispatch` block would publish live check-in codes to
+  anyone who can reach the URL.
+
+- **filed into `Backlog`, deliberately, and this is a correction.** I created
+  GAM-395 in `Todo` and moved it. Item 28a reserves promotion to `Todo` to the
+  owner — *"the owner's signal and the only one"* — and this workflow dispatches
+  an agent when a row enters `Todo`. Since **no agent holds the credentials to
+  deploy**, a dispatch would have burned a run discovering that. Urgency is
+  carried by priority `Urgent`, which is what the owner sorts on, not by a queue
+  promotion that was never mine to make.
