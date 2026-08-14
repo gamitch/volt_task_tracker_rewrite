@@ -4,10 +4,10 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-14T10:45:11.225Z from team `Gamitch`.
+Exported 2026-08-14T10:51:42.478Z from team `Gamitch`.
 
 - **375** issues (242 archived)
-- **72** not yet completed or cancelled
+- **71** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
 ## Open
@@ -82,7 +82,6 @@ Exported 2026-08-14T10:45:11.225Z from team `Gamitch`.
 | [GAM-368](https://linear.app/gamitch/issue/GAM-368/student-checkinspects216-pins-hardcoded-calendar-dates-jul-14-sun-aug) | — | Backlog | area/w1 provenance/e2e-personas tier/unreviewed | `student-checkin.spec.ts:216` pins hardcoded calendar dates (`Jul 14`, `Sun, Aug 23`) against a `current_date`-relative seed, so it goes red as the calendar moves |
 | [GAM-369](https://linear.app/gamitch/issue/GAM-369/coach-meetingspects88-is-still-titled-lists-every-team-after-it-was) | — | Backlog | area/w1 provenance/e2e-personas tier/unreviewed | `coach-meeting.spec.ts:88` is still titled "lists every team" after it was changed to assert the archived team is excluded |
 | [GAM-370](https://linear.app/gamitch/issue/GAM-370/the-same-login-card-overflow-ships-on-three-more-full-screen-cards) | — | Backlog | Bug tier/standard | The same login-card overflow ships on three more full-screen cards — `/accept-invite` measured at 40px on a 320px phone |
-| [GAM-371](https://linear.app/gamitch/issue/GAM-371/public-routesspects-asserts-no-horizontal-overflow-but-only-at-412px) | — | In Review | Improvement tier/fast | `public-routes.spec.ts` asserts no horizontal overflow but only at 412px, so it passed through the entire GAM-271 login-card bug |
 | [GAM-372](https://linear.app/gamitch/issue/GAM-372/the-layout-measurement-skill-documents-three-environment-facts-that) | — | Backlog | Improvement tier/fast | The `layout-measurement` skill documents three environment facts that are all false in a dispatched container, and its script exits 2 |
 | [GAM-373](https://linear.app/gamitch/issue/GAM-373/re-measure-t072s-liveconsoletsx1277-the-convention-it-was-changed-to) | — | Backlog | Improvement tier/fast | Re-measure T072's `LiveConsole.tsx:1277` — the convention it was changed to satisfy is now known to be inert under a shrink-to-fit parent |
 | [GAM-374](https://linear.app/gamitch/issue/GAM-374/nothing-stopped-a-dispatched-run-pushing-three-commits-straight-to) | — | Backlog | provenance/other tier/fast | Nothing stopped a dispatched run pushing three commits straight to `main` — the declaration gate is `pull_request`-only, so a direct push bypasses every review control at once |
@@ -393,6 +392,7 @@ Exported 2026-08-14T10:45:11.225Z from team `Gamitch`.
 | [GAM-345](https://linear.app/gamitch/issue/GAM-345/e2e-w4-hours-and-goal-accounting-the-same-students-numbers-agree-on) | — | Done | E2E — W4 Hours and goal accounting: the same student's numbers agree on every screen |
 | [GAM-355](https://linear.app/gamitch/issue/GAM-355/five-pre-existing-persona-suite-failures-are-stale-against-shipped) | — | Done | Five pre-existing persona-suite failures are stale against shipped fixes, not real regressions |
 | [GAM-366](https://linear.app/gamitch/issue/GAM-366/every-heavy-dispatch-run-finishes-with-under-16-minutes-of-headroom) | — | Done | Every HEAVY dispatch run finishes with under 16 minutes of headroom, and two on one row finished with none — `timeout-minutes: 120` is a cliff, not a bound |
+| [GAM-371](https://linear.app/gamitch/issue/GAM-371/public-routesspects-asserts-no-horizontal-overflow-but-only-at-412px) | — | Done | `public-routes.spec.ts` asserts no horizontal overflow but only at 412px, so it passed through the entire GAM-271 login-card bug |
 | [GAM-375](https://linear.app/gamitch/issue/GAM-375/three-gam-371-run-log-commits-are-on-main-unreviewed-revert-them-so) | — | Done | Three GAM-371 run-log commits are on `main` unreviewed — revert them so the branch's own PR lands the file properly |
 
 Full descriptions, relations and timestamps are in `linear-export.json`.

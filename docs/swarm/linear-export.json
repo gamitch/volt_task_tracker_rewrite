@@ -1,6 +1,6 @@
 {
   "meta": {
-    "exportedAt": "2026-08-14T10:45:11.225Z",
+    "exportedAt": "2026-08-14T10:51:42.478Z",
     "team": "Gamitch",
     "teamKey": "GAM",
     "issueCount": 375,
@@ -6833,8 +6833,8 @@
       "identifier": "GAM-371",
       "legacyId": null,
       "title": "`public-routes.spec.ts` asserts no horizontal overflow but only at 412px, so it passed through the entire GAM-271 login-card bug",
-      "state": "In Review",
-      "stateType": "started",
+      "state": "Done",
+      "stateType": "completed",
       "archived": false,
       "labels": [
         "Improvement",
@@ -6844,7 +6844,7 @@
       "blockedBy": [],
       "blocks": [],
       "createdAt": "2026-08-14T05:19:40.325Z",
-      "completedAt": null,
+      "completedAt": "2026-08-14T10:51:24.357Z",
       "canceledAt": null,
       "url": "https://linear.app/gamitch/issue/GAM-371/public-routesspects-asserts-no-horizontal-overflow-but-only-at-412px",
       "description": "The e2e suite already has a real-browser guard against horizontal overflow on `/login` — and it stayed green for the whole life of a defect that pushed that page 40px sideways on a 320px phone. Its narrowest project is Pixel 7 at **412px**, and the card that broke the page was 400px wide, so the one viewport that would have caught it was never run.\n\n## Why it is worth fixing\n\nTest quality. This is a guard that reads as coverage and is not, which is the failure class this project keeps catching (T325's three vacuous candidates, T330's `?? ''` sentinel, T401). It is worse than no test, because the presence of `fits the viewport with no horizontal overflow (mobile + desktop, NFR-06)` in the suite is a reason not to look.\n\nIt is also the **only** mechanism available for regressions in this class: jsdom performs no layout, so the 2443-test vitest suite is structurally blind to every overflow bug. This spec is where such a guard can live at all.\n\n## Why it happens\n\n`tests/e2e/public-routes.spec.ts:62-73` asserts `scrollWidth <= clientWidth + 1` on `/login`. The assertion is correct. The viewport matrix is what fails it — the projects in `playwright.config.ts` bottom out at Pixel 7, whose `playwright-core` device descriptor is 412×915. GAM-271's defect produced 0px of overflow at 414 and above, and 5px at 390. 412 sits in the gap.\n\nAdding one narrow project is enough. GAM-271's measurements give the expected values: at 320 the pre-fix page was `scrollWidth` 360 vs `clientWidth` 320, so the assertion **provably reddens** against the unfixed code — this would be a non-vacuous test, which is the bar `mutation-replay` sets.\n\n## Where it renders / lives\n\n| File | Line | What it does |\n| -- | -- | -- |\n| `tests/e2e/public-routes.spec.ts` | 62-73 | The overflow assertion — correct, under-exercised |\n| `playwright.config.ts` | projects block | Where the 412px floor is set |\n\n## The one constraint\n\n**Prove it reddens before shipping it.** Revert GAM-271's one-line fix, run the new narrow project, and confirm it fails at 320. A viewport added without that check is another test that looks like a guard.\n\n**This cannot be run in a dispatched container as things stand.** The `playwright` package the e2e suite imports is not in `node_modules` and not in `package.json` — see the separate follow-up on the `layout-measurement` skill's stale environment. Whoever takes this row needs an environment where `npm run test:e2e` actually executes, which may make it owner-machine work.\n\n**Consider covering** `/accept-invite` **in the same pass** — it is public, already has tests in this file, and carries the identical unfixed defect.\n\n## Size and tier\n\nOne project entry in `playwright.config.ts`, possibly one `test.use({ viewport })` block in the spec. No production code.\n\n**FAST** under item 26 — no write path, no schema, well under 20 lines — *except* that FAST requires a named mutation that turns a test red, and here that mutation is the whole point of the task rather than incidental to it. Treat it as FAST with the mutation as the deliverable.\n\n## Suggested priority: low urgency, low cost\n\n**Recommend bundling it with the sibling-overflow row rather than scheduling it alone.**\n\n1. No user is affected by this row directly — it is a test-coverage gap, and the defect it failed to catch is already fixed. Its value is preventing the next one.\n2. Nothing is blocked on it. It would, however, have caught GAM-271 and the three sibling instances automatically.\n\n**It stops being deferrable when someone next changes a full-screen card's width**, because that is the change this guard exists to catch and the only one that would notice its absence.\n\n## Verification note\n\nRe-checked against `main` on 2026-08-14. The assertion at `tests/e2e/public-routes.spec.ts:62-73` is present and reads as described. The 412px figure is the `playwright-core` Pixel 7 device descriptor, read by GAM-271's premise gate; **the spec was confirmed green both before and after GAM-271's fix**, which is the evidence that it is blind to the defect rather than merely untested.\n\n---\n\nFound while fixing GAM-271 (T507), filed under constitution item 20. GAM-271's premise gate identified it; the row could not be done there because the e2e runner does not execute in that container."
