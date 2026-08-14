@@ -4,9 +4,9 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-14T12:10:14.405Z from team `Gamitch`.
+Exported 2026-08-14T12:16:49.574Z from team `Gamitch`.
 
-- **384** issues (242 archived)
+- **385** issues (242 archived)
 - **76** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
@@ -62,7 +62,6 @@ Exported 2026-08-14T12:10:14.405Z from team `Gamitch`.
 | [GAM-347](https://linear.app/gamitch/issue/GAM-347/e2e-w6-calendar-and-subscribe-a-student-subscribes-and-the-feed-stays) | — | Backlog | area/w6 provenance/other tier/unreviewed | E2E — W6 Calendar and subscribe: a student subscribes and the feed stays current |
 | [GAM-348](https://linear.app/gamitch/issue/GAM-348/e2e-w7-roster-and-invites-adding-people-changing-them-and-inviting-a) | — | Backlog | area/w7 provenance/other tier/unreviewed | E2E — W7 Roster and invites: adding people, changing them, and inviting a parent |
 | [GAM-349](https://linear.app/gamitch/issue/GAM-349/e2e-sweep-drive-all-seven-user-workflows-in-a-real-browser-and-file) | — | Backlog | provenance/other tier/unreviewed | E2E sweep — drive all seven user workflows in a real browser and file what breaks |
-| [GAM-350](https://linear.app/gamitch/issue/GAM-350/the-persona-e2e-suite-cannot-run-from-a-clean-checkout-playwright-is) | — | In Progress | area/w10 provenance/e2e-personas tier/unreviewed | The persona E2E suite cannot run from a clean checkout: `playwright` is imported but never declared as a dependency |
 | [GAM-351](https://linear.app/gamitch/issue/GAM-351/vite-preview-binds-ipv6-only-while-the-persona-config-polls-127001-so) | — | Backlog | area/w10 provenance/e2e-personas tier/unreviewed | `vite preview` binds IPv6-only while the persona config polls `127.0.0.1`, so a fresh checkout dies on a silent 180s timeout |
 | [GAM-352](https://linear.app/gamitch/issue/GAM-352/checkinresult-crashes-to-a-blank-page-on-an-unvalidated-200-check-in) | — | Backlog | area/w1 provenance/e2e-personas tier/unreviewed | CheckinResult crashes to a blank page on an unvalidated 200 check-in payload |
 | [GAM-353](https://linear.app/gamitch/issue/GAM-353/selfcheckoffdialog-is-unreachable-in-the-unmodified-seed-fixtures) | — | Backlog | area/w1 provenance/e2e-personas tier/unreviewed | SelfCheckoffDialog is unreachable in the unmodified seed fixtures |
@@ -90,6 +89,7 @@ Exported 2026-08-14T12:10:14.405Z from team `Gamitch`.
 | [GAM-381](https://linear.app/gamitch/issue/GAM-381/testse2e-runs-in-no-github-actions-workflow-so-ten-specproject-checks) | — | Backlog | provenance/other tier/unreviewed | `tests/e2e/**` runs in no GitHub Actions workflow, so ten spec×project checks cannot fail a pull request |
 | [GAM-382](https://linear.app/gamitch/issue/GAM-382/a-filing-run-can-create-rows-directly-in-todo-and-self-assign-a-tier) | — | Backlog | provenance/other tier/unreviewed | A filing run can create rows directly in `Todo` and self-assign a tier, producing rows that sit in the live queue while being permanently unreachable by it |
 | [GAM-384](https://linear.app/gamitch/issue/GAM-384/gate-run-documents-a-377-warning-ceiling-but-main-measures-379-so-the) | — | Backlog | tier/unreviewed | `gate-run` documents a 377-warning ceiling but `main` measures 379, so the `--max-warnings 377` it prescribes fails a clean tree |
+| [GAM-385](https://linear.app/gamitch/issue/GAM-385/dispatch-runs-record-no-consumption-anywhere-durable-every-dollar-and) | — | Backlog | — | Dispatch runs record no consumption anywhere durable — every $ and token figure this project quotes was harvested by hand, and the artifacts expire 30 days after each run |
 
 ## Closed and cancelled
 
@@ -396,6 +396,7 @@ Exported 2026-08-14T12:10:14.405Z from team `Gamitch`.
 | [GAM-343](https://linear.app/gamitch/issue/GAM-343/e2e-w2-run-an-outreach-event-create-rsvp-attend-complete-hours-land) | — | Done | E2E — W2 Run an outreach event: create → RSVP → attend → complete → hours land |
 | [GAM-344](https://linear.app/gamitch/issue/GAM-344/e2e-w3-run-a-meeting-schedule-attendance-participation-percent) | — | Done | E2E — W3 Run a meeting: schedule → attendance → participation % |
 | [GAM-345](https://linear.app/gamitch/issue/GAM-345/e2e-w4-hours-and-goal-accounting-the-same-students-numbers-agree-on) | — | Done | E2E — W4 Hours and goal accounting: the same student's numbers agree on every screen |
+| [GAM-350](https://linear.app/gamitch/issue/GAM-350/the-persona-e2e-suite-cannot-run-from-a-clean-checkout-playwright-is) | — | Done | The persona E2E suite cannot run from a clean checkout: `playwright` is imported but never declared as a dependency |
 | [GAM-355](https://linear.app/gamitch/issue/GAM-355/five-pre-existing-persona-suite-failures-are-stale-against-shipped) | — | Done | Five pre-existing persona-suite failures are stale against shipped fixes, not real regressions |
 | [GAM-366](https://linear.app/gamitch/issue/GAM-366/every-heavy-dispatch-run-finishes-with-under-16-minutes-of-headroom) | — | Done | Every HEAVY dispatch run finishes with under 16 minutes of headroom, and two on one row finished with none — `timeout-minutes: 120` is a cliff, not a bound |
 | [GAM-371](https://linear.app/gamitch/issue/GAM-371/public-routesspects-asserts-no-horizontal-overflow-but-only-at-412px) | — | Done | `public-routes.spec.ts` asserts no horizontal overflow but only at 412px, so it passed through the entire GAM-271 login-card bug |
