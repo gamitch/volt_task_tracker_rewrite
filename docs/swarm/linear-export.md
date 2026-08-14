@@ -4,10 +4,10 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-14T11:48:18.815Z from team `Gamitch`.
+Exported 2026-08-14T12:10:14.405Z from team `Gamitch`.
 
-- **380** issues (242 archived)
-- **73** not yet completed or cancelled
+- **384** issues (242 archived)
+- **76** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
 ## Open
@@ -62,7 +62,7 @@ Exported 2026-08-14T11:48:18.815Z from team `Gamitch`.
 | [GAM-347](https://linear.app/gamitch/issue/GAM-347/e2e-w6-calendar-and-subscribe-a-student-subscribes-and-the-feed-stays) | — | Backlog | area/w6 provenance/other tier/unreviewed | E2E — W6 Calendar and subscribe: a student subscribes and the feed stays current |
 | [GAM-348](https://linear.app/gamitch/issue/GAM-348/e2e-w7-roster-and-invites-adding-people-changing-them-and-inviting-a) | — | Backlog | area/w7 provenance/other tier/unreviewed | E2E — W7 Roster and invites: adding people, changing them, and inviting a parent |
 | [GAM-349](https://linear.app/gamitch/issue/GAM-349/e2e-sweep-drive-all-seven-user-workflows-in-a-real-browser-and-file) | — | Backlog | provenance/other tier/unreviewed | E2E sweep — drive all seven user workflows in a real browser and file what breaks |
-| [GAM-350](https://linear.app/gamitch/issue/GAM-350/the-persona-e2e-suite-cannot-run-from-a-clean-checkout-playwright-is) | — | Backlog | area/w10 provenance/e2e-personas tier/unreviewed | The persona E2E suite cannot run from a clean checkout: `playwright` is imported but never declared as a dependency |
+| [GAM-350](https://linear.app/gamitch/issue/GAM-350/the-persona-e2e-suite-cannot-run-from-a-clean-checkout-playwright-is) | — | In Progress | area/w10 provenance/e2e-personas tier/unreviewed | The persona E2E suite cannot run from a clean checkout: `playwright` is imported but never declared as a dependency |
 | [GAM-351](https://linear.app/gamitch/issue/GAM-351/vite-preview-binds-ipv6-only-while-the-persona-config-polls-127001-so) | — | Backlog | area/w10 provenance/e2e-personas tier/unreviewed | `vite preview` binds IPv6-only while the persona config polls `127.0.0.1`, so a fresh checkout dies on a silent 180s timeout |
 | [GAM-352](https://linear.app/gamitch/issue/GAM-352/checkinresult-crashes-to-a-blank-page-on-an-unvalidated-200-check-in) | — | Backlog | area/w1 provenance/e2e-personas tier/unreviewed | CheckinResult crashes to a blank page on an unvalidated 200 check-in payload |
 | [GAM-353](https://linear.app/gamitch/issue/GAM-353/selfcheckoffdialog-is-unreachable-in-the-unmodified-seed-fixtures) | — | Backlog | area/w1 provenance/e2e-personas tier/unreviewed | SelfCheckoffDialog is unreachable in the unmodified seed fixtures |
@@ -87,12 +87,15 @@ Exported 2026-08-14T11:48:18.815Z from team `Gamitch`.
 | [GAM-377](https://linear.app/gamitch/issue/GAM-377/the-outreach-event-dialog-has-no-startend-ordering-guard-so-a-coach) | — | Backlog | Bug area/w2 tier/heavy | The outreach event dialog has no start/end ordering guard, so a coach can save a session whose end is before its start — and outreach hours are the ones that count toward season goals |
 | [GAM-378](https://linear.app/gamitch/issue/GAM-378/chicagowalltimetoutciso-resolves-the-zone-offset-at-the-naive-utc) | — | Backlog | Bug area/w3 tier/heavy | chicagoWallTimeToUtcIso resolves the zone offset at the naive-UTC instant, so every 07:00–07:59 session on a spring-forward date is stored an hour late — triplicated across three dialogs |
 | [GAM-379](https://linear.app/gamitch/issue/GAM-379/event-sessions-has-no-check-constraint-on-its-interval-so-nothing) | — | Backlog | Bug area/w3 tier/heavy | event_sessions has no CHECK constraint on its interval, so nothing below the UI stops an inverted session — and no audit has asked whether bad rows already exist |
+| [GAM-381](https://linear.app/gamitch/issue/GAM-381/testse2e-runs-in-no-github-actions-workflow-so-ten-specproject-checks) | — | Backlog | provenance/other tier/unreviewed | `tests/e2e/**` runs in no GitHub Actions workflow, so ten spec×project checks cannot fail a pull request |
+| [GAM-382](https://linear.app/gamitch/issue/GAM-382/a-filing-run-can-create-rows-directly-in-todo-and-self-assign-a-tier) | — | Backlog | provenance/other tier/unreviewed | A filing run can create rows directly in `Todo` and self-assign a tier, producing rows that sit in the live queue while being permanently unreachable by it |
+| [GAM-384](https://linear.app/gamitch/issue/GAM-384/gate-run-documents-a-377-warning-ceiling-but-main-measures-379-so-the) | — | Backlog | tier/unreviewed | `gate-run` documents a 377-warning ceiling but `main` measures 379, so the `--max-warnings 377` it prescribes fails a clean tree |
 
 ## Closed and cancelled
 
 | Issue | Legacy | State | Title |
 | -- | -- | -- | -- |
-| [GAM-1](https://linear.app/gamitch/issue/GAM-1/get-familiar-with-linear) | — | Canceled | Get familiar with Linear |
+| [GAM-1](https://linear.app/gamitch/issue/GAM-1/get-familiar-with-linear) | — | Done | Get familiar with Linear |
 | [GAM-2](https://linear.app/gamitch/issue/GAM-2/connect-your-tools) | — | Canceled | Connect your tools |
 | [GAM-3](https://linear.app/gamitch/issue/GAM-3/import-your-data) | — | Canceled | Import your data |
 | [GAM-4](https://linear.app/gamitch/issue/GAM-4/set-up-your-teams) | — | Canceled | Set up your teams |
@@ -399,5 +402,6 @@ Exported 2026-08-14T11:48:18.815Z from team `Gamitch`.
 | [GAM-375](https://linear.app/gamitch/issue/GAM-375/three-gam-371-run-log-commits-are-on-main-unreviewed-revert-them-so) | — | Done | Three GAM-371 run-log commits are on `main` unreviewed — revert them so the branch's own PR lands the file properly |
 | [GAM-376](https://linear.app/gamitch/issue/GAM-376/record-the-2026-08-14-owner-driven-session-what-landed-what-the) | — | Done | Record the 2026-08-14 owner-driven session: what landed, what the process caught, and where the session itself was wrong |
 | [GAM-380](https://linear.app/gamitch/issue/GAM-380/the-session-records-7-calls-gam-350-and-gam-372-both-wrong-both-are) | — | Done | The session record's §7 calls GAM-350 and GAM-372 "both wrong"; both are correct as filed and the disproof cited was misread |
+| [GAM-383](https://linear.app/gamitch/issue/GAM-383/no-pr-template-and-no-pr-body-skill-so-every-pr-body-re-derives-a) | — | Done | No PR template and no `pr-body` skill, so every PR body re-derives a shape the declaration gate already has opinions about |
 
 Full descriptions, relations and timestamps are in `linear-export.json`.
