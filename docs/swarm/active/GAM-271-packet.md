@@ -1,10 +1,21 @@
 # GAM-271 (T507) — worker packet
 
-**Revision 2.** Round 1 of the premise gate returned REVISE with 4 MAJOR / 4
-MINOR / 1 NIT. Every finding is addressed below; the two that changed the work
-are called out where they land. The largest is that **revision 1's prescription
-was two lines and only one of them does anything** — the gate measured line 275
-to be inert and I replayed that independently before adopting it.
+**Revision 3 — GATED, verdict DISPATCH** (constitution item 19). The gate ran
+the full two rounds item 19a allows: round 1 returned REVISE with 4 MAJOR / 4
+MINOR / 1 NIT, round 2 returned DISPATCH with 2 MINOR / 4 NIT, all of which are
+folded in here. Every finding is addressed where it lands, and the corrections
+are kept visible rather than edited away — the correction is the evidence that
+the check happened.
+
+**The two findings that changed the work:**
+
+1. **Revision 1 prescribed two lines and only one of them did anything.** I had
+   claimed both were load-bearing and measured. That was false; the gate showed
+   line 272 alone is the whole fix, and I replayed it independently before
+   adopting it.
+2. **The Card prop I had written off as inert is in fact the clamp.** Round 2
+   deleted it under the one-line fix and the overflow came straight back. See
+   the T072 section — this reverses the framing, not the decision.
 
 **Tier: STANDARD** (constitution item 26). No write path, no schema/RLS/migration,
 no auth/session/role logic — this is a layout prop on one presentational module,
@@ -107,18 +118,38 @@ codebase", naming **`LoginPage.tsx` as the exemplar**; passed task T072 changed
 on the exemplar file itself and said nothing about it, which Definition of Ready
 item 5 would have required as an explicit, authorized reversal.
 
-**The one-line fix preserves the pairing instead of reversing it.** The pairing
-was never wrong — it simply cannot work while the parent is shrink-to-fit, and
-constraining the stack is what switches it on. No reversal, no waiver needed.
+**The one-line fix does not merely preserve the pairing — it switches it on, and
+the Card's `maxWidth="100%"` becomes load-bearing.** The gate proved this by
+deleting that prop under the one-line fix: **the overflow returns in full, 40 /
+20 / 13 / 5 / 0**, with the stack correctly capped at 320 but the card still
+demanding 400 and escaping it. So line 272 supplies a real percentage basis and
+`maxWidth="100%"` is the clamp that actually produces the 320/360/375/390 card.
+Nothing is reversed and no waiver is owed.
+
+The pairing was never wrong; it simply cannot work while the parent is
+shrink-to-fit. T072's own patch site corroborates this from the other end:
+`LiveConsole.tsx:1277` sits inside `HStack gap={6} wrap="wrap"` in a page-level
+layout — a genuinely constrained parent — which is why the pairing works there
+and was inert here.
+
+**Consequence for the worker: `LoginPage.tsx:275` is now live code that looks
+dead.** Anyone who reads this issue's title and then reads line 275 will be
+tempted to delete a prop that is carrying the fix. Criterion 1a below requires a
+one-line comment to prevent exactly that.
 
 ### What NOT to do
 
-Do **not** "fix" this by putting `width="100%"` on the `Card` alone, with or
-without the stack change. Measured: overflow goes to 0 **and the card collapses
-to 247px at every viewport, including 414 and 1280**, where it is 400px today —
-because `hAlign="center"` stops the stack stretching its children and the stack
-is itself shrink-to-fit, so both collapse to min-content. **The overflow number
+Do **not** "fix" this by putting `width="100%"` on the `Card` **instead of** the
+stack change. Measured: overflow goes to 0 **and the card collapses to 247px at
+every viewport, including 414 and 1280**, where it is 400px today — because
+`hAlign="center"` stops the stack stretching its children and the stack is
+itself shrink-to-fit, so both collapse to min-content. **The overflow number
 improves while the screen gets worse**, which is T325's trap in a new costume.
+
+*(Revision 2 of this packet said "with or without the stack change" here. The
+gate measured that and it is false — with the stack change, the Card-only form
+gives 0 overflow and a 400px card at 414/1280. The claim is corrected rather
+than deleted, because the correction is the evidence that the check happened.)*
 
 ---
 
@@ -144,10 +175,13 @@ Install `playwright-core` **outside the repository**. It must not reach
 `package.json` or `package-lock.json` — the dependency allowlist (item 9) is not
 being amended by this task.
 
-Working rigs already exist and take a URL argument:
+Working rigs may already exist in this container and take a URL argument:
 `/tmp/pwrig/measure-login.cjs <url>` (five phone widths + ancestor chain),
 `/tmp/pwrig/measure-wide.cjs <url>` (768/1280/1920),
-`/tmp/pwrig/measure-reset.cjs <url>` (the reset panel). Reuse them.
+`/tmp/pwrig/measure-reset.cjs <url>` (the reset panel). **Reuse them if present;
+if `/tmp/pwrig` is not there, build your own from the install route above** —
+the gate verified that route works from an empty directory. Do not assume you
+inherit another process's `/tmp`.
 
 Start the dev server with `npx vite --port <free port>`.
 
@@ -156,7 +190,19 @@ Start the dev server with `npx vite --port <free port>`.
 ## Acceptance criteria
 
 1. `src/pages/login/LoginPage.tsx:272` reads exactly as prescribed above.
-   **No other line of the file changes** — line 275 in particular is untouched.
+   **The `<Card …>` line itself is unchanged** — its props keep reading
+   `width={400} maxWidth="100%" padding={6} variant="default"`.
+1a. **One comment line is added directly above the `<Card>`**, and it is the
+   only other permitted change in the file. It exists because the gate proved
+   that prop is load-bearing and looks dead. Use exactly:
+
+   ```tsx
+   {/* maxWidth="100%" is the clamp that keeps this card inside narrow
+       viewports -- it works only because the VStack above sets an explicit
+       width. Do not remove either half. Measured, GAM-271. */}
+   ```
+
+   No other line of the file changes.
 2. **Zero horizontal overflow at 320 / 360 / 375 / 390 / 414**, measured in a
    real browser. jsdom cannot see this; do not claim it from a unit test.
 3. **The card still measures 400px at 414, 768, 1280 and 1920.** This criterion
@@ -204,27 +250,33 @@ See the follow-ups below (item 20: a comment is not triage).
 Not required at STANDARD (item 19d binds HEAVY); kept because round 1 showed it
 earning its keep — the gate found #1 and #3 partly wrong.
 
-1. **Leaving the Card's `width={400} maxWidth="100%"` untouched.** It reads as
-   dead defensive code to anyone who does not know it only works because of the
-   stack cap one line above. I keep it because T072 established the pairing and
-   removing it is a separate decision. Wrong if a reviewer would rather the
-   inert-looking prop go, with T072 renegotiated explicitly.
-2. **`width="100%"` on the VStack changes the stack from shrink-to-fit to fill.**
-   The gate measured the sibling `<Heading level={1}>VOLT</Heading>`: `w=66`
-   with identical `left` (127/162/174/607 at 320/390/414/1280) before and after.
-   `Center` was already the centring agent. I now consider this settled rather
-   than uncertain.
-3. **Content-state coverage.** Revision 1 claimed two states were measured; the
-   gate showed the reset rig opens the panel at `resetStatus === 'idle'` so **no
-   banner state was actually covered**, and that the sign-in `formError` Banner
-   (`LoginPage.tsx:332-339`) is in the sign-in branch, not the reset form. The
-   gate then measured all three (`signin-error`, `reset-error`, `reset-sent`):
-   baseline 40/20/5/0/0, fixed 0 at 320/360/390/414/1280, banner present in all.
-   Conclusion held; my stated evidence for it had not. Wrong if a fourth branch
-   exists that none of us enumerated.
+1. **Leaving the Card's `width={400} maxWidth="100%"` untouched.** Revision 2
+   defended this as keeping harmless-but-inert defensive code. **The gate showed
+   that framing was wrong in my favour:** the prop is not inert after the fix,
+   it is the clamp — remove it and 40 / 20 / 13 / 5 / 0 comes straight back. The
+   decision stands and its justification got stronger. The residual doubt is now
+   only whether criterion 1a's comment is the right guard, or whether the pair
+   should be made structurally inseparable somehow. Wrong if a reviewer thinks a
+   comment is too weak a guard for a prop this load-bearing.
+2. *(Closed, not a doubt — kept for the record.)* `width="100%"` on the VStack
+   changes it from shrink-to-fit to fill. Measured twice, once per round: the
+   sibling `<Heading level={1}>VOLT</Heading>` is `w=66` with identical `left`
+   (127/162/174/607 at 320/390/414/1280) before and after. `Center` was already
+   the centring agent. **Settled.**
+3. *(Closed by round 2.)* Content-state coverage. Revision 1 claimed two states
+   were measured; the gate showed the reset rig opens the panel at
+   `resetStatus === 'idle'` so **no banner state was actually covered**, and
+   that the sign-in `formError` Banner (`LoginPage.tsx:332-339`) is in the
+   sign-in branch, not the reset form. The gate measured all three
+   (`signin-error`, `reset-error`, `reset-sent`): baseline 40/20/5/0/0, fixed 0
+   at 320/360/390/414/1280, banner present in all. It then enumerated the render
+   tree — exactly five conditionals (276, 284, 293, 332, and the two `TextInput
+   status` props at 349-351/361-365) — and confirmed **there is no fourth
+   structural branch**. My conclusion held; my stated evidence for it had not.
 4. **400 is retained as the design width.** Treated as intent, not questioned.
    Wrong if the owner would rather the card grow past 400 on desktop — but that
-   is a design change, not this bug fix.
+   is a design change, not this bug fix. **Still open, and the only genuinely
+   open one left.**
 
 ## Evidence the worker must return
 
@@ -242,11 +294,19 @@ Filed as Linear issues by the orchestrator, not left as comments:
 
 - **The same defect on three sibling pages**, byte-identical
   `Center > VStack hAlign="center" > Card width={400} maxWidth="100%"`:
-  `AcceptInvitePage.tsx:653-657` (gate-measured: 40 / 13 / 5 / 0 at
+  `AcceptInvitePage.tsx:653-657` (**gate-measured**: 40 / 13 / 5 / 0 at
   320 / 375 / 390 / 412), `AccessDeniedPage.tsx:86-90`,
   `NoAccessPage.tsx:309-313`. Plus `CheckinResult.tsx:740`, which uses
-  `width={420}` and so overflows even at Pixel 7's 412.
+  `width={420}` and so should overflow even at Pixel 7's 412 — **that one is
+  reasoned from the identical shell shape, NOT measured**: `/checkin` is
+  auth-gated and redirects to `/login` in this environment, so the follow-up
+  must measure it rather than inherit the claim.
 - **A narrow-viewport project for `tests/e2e/public-routes.spec.ts`**, which
   would convert this measurement into a real regression guard.
+- **Re-measure T072's own `LiveConsole.tsx:1277`.** A source read says its
+  parent is a genuinely constrained `HStack wrap="wrap"`, so its pairing is
+  probably real — but this packet now asserts the pairing is inert under
+  shrink-to-fit parents, and the one site that was changed *because of* that
+  convention has never actually been measured.
 - **The `layout-measurement` skill's environment facts are stale**, which cost
   this run a detour and would stop a run that trusted them.

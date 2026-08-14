@@ -212,3 +212,24 @@ and 31527801235, and it is the thing this wording exists to make unmistakable.
   · eslint **0 errors / 378 warnings, no rise** · vitest **95 files / 2443
   tests, exit 0**. It also proved the packet's rig route works from an empty
   directory (`npm i playwright-core` exit 0, harness returned real numbers).
+- **2026-08-14 05:50Z — packet revision 3 written**, folding in both round-2
+  MINORs and all four NITs (the gate said no re-gate needed): the false "with or
+  without the stack change" clause corrected in place rather than deleted; the
+  T072 section rewritten around the load-bearing measurement; **a new criterion
+  1a requiring one comment line above the `<Card>`**, because the gate's finding
+  means line 275 is now live code that reads as dead and the next person to see
+  this issue's title will be tempted to delete it; the rig-reuse line no longer
+  assumes the worker inherits this container's `/tmp`; the `CheckinResult.tsx`
+  follow-up marked reasoned-not-measured (that route is auth-gated here); a
+  fifth follow-up added to re-measure T072's own `LiveConsole.tsx:1277`; and
+  least-confident #2 and #3 restated as closed.
+- **2026-08-14 05:52Z — DISPATCHED `worker-implementer`** on packet revision 3.
+  Model: **pinned default (sonnet)** — constitution item 18's four override
+  triggers are migrations, RLS/security-definers, metric-view SQL, and
+  auth/session/permission logic, and a one-line layout prop on a presentational
+  component is none of them. Item 25's second obligation forbids bumping to opus
+  because a topic *sounds* sensitive, which "login" does. Recorded here per item
+  18's "record the tier used". Dispatched with `run_in_background: false`; this
+  line is written before the wait.
+  **If this line is the last one in this file, the run died holding this
+  subagent.**
