@@ -57,3 +57,33 @@ so this file is the only thing that survives.
   **If this line is the last one in this file, the run died holding this
   subagent** — the packet was never gated, no worker ran, and nothing was
   implemented. Waiting for the verdict now; the next line is the verdict.
+- **22:19Z — VERDICT round 1: `REVISE`** (subagent returned; the run did not die
+  holding it). 1 BLOCKER, 2 MAJOR, 3 MINOR, 2 NIT. **The premise itself was
+  independently re-measured and HOLDS** — the gate stood up scratch PostgreSQL
+  16.14 with all 25 migrations and executed the counterfactual: membership-less
+  student `vp_rows = 0`, student with membership `vp_rows = 1`. It explicitly
+  recommends *not* returning GAM-340 to `Todo`. Both of my traps were confirmed
+  by execution: Trap A reproduced SQLSTATE 23505 on re-join and confirmed the
+  prescribed upsert reactivates; Trap B confirmed dual ACTIVE memberships are
+  intended and fixtured, and team C survived the prescribed A→B move under a
+  real `coach` RLS session (`is_staff() = t`).
+  **The three findings that changed the outcome:**
+  * **BLOCKER — my Allowed Files were undeliverable.** The gate implemented my
+    prescription verbatim in a throwaway worktree and ran the suite:
+    `StudentsTab.test.tsx`'s two green T089 mutation tests fail with
+    `TypeError: client.from(...).upsert is not a function` and
+    `client.from(...).select is not a function` (2 failed | 2456 passed). That
+    file was not in Allowed Files, so a worker could not have fixed them — and
+    my criterion 7 asserted the opposite of what is measurably true.
+  * **MAJOR — my Trap B criterion was vacuous.** The gate implemented the exact
+    design Trap B forbids (`.neq('team_id', new)`) and applied my criterion 3 to
+    it: it PASSES, because the forbidden design never names team C. The
+    criterion guarding the packet's headline trap guarded nothing.
+  * **MAJOR — a second broken population I had not named.** The re-teamed
+    students with a stale ACTIVE row for a team they left
+    (`20260812000000_...sql:91-112`, fixtured `gam299_seed.sql:129-135`) are
+    corrupting `v_student_participation` **today**, with no dependency on
+    GAM-299 being applied — and my "close only the previous primary" rule
+    *permanently entrenches* them.
+  Also: `met01` `e.team_ids` predicate is at `:114`, not `:113` (my error).
+  Next: revise the packet, then round 2 (item 19a caps the gate at two rounds).
