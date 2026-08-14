@@ -159,3 +159,27 @@ so this file is the only thing that survives.
   **If this line is the last one in this file, the run died holding this
   subagent** — the work is committed at `74340f0` and pushed, but unreviewed,
   and no PR was opened. The next line is the checker's verdict.
+- **23:08Z — CHECKER VERDICT: `PASS WITH FOLLOW-UPS`** (subagent returned; the
+  run did not die holding it). No BLOCKER, no MAJOR. 1 MINOR, 1 NIT.
+  It reproduced the gates independently (2476 / 253 / 34, all six exit 0),
+  traced the item-27 connection end to end through `router.tsx:268` →
+  `RosterShell.tsx:258` → `StudentsTab.tsx:1081` → the real
+  `getSupabaseClient` (real path, real client, no stub), and verified the
+  amendment boundary literally.
+  **It ran SEVEN of its own mutations in its own worktree rather than trusting
+  the worker's three** — including writing the forbidden `.neq` design itself
+  end to end, which reddened criteria 2, 3a, 3b and 3c with exactly the
+  predicted `team-cedar: active → closed` diff.
+  * **MINOR — a real gap the packet's criteria did not catch.** Its mutation M5
+    moved the previous-team read-back to *after* the `students` update: **the
+    whole suite stays green**, yet in production that ordering makes
+    `previousTeamId === payload.teamId` always, so **no close would ever fire**.
+    The shipped code is correct; the guard against a future reordering is not.
+    The `students` double returns a constant regardless of the update, and the
+    `fromSpy` order assertion is invariant under the swap. Filed as a follow-up.
+  * **NIT** — `gate-run/SKILL.md` documents 377 standing eslint warnings; the
+    real figure at base `9d84bed` is **379**. Pre-existing; this change adds zero.
+    Verified by the checker against base content, not accepted from the worker.
+  It also confirmed the worker's "two-part mutation" was **not** an evasion: under
+  the extracted helper, a one-line `.eq`→`.neq` swap would negate against the
+  *previous* team, a different and weaker proof.
