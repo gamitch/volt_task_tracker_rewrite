@@ -12505,3 +12505,72 @@ saved the run. Filed as GAM-372.
 
 The frozen ledger (item 29) gets no row: `GAM-271` carries a legacy `T507` but
 item 29 forbids editing a Status there for new work.
+
+## GAM-371 — a 320px project makes `public-routes.spec.ts` see the gap it missed (FAST tier)
+
+**Tier: FAST** (constitution item 26), per the issue's own analysis: no write
+path, no schema/RLS/auth logic, one project entry (12 lines) in
+`playwright.config.ts`, no production code. The one FAST condition this task
+treats non-trivially is "a named mutation that turns a test red" — here the
+mutation *is* the deliverable, not incidental to it, exactly as the issue
+flagged.
+
+### The disclosed environment constraint was stale, measured rather than assumed
+
+The issue's own text said the e2e runner "cannot be run in a dispatched
+container as things stand" because `playwright` is absent from `node_modules`/
+`package.json`. Measured directly in this container: `npm install --no-save
+playwright` + `npx playwright install --with-deps chromium` both succeeded
+(chromium 151.0.7922.34, apt deps installed), and `npx playwright test
+tests/e2e/public-routes.spec.ts` ran for real against a real `npm run build` +
+`npm run preview`. The constraint held for an earlier run in a different
+container; it does not hold in this one.
+
+### The mutation, and an unplanned second finding
+
+Added `mobile-narrow-320` (viewport 320×568, matching GAM-271's own
+narrowest-measured width) as a fifth project in `playwright.config.ts`,
+additive to the existing 2×2 color/viewport matrix. Ran it against the branch
+tip *before* GAM-271's fix had merged to `main` (see below) and it failed for
+real: `scrollWidth` 360 vs `clientWidth` 320 — the exact 40px figure GAM-271's
+issue text cites as its own pre-fix measurement at 320. That is the redness
+this task exists to prove, and it arrived without needing to revert anything,
+because GAM-271's fix was not yet on `main` when it was measured — a
+genuinely-unmerged production defect this task's own dispatch surfaced
+(`gh pr create` had returned `401 Bad credentials` on that branch; see
+GAM-271's run log). GAM-271's PR (#183) merged independently while this task
+was in flight; re-verified afterward on the rebased branch that
+`mobile-narrow-320` passes for `/login` with the real fix present. Both states
+were observed directly, not inferred from one another.
+
+### Gates
+
+At `a18dc4d`, `--require-clean`: tsc **0** · vite build **0** · format:check
+**0** · eslint **0 errors / 378 warnings** (one more than the documented 377
+baseline, all pre-existing `react-refresh/only-export-components`, unrelated to
+this diff) · vitest **95 files / 2446 tests** (no baseline supplied for this
+row) · scoped SKIPPED — this diff touches no `src/` file, only
+`playwright.config.ts` and this task's run log, so gate 6 has no defensible
+scope. **5 of 6**, reported as such, not as six.
+
+Manually, `npx playwright test tests/e2e/public-routes.spec.ts` across all 5
+projects: all 5 `/login` "no horizontal overflow" runs pass, including the new
+`mobile-narrow-320`. 15 `/accept-invite` failures are pre-existing on every
+project (missing invite token, not an overflow defect) and out of this task's
+scope.
+
+### Process note, disclosed rather than buried
+
+The first three run-log commits on this task were pushed directly to `main`
+instead of a `claude/gam-371-...` branch — an error, corrected mid-run by
+creating the branch, rebasing onto `origin/main`, and resetting local `main`
+back to match. No source change reached `main` outside a PR; only run-log
+prose did, before the branch existed. Full detail in
+`docs/swarm/active/GAM-371-run-log.md`.
+
+### Filed, not fixed here (item 20)
+
+- `/accept-invite`'s three pre-existing failures (unrelated to overflow) are
+  untouched. GAM-371's own issue text suggested covering `/accept-invite`'s
+  overflow case "in the same pass" as optional scope; not taken here to keep
+  the diff to the one project entry the issue sized this task at.
