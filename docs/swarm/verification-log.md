@@ -12228,3 +12228,143 @@ AC6's `toBeCloseTo(dbHours, 3)` reads tighter than it is: every screen rounds to
 one decimal before the spec parses it, so the load-bearing assertion is
 `toBe(dbHours.toFixed(1))`. Graded NIT by the checker; no better resolution is
 reachable through a browser.
+
+---
+
+## GAM-355 — five persona tests outlived the bugs they witnessed (HEAVY tier)
+
+**Tier:** HEAVY (packet → premise gate ×2 → worker ×2 → checker ×2). Branch
+`claude/gam-355-stale-persona-failures`, work at `1861561` and `6d1e7bf`.
+**Result:** PASS. All seven acceptance criteria pass, and the two that mattered
+were proven non-vacuous by mutations the *checker* ran itself in its own
+worktree — not by the worker's transcript.
+
+**Deliverable:** `tests/e2e-personas/coach-meeting.spec.ts` (+15/-…) and
+`tests/e2e-personas/student-parent.spec.ts` (+72/-32 across two commits). **No
+production file changed** — every underlying fix had already shipped, which is
+the whole finding.
+
+**Gates at `0d23316`, clean tree:** tsc 0 · vite build 0 · format:check 0 ·
+eslint 0 errors (378 warnings) · vitest 95 files / 2443 tests, exit 0 · scoped
+vitest **SKIPPED** — five of six, and it is five, not six. Gate 6 had no
+defensible scope because no `src/` file changed. No baseline was given for gate
+5, and none is needed: `vite.config.ts:57-59` excludes `tests/e2e-personas/**`
+from vitest discovery outright, so this change cannot move that count by
+construction.
+
+*The eslint gate first came back with 1124 errors and it was not the tree.* All
+1124 sat in `playwright-report/personas`, the HTML report the persona suite
+writes. It is gitignored but eslint does not read `.gitignore`, so running the
+suite before the gate turns the gate red. Already filed as **GAM-362** and
+**GAM-365**; recorded here because a future run will hit it in the same order
+and should not re-diagnose it.
+
+### The finding this row exists for
+
+**The issue asked us to re-verify a premise before acting, and re-verifying it
+changed the answer twice — in opposite directions.**
+
+The first full-suite baseline said the filing was wrong: four of its five named
+failures reproduced, `student-parent.spec.ts:66` **passed**, and two failures
+nobody had filed appeared. Running each spec in isolation on a fresh seed
+reversed that: `:66` fails, and its full-suite green came from
+`outreach-lifecycle.spec.ts` creating an opportunity that took the slot
+`getByRole('button', {name:'Sign up'}).first()` grabs — so the click RSVP'd to a
+different session and "no write happened" was satisfied **by querying a row the
+user never touched.** The filing was right; the instrument was lying. That is
+worse than the defect filed, and the rewrite pins the click to the seeded event
+rather than to list position.
+
+**The second reversal was mine.** The run log recorded
+`outreach-lifecycle.spec.ts:149` as *"a write path that records nothing … a
+candidate production defect."* The premise gate queried the database after a run
+in which line 233 failed with `[]` and found the row present, exactly as lines
+234-235 assert: the spec polls only for the `events` row (`:217`) and then reads
+`rsvps` synchronously (`:232`), while `reconcileExpectedAttendeeRsvps` runs
+after `createOutreachEvent` (`loaders/outreach.ts:1627-1643`). A read-after-write
+race in the test. Filing it as written would have put a nonexistent production
+defect in the queue. The error is left standing in the run log rather than
+edited out — deleting it deletes the evidence that the check happened.
+
+### The mutation that changed the outcome
+
+The checker passed the first commit with a MINOR, and demonstrated it rather
+than argued it: with the hours formatter mutated to `(value / 2).toFixed(1)`,
+the page rendered **`3.2 / 100.0 h`** against a database value of
+**`6.4999991188888889`** and **both rewritten hours tests stayed green**. The
+rewrite had kept the shape assertion and the not-the-raw-float assertion and
+dropped the positive screen-to-database comparison the test it replaced had.
+
+I graded that MAJOR and sent it back. A student's own hours halved on screen,
+undetected, is item 26's trigger question — *can a mistake here lie to a user
+about their own data?* — answered yes, and it is the reason this row was tiered
+HEAVY. `6d1e7bf` adds `expect(label.split(' ')[0]).toBe(raw.toFixed(1))` to both
+surfaces. **The checker then re-ran the mutation itself and found a hole in the
+worker's proof:** the worker had mutated only `StudentHome.tsx`, and
+`ParentHome.tsx` carries a *separate copy* of the same format string, so that
+run could not have exercised the parent guard at all. Halving both turned both
+tests red at their own new lines — `:56` and `:150`, `Expected "4.0" / Received
+"2.0"`. Note what the mutated string was: `2.0 / 100.0 h (4%)`, which still
+satisfies both pre-existing assertions. The failure landing on the new line and
+only the new line is what proves the addition carries the teeth.
+
+### What the gate was worth, priced against item 19a
+
+Round 1 cost ~113K tokens and returned three MAJORs, one of which was the
+falsification above. Round 2 cost ~129K, was scoped to the revision deltas under
+item 19b, and caught a wrong line number **inside the paragraph correcting the
+previous wrong claim** (`:222` for a poll that is at `:217`) plus an elided
+`student_id = '…'` in a prescribed `beforeEach` that would have failed all seven
+tests with an opaque `invalid input syntax for type uuid`. Item 19c's failure
+class, twice in a row, in a packet whose author had just written about it.
+
+Both rounds ran rather than read. Round 1 authored a complete candidate fix and
+executed it, which is why round 2 could be cheap and why the worker's first
+attempt needed no rework on AC1-AC5.
+
+### Where the packet was wrong and the worker was right
+
+The packet specified a percentage matcher of `\d+%` from one observed render of
+`(4%)`. The worker widened it to `\d+(\.\d)?%` and declared the deviation. It was
+correct: `hoursVsGoalPercent` is `Math.min(100, round1(...))`, so a decimal is
+reachable by construction, and the checker observed `(6.5%)` live. The packet's
+own instruction was "do not over-fit", written by an author who had just
+over-fitted a locator to a single observation two paragraphs earlier.
+
+### Follow-up (item 20 — filed before the row moved)
+
+- **`GAM-367`** (MAJOR, test-infra) — the read-after-write race above, and its
+  coupling: when `:149` passes it logs a `2.5 h` override for Priya on a
+  surviving event, which turns `reports-accounting.spec.ts:333` red instead.
+  Exactly one of the two fails per run and which one is not deterministic.
+  Fixing the race alone makes the *other* failure permanent, so both legs must
+  land together — the constraint is stated on the row.
+- **`GAM-368`** (MAJOR, test-infra) — `student-checkin.spec.ts:216` pins
+  `Jul 14` / `Sun, Aug 23` against a `current_date`-relative seed. Correct on
+  the day GAM-342 wrote it, red every day since.
+- **`GAM-369`** (NIT) — `coach-meeting.spec.ts:88` still titled "lists every
+  team" after being changed to assert the archived team is excluded.
+- **`GAM-360` is the same five failures filed twice**, from the GAM-345 run
+  rather than the GAM-342 one. Commented rather than closed — an agent should
+  not close a row it did not work (item 28e). Recommended as a duplicate of this
+  one.
+- **Deliberately NOT filed:** the `capture()` ids `21-student-hours-float` and
+  `25-parent-hours-float` now name behaviour their tests no longer assert. AC7
+  forbids the rename that would fix it (it orphans the committed PNG and creates
+  an untracked one), so a row of its own would be a row nobody could work — item
+  20's failure shape wearing the opposite hat.
+
+### Known residue, disclosed
+
+**The persona suite still exits 1**, at `36 passed / 2 failed`. That is expected
+and is not this row's work: the two failures are `GAM-368` always, plus exactly
+one leg of `GAM-367`'s coupled pair. All 5 tests in `coach-meeting.spec.ts` and
+all 7 in `student-parent.spec.ts` are green in isolation and inside the full
+suite. Anyone reading "the suite is not green" as a regression from this branch
+should read `GAM-367` and `GAM-368` first.
+
+The environment findings this run hit are all already filed and were not
+re-filed: **GAM-350** (`playwright` unresolvable from a clean checkout),
+**GAM-351** (`vite preview` binds IPv6-only while the config polls `127.0.0.1`
+— this is what makes `webServer` time out at 180s), **GAM-362**/**GAM-365**
+(the eslint/`playwright-report` interaction).
