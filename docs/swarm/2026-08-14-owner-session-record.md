@@ -41,30 +41,39 @@ Four of the seven E2E workflow rows are done (W1–W4). W5–W7 remain.
 ## 2. Twelve of sixteen pull requests were opened by hand, and that was the session's main job
 
 Of the sixteen, the session opened twelve. Three of those were its own work end to end (#172, #180,
-#185). **The other nine were finished dispatched runs that could not open their own pull request** — the
-run completes its chain, pushes its branch, writes its PR body to `docs/swarm/active/GAM-nnn-pr-body.md`,
-and stops there. Each time, a human had to notice and ask.
+#185). **The other nine were dispatched-run work the session had to deliver.** Eight of those stranded at
+the same wall — the run completes its chain, pushes its branch, writes its PR body to
+`docs/swarm/active/GAM-nnn-pr-body.md`, and stops there. The ninth, GAM-344, never reached that wall: it
+was killed at the timeout instead. Each time, a human had to notice and ask.
 
 **The convention that made this cheap emerged on its own.** No row asked runs to preserve a PR body;
 stranded runs did it anyway. Eight such artifacts are on disk — GAM-271, 283, 299, 305, 342, 343, 345,
-355 — and each of those bodies was published verbatim. **The ninth, GAM-344, had no artifact**: that run
-was killed at the timeout twice, so its body was re-derived from the MAJOR recorded in its run log. The
-convention held nine times out of nine only because the ninth failure mode was survivable, not because
-the artifact is guaranteed.
+355 — one for each run that stranded, and each of those bodies was published verbatim. **GAM-344 had no
+artifact**, because it died before writing one; its body was re-derived from the MAJOR recorded in its
+run log. So the convention is eight for eight where it applies, and the one gap was covered only because
+that failure mode happened to leave a run log behind. Nothing guarantees the artifact.
 
-**GAM-333 is incomplete, and the session did not update it.** Its premise is that a dispatched run
-*cannot* open a PR. Measured across this session, four runs opened their own: #169 (08-12 16:23Z), #170
-(16:53Z), #171 (18:00Z), **#182 (08-14 04:35Z)** and **#184 (10:31Z)** — five, in fact — while the nine
-above stranded.
+**GAM-333 was incomplete; the session has since updated it.** Its premise is that a dispatched run
+*cannot* open a PR. **Five opened their own** — #169 (08-12 16:23Z), #170 (16:53Z), #171 (18:00Z), #182
+(08-14 04:35Z) and #184 (10:31Z) — against **eight that stranded at the wall.** (The ninth hand-opened
+PR, GAM-344, is not evidence either way: that run was killed at the timeout and never reached PR time.)
 
 **The draft of this record claimed those failures occupied a clean window (08-12 21:28Z → 08-14 05:22Z);
 checking the timestamps before committing falsified it.** #182 was opened by `claude[bot]` at 08-14
 04:35Z, inside that window, 58 minutes after #181 stranded and had to be opened by hand. Two consecutive
 runs, opposite outcomes, under an hour apart. **So the deciding variable is not time** — not a credential
-that lapsed and was later renewed — **it is something that differs per run.** The App installation token
-versus the PAT a run shells out with remains the most plausible candidate, and it is now a sharper
-hypothesis than the row carries. **That is a cheaper fix than the one GAM-333 proposes, and the row does
-not know about it yet.**
+that lapsed and was later renewed — **it is per-run.**
+
+**Reading the workflow then narrowed it to three lines.** Authorship is the tell: `CLAUDE_PR_TOKEN` is a
+human PAT, so a PR opened with it would author as the owner and be indistinguishable from a hand-opened
+one. Every success authored as `claude[bot]`, an App identity — so the working path is definitively not
+the PAT. In `claude-linear-dispatch.yml`, `:115` grants `id-token: write` for the action's own GitHub App
+auth (the path that works); `:137` sets `GH_TOKEN` to `secrets.CLAUDE_PR_TOKEN || github.token`, so a run
+that shells out to `gh` gets the PAT and the measured 403; and `:113` does grant `pull-requests: write`,
+but that governs `GITHUB_TOKEN`, which the `||` shadows whenever the PAT is set. **That last line is why
+the permission block looks correct and runs still fail.** The outcome therefore depends on which
+mechanism a run reaches for at the last step, with nothing telling it which to prefer. GAM-333 now
+carries this.
 
 ---
 
@@ -123,9 +132,20 @@ that window — 58 minutes after the run before it stranded. The same pass found
 merged pull requests, #176 and #184, and that section 2's "nothing had to be reconstructed" was false
 because GAM-344's body was reconstructed.
 
-The pattern in all five: a plausible mechanism asserted from partial evidence, when the full evidence was
-one query away. The fifth is the most useful of them, because it was caught — by running on this document
-the check the document spends its length arguing for, before it was committed rather than after.
+**Declaring two correct rows wrong, in section 7 of this document.** The first published version said
+"GAM-350 and GAM-372 are both wrong", citing two environments as disproof. Reading the two rows in order
+to correct them showed there was nothing to correct. GAM-350 never mentions dispatched containers — its
+subject is the `package.json` declaration, re-measured true. GAM-372 names the dispatched container in
+its own title, and the symlink cited against it was made in a different container, where the paths it
+calls absent are present. The third citation, GAM-371's `npm install --no-save playwright`, is the same
+class of workaround GAM-372 recommends. **All three were evidence from one environment treated as
+decisive about another.** Corrected in section 7 above; filed as GAM-380.
+
+The pattern in all six: a plausible mechanism asserted from partial evidence, when the full evidence was
+one query away. The last two are the most useful, because both were caught by running on this document
+the check the document spends its length arguing for — the fifth before it was committed, the sixth only
+after it had shipped, and only because acting on the false claim required reading the rows it was about.
+**A wrong claim survives exactly as long as nobody tries to use it.**
 
 ---
 
@@ -178,10 +198,25 @@ decision and the tier declaration at once; only `ci.yml` survived, because it al
 The outcome is measured; the branch-protection configuration was not readable from the session and is not
 claimed.
 
-**GAM-350 and GAM-372 are both wrong** and should be corrected before either is actioned. Both rest on
-"the e2e runner cannot run in a dispatched container". Two independent environments disproved it this
-session — GAM-371's run with `npm install --no-save playwright`, and this session with a symlink to the
-global install.
+**GAM-350 and GAM-372 are both correct as filed** — an earlier version of this section said they were
+both wrong, and that was this session's sixth error (§ 4). Neither rests on "the e2e runner cannot run in
+a dispatched container": GAM-350's subject is the `package.json` declaration, and GAM-372 scopes its
+claim to a dispatched container in its own title.
+
+**The useful finding underneath is an environment split.** Measured 2026-08-14:
+
+| | dispatched GitHub Actions runner | Claude Code Remote interactive container |
+| -- | -- | -- |
+| `/opt/node22/lib/node_modules` | absent | **present**, contains `playwright` |
+| `/opt/pw-browsers` | absent | **present**, `PLAYWRIGHT_BROWSERS_PATH` set to it |
+| `playwright` in `package.json` / `node_modules` | absent | absent — identical, and GAM-350's subject |
+
+Running `measure.cjs` in the interactive container resolves `playwright` and launches Chromium; it exits
+2 only on page load, not on the `Cannot resolve playwright…` GAM-372 reports. **So GAM-372's warning not
+to replace one hardcoded environment with another is load-bearing, not cautious** — a scratch
+`playwright-core` rig would fix the dispatched runner and break the container where the owner's own
+sessions and premise gates run. The fallback chain is the only acceptable shape, and two of its three
+positions are each known to win somewhere real.
 
 **`tests/e2e/**` is wired into no GitHub Actions workflow.** GAM-371 widened the overflow guard from 412px
 to 320px, which is correct and necessary — but neither the old nor the new project can fail a pull
@@ -201,7 +236,13 @@ the packets. On GAM-305, GAM-345, GAM-355 and GAM-271, the thing that changed th
 measurement contradicting something already written down and believed — usually by the person who had
 just written it.
 
-The corollary is the session's own failure mode: **five wrong calls, every one a plausible mechanism
-asserted before the cheap check was run** — the fifth inside this file, caught only because the check was
-finally run on it too. The same discipline the process applies to code was applied inconsistently to the
-session's own reasoning about process, and the fix is not more care. It is running the query.
+The corollary is the session's own failure mode: **six wrong calls, every one a plausible mechanism
+asserted before the cheap check was run** — two of them inside this file, caught only because the check
+was finally run on it too. The same discipline the process applies to code was applied inconsistently to
+the session's own reasoning about process, and the fix is not more care. It is running the query.
+
+The sixth is the one to keep. It shipped in the first published version of this record, in the section
+listing what a future reader should act on, and it told that reader to rewrite two correct rows. It
+survived gates, review and merge, because none of those check whether a claim about a Linear row is true.
+**It was caught only when someone tried to act on it** — which means the document's real safeguard is not
+its own care but the fact that its claims eventually get used.
