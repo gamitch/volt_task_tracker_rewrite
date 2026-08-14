@@ -626,6 +626,204 @@ describe('makeOnEndMeeting', () => {
 });
 
 // ---------------------------------------------------------------------------
+// GAM-338 -- `makeOnEndMeeting` retry idempotency, outcome-provable against a
+// semantic fake `attendance` table, not call-shape. Criterion 10 above (and
+// criterion 5's concurrency proof) only prove no *throw* on a second call --
+// they use `makeMutationRecordingClient`, which records call arguments and
+// resolves whatever `MutationResult` the test hands it, so it cannot show
+// what a real Postgrest server would have done to the ROW. Removing
+// `ignoreDuplicates: true` (`endMeeting.ts:405`) or the `.is('check_out_at',
+// null)` guard (`endMeeting.ts:417`) leaves every existing assertion green,
+// because none of them models `ON CONFLICT` or the guard's filtering
+// semantics -- only what is recorded here can turn red for either mutation.
+// Same "physical fake table" discipline the T197 section above already
+// established for `makeOnEditAttendance`.
+// ---------------------------------------------------------------------------
+
+interface FakeEndMeetingAttendanceRow {
+  session_id: string;
+  student_id: string;
+  status: AttendanceStatus;
+  method: 'qr' | 'coach' | 'import';
+  recorded_by: string | null;
+  check_in_at: string | null;
+  check_out_at: string | null;
+}
+
+type AttendanceFilter =
+  | { type: 'eq' | 'is'; column: string; value: unknown }
+  | { type: 'in'; column: string; value: unknown[] };
+
+function rowMatchesFilters(
+  row: FakeEndMeetingAttendanceRow,
+  filters: AttendanceFilter[],
+): boolean {
+  return filters.every((filter) => {
+    const cell = (row as unknown as Record<string, unknown>)[filter.column];
+    return filter.type === 'in' ? filter.value.includes(cell) : cell === filter.value;
+  });
+}
+
+/**
+ * Models the two pieces of real Postgrest semantics this task's mutation
+ * targets, against a small in-memory `attendance` table:
+ *   - `.upsert(rows, { onConflict, ignoreDuplicates })` -- when a row with a
+ *     matching `(session_id, student_id)` already exists, `ignoreDuplicates:
+ *     true` leaves it byte-for-byte untouched (ON CONFLICT DO NOTHING); a
+ *     falsy value overwrites it (what the mutation under test produces).
+ *   - `.update(patch)` with chained `.eq()`/`.in()`/`.is()` -- the patch only
+ *     applies to rows matching EVERY accumulated filter, so a dropped
+ *     `.is('check_out_at', null)` (source-side, not modeled here) makes the
+ *     filter list shorter and the row match unconditionally.
+ * `event_sessions` is not modeled beyond resolving success -- neither test
+ * below asserts on session status.
+ */
+function makeSemanticEndMeetingClient(initialAttendanceRows: FakeEndMeetingAttendanceRow[]): {
+  client: SupabaseClient;
+  attendanceRows: FakeEndMeetingAttendanceRow[];
+} {
+  const attendanceRows = initialAttendanceRows.map((row) => ({ ...row }));
+
+  function makeUpdateChain(applyPatch: (row: FakeEndMeetingAttendanceRow) => void) {
+    const filters: AttendanceFilter[] = [];
+    const chain: Record<string, unknown> = {};
+    chain.eq = (column: string, value: unknown) => {
+      filters.push({ type: 'eq', column, value });
+      return chain;
+    };
+    chain.in = (column: string, value: unknown[]) => {
+      filters.push({ type: 'in', column, value });
+      return chain;
+    };
+    chain.is = (column: string, value: unknown) => {
+      filters.push({ type: 'is', column, value });
+      return chain;
+    };
+    chain.then = (
+      onFulfilled: (value: MutationResult) => unknown,
+      onRejected?: (reason: unknown) => unknown,
+    ) =>
+      Promise.resolve()
+        .then(() => {
+          for (const row of attendanceRows) {
+            if (rowMatchesFilters(row, filters)) applyPatch(row);
+          }
+          return { data: null, error: null } as MutationResult;
+        })
+        .then(onFulfilled, onRejected);
+    return chain;
+  }
+
+  const fromSpy = vi.fn((table: string) => {
+    if (table === 'attendance') {
+      return {
+        upsert: (
+          rows: FakeEndMeetingAttendanceRow[],
+          opts: { onConflict: string; ignoreDuplicates?: boolean },
+        ) => ({
+          then: (
+            onFulfilled: (value: MutationResult) => unknown,
+            onRejected?: (reason: unknown) => unknown,
+          ) =>
+            Promise.resolve()
+              .then(() => {
+                for (const incoming of rows) {
+                  const existing = attendanceRows.find(
+                    (row) =>
+                      row.session_id === incoming.session_id &&
+                      row.student_id === incoming.student_id,
+                  );
+                  if (existing) {
+                    if (!opts.ignoreDuplicates) Object.assign(existing, incoming);
+                    // ignoreDuplicates: true -- ON CONFLICT DO NOTHING, existing row untouched.
+                  } else {
+                    attendanceRows.push({ check_in_at: null, check_out_at: null, ...incoming });
+                  }
+                }
+                return { data: null, error: null } as MutationResult;
+              })
+              .then(onFulfilled, onRejected),
+        }),
+        update: (patch: Partial<FakeEndMeetingAttendanceRow>) =>
+          makeUpdateChain((row) => Object.assign(row, patch)),
+      };
+    }
+    if (table === 'event_sessions') {
+      return {
+        update: () => ({
+          eq: () => ({
+            then: (
+              onFulfilled: (value: MutationResult) => unknown,
+              onRejected?: (reason: unknown) => unknown,
+            ) => Promise.resolve({ data: null, error: null } as MutationResult).then(onFulfilled, onRejected),
+          }),
+        }),
+      };
+    }
+    throw new Error(`unexpected table: ${table}`);
+  });
+
+  return { client: { from: fromSpy } as unknown as SupabaseClient, attendanceRows };
+}
+
+describe('makeOnEndMeeting retry idempotency (GAM-338) -- outcome-provable against a semantic fake table', () => {
+  it('mutation: ignoreDuplicates:true means a retry never re-marks a student whose row was corrected in between -- ON CONFLICT DO NOTHING, not DO UPDATE', async () => {
+    const { client, attendanceRows } = makeSemanticEndMeetingClient([]);
+    const onEndMeeting = makeOnEndMeeting(() => client);
+
+    // Clean run: no row exists yet for the marked student, so the upsert inserts one.
+    await onEndMeeting(SAMPLE_PAYLOAD);
+    expect(attendanceRows.filter((row) => row.student_id === 'student-mark-a')).toHaveLength(1);
+    expect(attendanceRows.find((row) => row.student_id === 'student-mark-a')).toMatchObject({
+      status: 'absent',
+      method: 'coach',
+      recorded_by: null,
+    });
+
+    // Between the coach's first (ambiguous) attempt and their retry, a real
+    // correction lands through the edit-attendance path: the student
+    // actually WAS present.
+    const corrected = attendanceRows.find((row) => row.student_id === 'student-mark-a')!;
+    corrected.status = 'present';
+    corrected.method = 'qr';
+    corrected.recorded_by = 'coach-real-9';
+
+    // The coach retries the SAME End Meeting action.
+    await onEndMeeting(SAMPLE_PAYLOAD);
+
+    // The on-screen promise is that nothing is recorded twice -- which
+    // includes not silently reverting a correction that landed in between.
+    expect(attendanceRows.filter((row) => row.student_id === 'student-mark-a')).toHaveLength(1);
+    expect(attendanceRows.find((row) => row.student_id === 'student-mark-a')).toMatchObject({
+      status: 'present',
+      method: 'qr',
+      recorded_by: 'coach-real-9',
+    });
+  });
+
+  it('mutation: .is(check_out_at, null) means a retry never overwrites a checkout stamp already set for a different reason', async () => {
+    const { client, attendanceRows } = makeSemanticEndMeetingClient([
+      {
+        session_id: SAMPLE_PAYLOAD.sessionId,
+        student_id: 'student-checkout-b',
+        status: 'present',
+        method: 'qr',
+        recorded_by: null,
+        check_in_at: '2026-07-31T00:05:00.000Z',
+        // Already checked out for a real reason unrelated to this call --
+        // distinct from SAMPLE_PAYLOAD.endsAt so an overwrite is observable.
+        check_out_at: '2026-07-31T01:58:00.000Z',
+      },
+    ]);
+    const onEndMeeting = makeOnEndMeeting(() => client);
+
+    await onEndMeeting(SAMPLE_PAYLOAD);
+
+    expect(attendanceRows[0].check_out_at).toBe('2026-07-31T01:58:00.000Z');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Criteria 11-12 -- `makeOnEditAttendance`.
 // ---------------------------------------------------------------------------
 
