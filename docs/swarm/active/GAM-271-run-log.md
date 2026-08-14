@@ -167,3 +167,25 @@ and 31527801235, and it is the thing this wording exists to make unmistakable.
   (item 20 follow-ups owed); and `tests/e2e/public-routes.spec.ts:62-73`
   **already** asserts no overflow on `/login` in a real browser, blind here only
   because its narrowest project is Pixel 7 at 412px.
+- **2026-08-14 05:31Z — replayed the gate's central claim myself before acting
+  on it** (worktree `/tmp/gam271-v2`, :5175, item 23; torn down after).
+  Line 272 alone, Card untouched: overflow **0 / 0 / 0 / 0 / 0** at
+  320/360/375/390/414, card rect **320/360/375/390/400**, **400px at
+  768/1280/1920**, reset panel 0 overflow at 320/390 with the card back to 400
+  at 414/1280. Identical to the two-line form in every cell. **The gate was
+  right and my claim was wrong.** Separately confirmed `npx eslint .` on this
+  branch point: **0 errors / 378 warnings** — so the packet's "364" really was
+  stale, quoted from `RESUME-HERE.md:110` dated 2026-08-04.
+- **2026-08-14 05:34Z — packet revision 2 written.** Prescription reduced to
+  **one line**; T072 pattern preserved rather than inverted; eslint baseline
+  corrected to 378; the dead measurement route and its working replacement
+  named explicitly for the worker; least-confident #3 corrected with the gate's
+  banner-state numbers; in-repo precedent cited; three follow-up families
+  recorded for item 20 filing.
+- **2026-08-14 05:35Z — DISPATCHED `checker-premise` round 2** on packet
+  revision 2, via `SendMessage` to the same agent so it re-reads its own round-1
+  findings with context intact. This is the **second and final** round — item
+  19a caps the gate at two, and a third REVISE escalates to the human owner
+  rather than looping. Dispatched blocking; this line is written before the wait.
+  **If this line is the last one in this file, the run died holding this
+  subagent.**
