@@ -106,3 +106,37 @@ a dispatched run hits".
   triggered.
 - **2026-08-14 10:36Z — packet revised for round 2** (all 8 required revisions
   applied), three item-20 follow-ups queued for filing.
+- **2026-08-14 10:40Z — `checker-premise` round 2 DISPATCHED**, blocking
+  (`run_in_background: false`). **If this line is the last one in this file, the
+  run died holding this subagent.**
+- **2026-08-14 10:53Z — `checker-premise` round 2 VERDICT: DISPATCH.** Severity
+  ceiling MINOR (2 MINOR-with-teeth, 4 MINOR, 3 NIT; no BLOCKER, no MAJOR).
+  115K tokens, 58 tool calls. Reused the round-1 worktree rather than paying for
+  a second `npm ci`. All eight revisions verified as landed; the two wrong
+  citations are gone from the packet everywhere (`grep` exit 1). Every round-2
+  line number I asked it to check came back exact except four off-by-ones.
+  **The gate found a false claim in my own round-2 text**, which is the point of
+  a second round: §1 said an inverted row emits a `VEVENT` with `DTEND` before
+  `DTSTART`. It does not — `ical-generator@11` calls `swapStartAndEndIfRequired()`
+  in `toString()`, measured against the real package with round 1's own inverted
+  payload. The harm surface is real (subscribers get a silently swapped span,
+  zero-length on the DST date) but my mechanism was wrong, and I had labelled it
+  "measured". Graded MINOR rather than MAJOR only because, unlike round 1's
+  metric error, nothing rests on it — not the tier, not the scope, not an AC.
+  **Ruling on LCD #6, which I will act on: `Passed`, not `Partial`.** Item 27 is
+  scoped to a surface reading a fixture or stub; this dialog writes real rows.
+  The unguarded outreach dialog is a *different surface*, and treating it as
+  item 27 would turn that item into a horizontal-completeness rule its own text
+  forbids. Two conditions attached: the outreach follow-up must be a real filed
+  row before this one moves, and the closing note must state the narrowed claim.
+  LCD #7 SOUND (leave the residual path; my "breaks T611" justification was
+  overstated). LCD #8 SOUND, and for a better reason than I gave — an ICS
+  assertion would have asserted the falsehood in finding 1.
+  AC 4c confirmed **satisfiable and discriminating**: measured in create mode,
+  a 07:00–08:00 session on 2026-03-08 is accepted today, passes under the
+  prescribed wall-clock compare and goes **red** under a UTC one. Past dates are
+  pickable with no clock manipulation, so it is cheap to write.
+  Five text corrections folded in without a third round (item 19a: a third
+  REVISE escalates, and the gate explicitly separated "must fix before a worker
+  reads §1" from "a checker can catch later").
+- **2026-08-14 10:56Z — five fold-in corrections applied; packet is DISPATCHABLE.**
