@@ -140,3 +140,7 @@ subagent** — that is the failure shape the constitution's delegation rule and
   (`coach-meeting.spec.ts`, `student-parent.spec.ts`), seven acceptance
   criteria, five declared least-confident decisions (item 19d). No `src/**` in
   scope: every underlying fix has already shipped.
+- **DISPATCHED `checker-premise`** on `docs/swarm/active/GAM-355-packet.md`
+  (round 1 of the two-round cap, item 19a), `run_in_background: false`.
+  *If this line is the last one in this file, the run died holding this
+  subagent* — no verdict was ever seen, and nothing below it happened.
