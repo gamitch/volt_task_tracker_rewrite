@@ -356,3 +356,39 @@ subagent** — that is the failure shape the constitution's delegation rule and
   its own measurements. `run_in_background: false`.
   *If this line is the last one in this file, the run died holding this
   subagent.*
+- **`checker-reviewer` re-check VERDICT: PASS, nothing outstanding.** Verdict
+  seen and recorded — the dispatch above did not orphan. No BLOCKER, no MAJOR,
+  no MINOR; the two round-1 NITs stand.
+
+  **It refused to accept the worker's proof and ran its own — and found a hole
+  in it.** The worker mutated only `StudentHome.tsx`. `ParentHome.tsx` carries
+  a *separate copy* of the same format string, so that run could not have
+  exercised the parent-side guard at all; the worker's single reported failure
+  demonstrated one surface and implied two. The checker halved both files in
+  its own worktree and got both tests red at their own new lines — `:56` and
+  `:150`, `Expected "4.0" / Received "2.0"`. The parent guard is independently
+  live. This is exactly why a worker may not certify its own work.
+
+  It also noticed what the mutated render was: `2.0 / 100.0 h (4%)`, which
+  **still satisfies both pre-existing assertions**. The failure landing on the
+  new line and only the new line is direct evidence the addition carries the
+  teeth rather than duplicating a check.
+
+  On the flakiness question I raised: it did not assume the two rounding paths
+  agree, it read the view. `v_student_goal_projection.confirmed_hours` is a
+  `COALESCE` of the very column `confirmedHours()` reads (side-by-side query for
+  Priya: identical `3.9999990788888889`), so both sides parse one canonical
+  numeric to the same double and call the same `toFixed(1)`. No `.05` boundary
+  hazard, because a boundary can only bite if the inputs differ.
+
+  Final measurements: `tsc --noEmit` exit 0; isolation `7 passed`, exit 0; full
+  suite `36 passed / 2 failed`, exit 1, failures being the documented pair
+  only. **Definition of Done items 1-3 satisfied** — worker produced the change,
+  a separate checker validated the actual artifact, evidence recorded.
+
+  Follow-up disposition it recommended, which I accept: its round-1 follow-up
+  #1 is **closed** by `6d1e7bf` and must not be filed; NIT 1 (the misleading
+  "lists every team" title) gets its own low-priority row; NIT 2 (the
+  `…-float` capture ids) is **dropped** rather than filed, because AC7
+  deliberately forbids the rename that would close it — a row nobody may work
+  is item 20's failure shape wearing the opposite hat.
