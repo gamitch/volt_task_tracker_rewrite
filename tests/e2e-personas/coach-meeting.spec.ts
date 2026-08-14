@@ -97,17 +97,17 @@ test.describe('MTG-02 Schedule meetings dialog', () => {
       'Select all',
       'Volt Robotics 9911',
       'Volt Junior 4402',
-      // Regression guard for FINDING 1: this team is `archived = true` in the
-      // database and is still offered here, pre-selected. If a fix lands that
-      // filters archived teams out of the scope picker, this line is the one
-      // to delete — the assertion records today's behaviour, it does not
-      // bless it.
-      'Volt Legacy 2201',
+      // Regression guard for GAM-305: `Volt Legacy 2201` is `teams.archived =
+      // true` in `seed.sql` and is filtered out of this list. The exclusion
+      // happens at `ScheduleMeetingsDialog.tsx:854-855` and `:861` —
+      // `excludeArchivedTeams` narrows `allTeamIds`, which seeds the initial
+      // `selectedTeamIds`. (`:885` does the opposite — it re-includes an
+      // archived team that is already selected — and `:1236` renders such a
+      // team disabled; neither of those is the reason this option is absent.)
     ]);
     await capture(page, '11-coach-team-scope-open');
 
     await page.getByRole('option', { name: 'Volt Junior 4402' }).click();
-    await page.getByRole('option', { name: 'Volt Legacy 2201' }).click();
     await page.keyboard.press('Escape');
     await expect(scope).toHaveText('Volt Robotics 9911');
   });
@@ -123,7 +123,6 @@ test.describe('MTG-02 Schedule meetings dialog', () => {
     const scope = dialog.getByRole('combobox').first();
     await scope.click();
     await page.getByRole('option', { name: 'Volt Junior 4402' }).click();
-    await page.getByRole('option', { name: 'Volt Legacy 2201' }).click();
     await page.keyboard.press('Escape');
 
     const dateField = dialog.getByRole('combobox', { name: /^Date/ });
