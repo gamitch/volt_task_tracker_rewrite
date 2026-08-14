@@ -270,3 +270,32 @@ and 31527801235, and it is the thing this wording exists to make unmistakable.
     (baseline 9, +0). **VERDICT: PASS — all six.** These figures match the
     worker's and the premise gate's independently, which is the point of three
     agents running them rather than one quoting another.
+- **2026-08-14 06:25Z — four follow-ups filed to Linear `Backlog`** under item
+  20 (a deferral files a task, not a comment), each written through the
+  `linear-task-writing` skill per item 30 rather than from memory, and each with
+  its line numbers re-verified against current `main` before writing:
+  - **GAM-370** — the same overflow on three more full-screen cards.
+    I measured `/accept-invite` myself rather than inheriting the gate's figure:
+    **40 / 20 / 13 / 5 / 0** at 320/360/375/390/414, card at 400px, content
+    present. `AccessDeniedPage.tsx:90` and `NoAccessPage.tsx:313` are recorded as
+    **reasoned, not measured** — `guards.tsx` renders them in place rather than
+    routing them, so they need an authenticated session with a pending/denied
+    role that this container cannot produce. `CheckinResult.tsx:740` likewise
+    (auth-gated, and it uses `width={420}` so it needs its own measurement).
+  - **GAM-371** — `public-routes.spec.ts:62-73` already asserts no horizontal
+    overflow on `/login` in a real browser and **stayed green through this
+    entire bug**, because its narrowest project is Pixel 7 at 412px and the card
+    was 400. A narrow project there provably reddens pre-fix.
+  - **GAM-372** — the `layout-measurement` skill's three false environment
+    facts. **Checked for a duplicate before filing and found a near-miss:**
+    `GAM-350` reports the persona suite importing an undeclared `playwright`.
+    Same root cause, different artifact, and fixing GAM-350 alone would not
+    close GAM-372 because `measure.cjs` also hardcodes the browser path. Both
+    rows now say so; GAM-372 carries the cross-link.
+  - **GAM-373** — re-measure T072's `LiveConsole.tsx:1277`, the single site
+    changed to satisfy a convention this run showed to be conditional on the
+    parent. Lowest priority of the four; "no change needed" is the likely and
+    acceptable outcome.
+- **2026-08-14 06:30Z — verification-log entry written** (item 24). No ledger
+  row: item 29 freezes `task-ledger.md` and forbids editing a Status there for
+  new work, even for a row carrying a legacy `Tnnn`.
