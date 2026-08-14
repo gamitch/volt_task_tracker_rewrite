@@ -179,3 +179,33 @@ a dispatched run hits".
 - **2026-08-14 11:22Z — `checker-reviewer` DISPATCHED**, blocking
   (`run_in_background: false`). **If this line is the last one in this file, the
   run died holding this subagent** and the work is unreviewed.
+- **2026-08-14 11:32Z — `checker-reviewer` VERDICT: PASS.** 3 NITs, no BLOCKER,
+  no MAJOR, no MINOR. 74K tokens, 45 tool calls. All eight §6 criteria PASS.
+  **It ran rather than read (item 26), and went past its brief:** it replayed
+  the worker's mutation *and ran four more the worker never did*.
+  - A (worker's) `<=`→`>=`: exit 1, 16 failed, AC1 red — reproduced independently.
+  - **B (the one I asked for): delete the `endTimeError` clause from the CREATE
+    branch only → exit 1, both AC4b tests red.** This was the MAJOR risk — that
+    create gating could be deleted with the suite staying green. It cannot.
+  - C: same deletion on the EDIT branch only → exit 1, AC1 + AC2 red.
+  - D: delete the `status` prop → exit 1, 4 red. This proves the error copy
+    actually originates from the End field's own `status`.
+  - E: delete `min={startTime}` → **94/94 green**. `min` is untested — but
+    packet §3.5 forbids the natural test for it (it silently reverts on blur),
+    so this is a disclosed gap, not an omission. Logged as NIT-2.
+  Test diff verified **271 insertions, 0 deletions** — no original test was
+  weakened, deleted or rewritten; 82 + 12 = 94.
+  It also **resolved the gate-6 baseline the worker honestly declined to quote**,
+  measuring the directory baseline itself (348 → 360, +12, matching the 12 added
+  `it()` blocks). Six gates green at `329193d` with `--require-clean`.
+  **Item 27 ruling: `Passed`, not `Partial` — agreed, and traced rather than
+  asserted.** It followed the real prop chain `MeetingsList.tsx:2947-2948` →
+  `:2979-2980` → `:2497/:2516` into the one rendered dialog: real loaders, no
+  fixture or stub on the user's path.
+  NITs (constitution: NIT passes and is logged only): (1) error-copy assertions
+  use `container.textContent` rather than scoping to the End field — mutation D
+  covers the gap in practice; (2) `min` untested, as above; (3) the helper's
+  doc comment has the `hasSeconds` rationale backwards — minutes-since-midnight
+  *drops* seconds rather than preserving them. The function is correct either
+  way and degrades in the conservative direction. NIT 3 is inherited from my own
+  packet §3.1 wording, not the worker's.
