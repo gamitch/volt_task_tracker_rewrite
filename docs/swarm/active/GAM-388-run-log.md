@@ -134,3 +134,48 @@ code half only; deploy half escalated to the owner.
   subagent** — the packet was written, no worker was ever dispatched, and no
   source file was modified. Resume by re-reading the packet and re-running the
   gate; nothing is half-applied.
+
+- **checker-premise VERDICT: REVISE** — 2026-08-14, round 1. Subagent returned;
+  the run did not die holding it. 2 MAJOR, 6 MINOR, 1 NIT, **no BLOCKER**. The
+  gate ran rather than read: it created its own worktree (`/tmp/pcheck-388`,
+  item 23), `npm ci`'d, **implemented the whole prescription**, ran
+  `tsc --noEmit` (0), `eslint` (0) and the **full suite (95 files / 2463 tests,
+  all green)**, wrote a probe test per acceptance criterion, and **executed the
+  packet's named mutation**. It removed its worktree and left the shared tree
+  clean.
+
+  **The central discriminator survived** — explicitly "sound and needs no
+  change; do not re-derive it". Exhaustively confirmed: only three 404 emitters
+  exist in `supabase/functions/**` (`checkin-token:424`, `checkin:169`,
+  `send-invite:172`), all via `errorResponse`; `ics`, `send-reminders` and
+  `linear-dispatch` have no 404 path; `handleCheckinTokenRequest` has no
+  top-level `try` so an unhandled throw is a 500, not a 404; `OPTIONS` returns
+  200 and `invoke` never sends it. So no *deployed* function can emit a 404 that
+  fails `isEdgeFunctionErrorBody`.
+
+  **MAJOR 1 — my named mutation's stated outcome was false, and it was measured
+  false.** Deleting the `status === 404` narrowing turns criterion 1 red but
+  leaves criterion 4 **green** (`1 failed | 30 passed`), because criterion 4
+  stubs the loader seam and never traverses `toEdgeFunctionError`. Replaying it
+  faithfully, I would have seen a green test my own packet condemns and sent a
+  correct implementation into rework. This is exactly the failure item 26's
+  "a gate that runs is worth much more than one that reads" predicts.
+
+  **MAJOR 2 — the shared error copy was written for the wrong audience.**
+  `invokeEdgeFunction` is not kiosk-only: `InviteParentDialog.tsx:366`,
+  `StudentsTab.tsx:1235` and `loaders/invites.ts:237` also call it, and
+  `InviteParentDialog.tsx:477-483` renders `SupabaseLoaderError.message`
+  verbatim on a **coach/admin-only** screen. My prescribed string told a coach
+  to "Tell a coach", and the packet mandated it verbatim so the worker could not
+  have fixed it.
+
+  Also corrected: `FunctionsError.context` is declared **`any`**, not
+  `Response` — my prescription compiles for the wrong reason and my hedge could
+  never fire (MINOR 1); the repo already has `isSupabaseLoaderError`
+  (`loader.ts:125-133`) so "a small type guard" invited a duplicate (MINOR 6);
+  criterion 4's "sole signal" was not a falsifiable predicate (MINOR 3); the
+  shared tree has **no `node_modules`**, so `gates.py` refuses with
+  `UNTRUSTWORTHY` until `npm ci` runs (MINOR 5); and the persona harness
+  (`tests/e2e-harness/server.mjs:503`) already returns a flat-bodied 404 for
+  `checkin-token`, so the new Banner will render there too (MINOR 2 — no
+  assertion breaks; Playwright is not one of the six gates).
