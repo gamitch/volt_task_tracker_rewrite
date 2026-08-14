@@ -35,3 +35,20 @@ so this file is the only thing that survives.
   writing any packet. If `student_teams` turns out to have a writer on current
   `main`, this row goes back to `Todo` with the measurement recorded, per the
   dispatch instructions.
+- **22:06Z — premise measured by the orchestrator, and it HOLDS.** Re-measured
+  against branch base `9d84bed` rather than trusted from the issue (item 30c):
+  (1) no `insert`/`upsert`/`update`/`delete` against `student_teams` anywhere in
+  `src/`, `supabase/functions/`, `scripts/` or any migration except the backfill
+  at `20260721000000_student_teams.sql:37` — the only application access is the
+  read at `students.ts:486`; (2) `makeCreateStudent` (`students.ts:274-295`) and
+  (3) `makeUpdateStudent` (`students.ts:302-324`) write `students.team_id` alone;
+  (4) `met01_explicit_marks.sql:109` is an INNER join on `left_on is null`, and
+  `st.team_id` also feeds the `e.team_ids` predicate at :113. **The run proceeds.**
+- **22:06Z — packet written** to `docs/swarm/active/GAM-340-packet.md`, carrying
+  two traps the issue text does not: **Trap A** — the PK is `(student_id,
+  team_id)` and the migration's own text says re-joining is an UPDATE of
+  `left_on`, so a plain insert raises a unique violation; **Trap B** — closing
+  every non-matching active membership would silently delete a *dual-team*
+  student's legitimate second team, converting a participation-gap fix into a
+  participation-loss bug. Five Least confident decisions declared (item 19d).
+  Allowed Files checked for `.github/workflows/**` at packet time: none present.
