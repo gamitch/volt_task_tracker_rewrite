@@ -183,3 +183,23 @@ so this file is the only thing that survives.
   It also confirmed the worker's "two-part mutation" was **not** an evasion: under
   the extracted helper, a one-line `.eq`→`.neq` swap would negate against the
   *previous* team, a different and weaker proof.
+- **23:20Z — five follow-up rows filed** (item 20), all `Backlog` +
+  `tier/unreviewed` per the `pr-body` skill's convention — a row created directly
+  in `Todo` is never dispatched, and promotion is the owner's signal. GAM-390
+  (missing-membership backfill, `gate/human`), GAM-391 (stale-membership
+  backfill, `gate/human`), GAM-392 (**Part 2**, the legacy RLS policy drop),
+  GAM-393 (the ordering-test gap the checker's M5 found), GAM-394 (eslint
+  baseline 377 → 379). GAM-392 exists so this row's closure does not lose Part 2.
+- **23:22Z — verification-log entry added** (item 24 — it lands with the merge).
+- **23:24Z — PR body written, validated, pushed. PR NOT opened: `HTTP 401 Bad
+  credentials` on both available credentials** — the GAM-333 wall, not a mistake
+  to retry. Body preserved verbatim at `docs/swarm/active/GAM-340-pr-body.md`;
+  `.claude/skills/pr-body/scripts/check.mjs` exits 0 on it. A human opens it with
+  one paste; the command is in the Linear comment.
+- **23:25Z — GAM-340 moved `In Progress → In Review`** (item 28e — never `Done`;
+  the merge closes it, not me), with a handover comment leading with the one
+  action needed. **Read back: `In Review`, `tier/heavy`.**
+- **23:25Z — RUN COMPLETE.** No subagent was in flight at any point when this
+  file was last written; every dispatch line above has a matching verdict line.
+  Work is at `74340f0`, everything is pushed, nothing lives only in this
+  container.
