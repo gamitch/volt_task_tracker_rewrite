@@ -60,4 +60,57 @@ can actually do follows in the premise gate below.
 
 ## Premise gate
 
-(entries appended below as they are measured)
+- **premise measured (orchestrator, run not read)** — 2026-08-14. Every claim
+  below was executed, not taken from the issue text.
+
+**1. The 404 is real, and it is a deployment fault — measured with two
+controls, so the result is informative rather than merely consistent.**
+
+| Probe (`POST …/functions/v1/<fn>`, no auth header) | Status |
+| -- | -- |
+| `checkin-token` | **404** |
+| `checkin` (positive control — deployed) | 401 |
+| `ics`, `send-invite`, `send-reminders`, `linear-dispatch` | 401 |
+| `nope-does-not-exist` (negative control — never existed) | **404** |
+
+The negative control is what makes this a measurement: an absent function and
+`checkin-token` are indistinguishable from outside, and every deployed function
+answers 401. Response bodies confirm the two channels are different systems:
+
+- gateway 404 → `{"code":"NOT_FOUND","message":"Requested function was not found"}`,
+  header `sb-error-code: NOT_FOUND`, `x-served-by: supabase-edge-runtime`
+- deployed 401 → `{"code":"UNAUTHORIZED_NO_AUTH_HEADER","message":"Missing authorization header"}`
+
+**2. The deploy half cannot be executed from this container, and that is a
+boundary, not an obstacle to route around.** Measured: `supabase` CLI **absent**;
+`SUPABASE_ACCESS_TOKEN`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_PASSWORD`,
+`SUPABASE_PROJECT_ID`/`_REF`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` all
+**absent**. `grep -rl "functions deploy" .github/` → **no match**, confirming the
+issue's root cause: nothing in CI deploys Edge Functions. This is the same shape
+as `AGENTS.md`'s § "Two walls a dispatched run hits" — the credential is withheld
+deliberately, so acceptance criteria **1, 2 and 3 are undeliverable here** and are
+handed over rather than faked.
+
+**3. A trap in the prescription, found before the packet was written.** The
+issue's criterion 4 proposes distinguishing a 404 from an empty session. **HTTP
+status alone cannot do it:** `supabase/functions/checkin-token/index.ts:424`
+makes the function return **404** itself for `SESSION_NOT_FOUND`. A discriminator
+keyed on `status === 404` would report "this feature was never turned on" every
+time a coach opened a kiosk URL for a deleted session — replacing one lie with a
+worse one. The sound discriminator is **status 404 *and* a body that is not in
+the deployed functions' `{ error: { code, message } }` shape**: every in-function
+404 goes through `errorResponse` (`index.ts:212-213`) and parses; the gateway's
+flat `{code,message}` does not. `functions.ts:136-142` already isolates exactly
+that "unparsable body" branch, so the seam exists and needs no new plumbing.
+
+**4. Call sites verified against current `main`** (item 19c — citations checked,
+not copied): `src/lib/supabase/loaders/kiosk.ts:368-372` invokes
+`'checkin-token'` and does **not** catch, so an error propagates;
+`src/pages/meetings/Kiosk.tsx:363-367` (`usePolling`) swallows every rejection
+into `setValue(null)`; `Kiosk.tsx:471-472,485` render `QR not available yet.` and
+`------` for both the empty and error cases. The issue cited `kiosk.ts:369` and
+`Kiosk.tsx ~202` — both correct (`Kiosk.tsx:201-206` is the module doc recording
+the deliberate decision; the code implementing it is at 363-367).
+
+**Verdict: premise HOLDS.** The bug is real and still present. Proceeding on the
+code half only; deploy half escalated to the owner.
