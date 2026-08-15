@@ -12574,3 +12574,81 @@ prose did, before the branch existed. Full detail in
   untouched. GAM-371's own issue text suggested covering `/accept-invite`'s
   overflow case "in the same pass" as optional scope; not taken here to keep
   the diff to the one project entry the issue sized this task at.
+
+---
+
+## GAM-340 — `student_teams` writer (Part 1)
+
+Tier **HEAVY** (item 26): a roster **write path** performing a destructive close
+(`left_on`), whose rows are **metric-view input** (`v_student_participation`
+INNER JOINs `student_teams`) and become **RLS input** once GAM-299's migration is
+applied. Worker on `model: "opus"` (item 18). Work at `74340f0`; three files, all
+inside Allowed Files, verified against the committed blob rather than the tree
+(item 21).
+
+### Premise gate (item 19) — two rounds, the cap
+
+**Round 1 `REVISE`** — 1 BLOCKER, 2 MAJOR, 3 MINOR, 2 NIT. The gate implemented
+the packet's own prescription in a throwaway worktree and ran the suite, which is
+what found the BLOCKER: `StudentsTab.test.tsx`'s two green T089 tests fail with
+`TypeError: client.from(...).upsert is not a function`, and that file was not in
+Allowed Files — a worker could not have fixed them. It also proved the packet's
+Trap B criterion **vacuous** by implementing the forbidden `.neq` design and
+watching the criterion pass for it.
+
+**Round 2 `DISPATCH`** — 4 MINOR, 2 NIT, all folded in before dispatch. Round 2
+**withdrew two of its own round-1 findings** after measuring them: the suggested
+step-2.4 guard changes final row state in zero of four reachable states, and the
+suggested "thread the previous team from the call site" cheaper path was measured
+to *re-create* the stale-membership defect this task exists to prevent.
+
+Premise independently re-measured on scratch PostgreSQL 16.14 with all 25
+migrations: membership-less student **0** participation rows, same student with a
+membership **1**. `§2a`'s `joined_on` claim measured through a real PostgREST
+container with the generated SQL captured, not taken from documentation.
+
+### Gates
+
+At `74340f0`, `--require-clean`: tsc **0** · vite build **0** · format:check
+**0** · eslint **0 errors / 379 warnings** (documented baseline says 377; measured
+**379 at base `9d84bed` content** too, so the drift predates this diff and this
+change adds zero — filed GAM-394) · vitest **95 files / 2476 tests** (baseline
+2458, **+18**) · scoped `src/lib/supabase/loaders/` **14 files / 253 tests**
+(baseline 235, **+18**). **All six, exit 0.** `StudentsTab.test.tsx` re-run
+separately: **34**, unchanged. Reproduced by `checker-reviewer` independently of
+the worker.
+
+### Mutations — 7, of which 4 were the checker's own
+
+Packet's three all reddened. The checker added four more in its own worktree
+(item 23) and one of them **found a real gap**: moving the previous-team read-back
+to *after* the `students` update leaves the **whole suite green**, though in
+production it would make `previousTeamId === payload.teamId` always and so
+silently disable every close. Shipped code is correct; the regression guard is
+not. Filed GAM-393.
+
+Recorded because it is the point of an independent checker: the gap was invisible
+to the packet's own criterion-9 set and visible to a checker that ran its own
+experiments.
+
+### Item 27 — connection, not render
+
+Traced `router.tsx:268` → `RosterShell.tsx:258` → `StudentsTab.tsx:1081-1082`
+(defaults to the real loaders) → `getSupabaseClient`. Real path, real client, no
+fixture. **Passed, not Partial.**
+
+### Filed, not fixed here (item 20)
+
+GAM-390 and GAM-391 (the two backfill populations, both `gate/human` under item
+16 — a code change cannot retroactively create memberships), GAM-392 (Part 2, the
+legacy RLS policy drop, excluded on the issue's own "do not ship these together"
+constraint), GAM-393 (the ordering-test gap above), GAM-394 (the eslint baseline
+figure). All in `Backlog` carrying `tier/unreviewed`.
+
+### Integration note
+
+**This run could not open its own pull request** — both available credentials
+returned `HTTP 401 Bad credentials` (the GAM-333 wall). The body is preserved
+verbatim at `docs/swarm/active/GAM-340-pr-body.md` and passes
+`.claude/skills/pr-body/scripts/check.mjs` (exit 0). A human opens the PR from
+that artifact with one paste. This log entry lands with the merge, per item 24.
