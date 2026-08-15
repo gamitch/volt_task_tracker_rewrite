@@ -4,10 +4,10 @@
 > **Linear is the source of truth; this is a backup so the history survives the account.**
 > **Edits here are lost on the next run and change nothing in Linear.**
 
-Exported 2026-08-15T06:17:52.299Z from team `Gamitch`.
+Exported 2026-08-15T21:52:18.166Z from team `Gamitch`.
 
-- **396** issues (242 archived)
-- **86** not yet completed or cancelled
+- **398** issues (242 archived)
+- **87** not yet completed or cancelled
 - 301 carry a legacy `Tnnn` id
 
 ## Open
@@ -100,6 +100,7 @@ Exported 2026-08-15T06:17:52.299Z from team `Gamitch`.
 | [GAM-394](https://linear.app/gamitch/issue/GAM-394/gate-run-skillmd-documents-377-standing-eslint-warnings-the-real) | — | Backlog | tier/unreviewed | `gate-run` SKILL.md documents 377 standing eslint warnings; the real figure is 379 |
 | [GAM-395](https://linear.app/gamitch/issue/GAM-395/deploy-the-checkin-token-edge-function-to-the-live-project-the-kiosk) | — | Backlog | Bug area/w1 gate/human tier/unreviewed | Deploy the checkin-token Edge Function to the live project — the kiosk QR and short code cannot work until it exists (owner-gated) |
 | [GAM-396](https://linear.app/gamitch/issue/GAM-396/nothing-in-ci-checks-that-supabasefunctions-matches-what-is-deployed) | — | Backlog | area/w1 gate/human tier/unreviewed | Nothing in CI checks that supabase/functions/ matches what is deployed, so a written-but-undeployed function drifts silently |
+| [GAM-398](https://linear.app/gamitch/issue/GAM-398/executor-routing-remains-inactive-until-the-accepted-guard-is-deployed) | — | Backlog | Improvement area/w1 provenance/other tier/heavy | Executor routing remains inactive until the accepted guard is deployed and its Linear labels are created |
 
 ## Closed and cancelled
 
@@ -415,5 +416,6 @@ Exported 2026-08-15T06:17:52.299Z from team `Gamitch`.
 | [GAM-376](https://linear.app/gamitch/issue/GAM-376/record-the-2026-08-14-owner-driven-session-what-landed-what-the) | — | Done | Record the 2026-08-14 owner-driven session: what landed, what the process caught, and where the session itself was wrong |
 | [GAM-380](https://linear.app/gamitch/issue/GAM-380/the-session-records-7-calls-gam-350-and-gam-372-both-wrong-both-are) | — | Done | The session record's §7 calls GAM-350 and GAM-372 "both wrong"; both are correct as filed and the disproof cited was misread |
 | [GAM-383](https://linear.app/gamitch/issue/GAM-383/no-pr-template-and-no-pr-body-skill-so-every-pr-body-re-derives-a) | — | Done | No PR template and no `pr-body` skill, so every PR body re-derives a shape the declaration gate already has opinions about |
+| [GAM-397](https://linear.app/gamitch/issue/GAM-397/todo-has-no-executor-route-so-codex-owned-issues-dispatch-claude) | — | Done | Todo has no executor route, so Codex-owned issues dispatch Claude |
 
 Full descriptions, relations and timestamps are in `linear-export.json`.
