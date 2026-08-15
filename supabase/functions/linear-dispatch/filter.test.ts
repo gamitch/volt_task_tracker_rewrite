@@ -12,9 +12,12 @@
 import assert from 'node:assert/strict';
 import {
   DEFAULT_TARGET_STATE,
+  EXECUTOR_LABEL_PREFIX,
   HUMAN_GATE_LABEL,
+  KNOWN_EXECUTOR_NAMES,
   KNOWN_TIER_NAMES,
   decideDispatch,
+  executorRoutingFromLabels,
   extractLabelNames,
   hasHumanGate,
   tierFromLabels,
@@ -296,6 +299,182 @@ Deno.test('gate/unverified is NOT a human gate --- re-measuring a premise is wor
     issueEvent({ labels: [{ id: 'l1', name: 'tier/heavy' }, { id: 'l2', name: 'gate/unverified' }] }),
   );
   assert.ok(decision.dispatch);
+});
+
+// --------------------------------------------------------------------
+// Rule 9: executor routing
+// --------------------------------------------------------------------
+
+Deno.test('executor routing helper accepts path and defensive bare forms', () => {
+  assert.equal(EXECUTOR_LABEL_PREFIX, 'executor/');
+  assert.deepEqual(KNOWN_EXECUTOR_NAMES, ['claude', 'codex']);
+  assert.equal(executorRoutingFromLabels(['executor/claude']), 'claude');
+  assert.equal(executorRoutingFromLabels(['executor/codex']), 'codex');
+  assert.equal(executorRoutingFromLabels(['claude']), 'claude');
+  assert.equal(executorRoutingFromLabels(['codex']), 'codex');
+  assert.equal(executorRoutingFromLabels([' EXECUTOR/CoDeX ']), 'codex');
+});
+
+Deno.test('executor routing helper collapses duplicates and rejects distinct routes', () => {
+  assert.equal(executorRoutingFromLabels(['executor/claude', 'executor/claude', 'claude']), 'claude');
+  assert.equal(executorRoutingFromLabels(['executor/codex', 'executor/codex', 'codex']), 'codex');
+  assert.equal(executorRoutingFromLabels(['executor/claude', 'executor/codex']), 'conflict');
+  assert.equal(executorRoutingFromLabels(['claude', 'codex']), 'conflict');
+});
+
+Deno.test('executor routing helper gives malformed path routes precedence over recognized routes', () => {
+  for (const unknown of ['executor/', 'executor/other', ' executor/unsupported ', 'executor/codex/extra']) {
+    assert.equal(executorRoutingFromLabels([unknown]), 'unknown', unknown);
+    assert.equal(executorRoutingFromLabels(['executor/claude', unknown]), 'unknown', `claude plus ${unknown}`);
+    assert.equal(executorRoutingFromLabels(['executor/codex', unknown]), 'unknown', `codex plus ${unknown}`);
+  }
+});
+
+Deno.test('executor routing helper preserves migration compatibility when no route is present', () => {
+  assert.equal(executorRoutingFromLabels([]), 'none');
+  assert.equal(executorRoutingFromLabels(['tier/standard', 'area/w4', 'unrelated']), 'none');
+  assert.equal(executorRoutingFromLabels(['executorish/codex']), 'none');
+});
+
+Deno.test('executor/codex skips Claude dispatch and tells the owner to open and claim in Codex', () => {
+  const decision = decideDispatch(
+    issueEvent({
+      identifier: 'GAM-397',
+      labels: [
+        { id: 'l1', name: 'standard', parent: { name: 'tier' } },
+        { id: 'l2', name: 'codex', parent: { name: 'executor' } },
+      ],
+    }),
+  );
+  assert.ok(!decision.dispatch);
+  assert.equal(decision.reason, 'ROUTED_TO_CODEX');
+  assert.match(decision.detail, /GAM-397/);
+  assert.match(decision.detail, /owner must open Codex and claim it/);
+  assert.doesNotMatch(decision.detail, /launch(?:ed)?/i);
+});
+
+Deno.test('legacy no-route payload keeps exact values and explicit Claude only adds its normalized label', () => {
+  const legacy = decideDispatch(issueEvent());
+  const explicitClaude = decideDispatch(
+    issueEvent({
+      labels: [
+        { id: 'l1', name: 'standard', parent: { name: 'tier' } },
+        { id: 'l2', name: 'claude', parent: { name: 'executor' } },
+      ],
+    }),
+  );
+  assert.ok(legacy.dispatch);
+  assert.deepEqual(legacy.clientPayload, {
+    identifier: 'GAM-308',
+    issueId: ISSUE_UUID,
+    title: 'HoursTab renders 4.0 where CoachHome renders 4',
+    url: 'https://linear.app/gamitch/issue/GAM-308/hourstab-renders-40',
+    tier: 'standard',
+    labels: ['tier/standard'],
+    priority: 2,
+  });
+  assert.ok(explicitClaude.dispatch);
+  assert.deepEqual(explicitClaude.clientPayload, {
+    ...legacy.clientPayload,
+    labels: ['tier/standard', 'executor/claude'],
+  });
+  assert.deepEqual(Object.keys(explicitClaude.clientPayload), Object.keys(legacy.clientPayload));
+});
+
+Deno.test('conflicting and unknown executor paths return their exact named reasons', () => {
+  const conflict = decideDispatch(
+    issueEvent({ labels: ['tier/standard', 'executor/claude', 'executor/codex'] }),
+  );
+  assert.ok(!conflict.dispatch);
+  assert.equal(conflict.reason, 'EXECUTOR_CONFLICT');
+
+  for (const labels of [
+    ['tier/standard', 'executor/'],
+    ['tier/standard', 'executor/other'],
+    ['tier/standard', 'executor/claude', 'executor/other'],
+    ['tier/standard', 'executor/codex', 'executor/other'],
+    ['tier/standard', 'executor/claude', 'executor/codex', 'executor/other'],
+  ]) {
+    const decision = decideDispatch(issueEvent({ labels }));
+    assert.ok(!decision.dispatch);
+    assert.equal(decision.reason, 'UNKNOWN_EXECUTOR', labels.join(', '));
+  }
+});
+
+Deno.test('duplicate recognized executor labels behave as one route', () => {
+  const claude = decideDispatch(
+    issueEvent({ labels: ['tier/standard', 'executor/claude', 'executor/claude', 'claude'] }),
+  );
+  assert.ok(claude.dispatch);
+
+  const codex = decideDispatch(
+    issueEvent({ labels: ['tier/standard', 'executor/codex', 'executor/codex', 'codex'] }),
+  );
+  assert.ok(!codex.dispatch);
+  assert.equal(codex.reason, 'ROUTED_TO_CODEX');
+});
+
+Deno.test('gate/human wins over every executor routing outcome', () => {
+  for (const executorLabels of [
+    ['executor/claude'],
+    ['executor/codex'],
+    ['executor/claude', 'executor/codex'],
+    ['executor/other'],
+  ]) {
+    const decision = decideDispatch(issueEvent({ labels: ['tier/standard', HUMAN_GATE_LABEL, ...executorLabels] }));
+    assert.ok(!decision.dispatch);
+    assert.equal(decision.reason, 'HUMAN_GATED', executorLabels.join(', '));
+  }
+});
+
+Deno.test('changing only an executor label on an issue already in Todo remains STATE_UNCHANGED', () => {
+  for (const labels of [
+    ['tier/standard', 'executor/claude'],
+    ['tier/standard', 'executor/codex'],
+    ['tier/standard', 'executor/other'],
+  ]) {
+    const decision = decideDispatch(issueEvent({ labels, updatedFrom: { labelIds: ['previous-executor-label'] } }));
+    assert.ok(!decision.dispatch);
+    assert.equal(decision.reason, 'STATE_UNCHANGED', labels.join(', '));
+  }
+});
+
+Deno.test('grouped executor labels use the parent-present GraphQL entity shape', () => {
+  const claude = decideDispatch(
+    issueEvent({
+      labels: [
+        { id: 'l1', name: 'standard', parent: { id: 'g1', name: 'tier' } },
+        { id: 'l2', name: 'claude', parent: { id: 'g2', name: 'executor' } },
+      ],
+    }),
+  );
+  assert.ok(claude.dispatch);
+  assert.deepEqual(claude.clientPayload.labels, ['tier/standard', 'executor/claude']);
+
+  const codex = decideDispatch(
+    issueEvent({
+      labels: [
+        { id: 'l1', name: 'standard', parent: { id: 'g1', name: 'tier' } },
+        { id: 'l2', name: 'codex', parent: { id: 'g2', name: 'executor' } },
+      ],
+    }),
+  );
+  assert.ok(!codex.dispatch);
+  assert.equal(codex.reason, 'ROUTED_TO_CODEX');
+});
+
+Deno.test('synthetic parent-absent webhook fallback recognizes bare executor children defensively', () => {
+  const claude = decideDispatch(
+    issueEvent({ labels: [{ id: 'l1', name: 'standard' }, { id: 'l2', name: 'claude' }] }),
+  );
+  assert.ok(claude.dispatch);
+  assert.deepEqual(claude.clientPayload.labels, ['standard', 'claude']);
+
+  const codex = decideDispatch(
+    issueEvent({ labels: [{ id: 'l1', name: 'standard' }, { id: 'l2', name: 'codex' }] }),
+  );
+  assert.ok(!codex.dispatch);
+  assert.equal(codex.reason, 'ROUTED_TO_CODEX');
 });
 
 // --------------------------------------------------------------------

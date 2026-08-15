@@ -74,6 +74,13 @@
 //    prevent. This is the one rule here that is an inference rather than a
 //    quotation, so it is called out as a decision in the design doc and the
 //    skip is loud rather than silent.
+//
+// 9. Executor routing is evaluated after the human gate. During migration,
+//    no executor route and an explicit Claude route both continue to this
+//    dispatcher's positive path. A Codex route is a named skip: the owner must
+//    open Codex and claim it, but this function does not launch Codex. Unknown
+//    path-form routes win over recognized conflicts so malformed routing is
+//    never hidden by a valid-looking label.
 
 /** The state name an issue must land in to be dispatched. Item 28's `Todo`. */
 export const DEFAULT_TARGET_STATE = 'Todo';
@@ -83,6 +90,9 @@ export const TIER_LABEL_PREFIX = 'tier/';
 
 /** AGENTS.md: "no machine may close it". */
 export const HUMAN_GATE_LABEL = 'gate/human';
+
+/** Grouped executor labels are normalized to this path prefix. */
+export const EXECUTOR_LABEL_PREFIX = 'executor/';
 
 // -----------------------------------------------------------------------
 // `tier/fast` IS NOT A LABEL NAME. THIS COST A REWRITE OF THIS FILE.
@@ -129,6 +139,11 @@ export const KNOWN_TIER_NAMES: readonly string[] = ['unreviewed', 'fast', 'stand
 /** Bare child name of the `gate` group that blocks machine dispatch. */
 const HUMAN_GATE_BARE_NAME = 'human';
 
+/** Recognized bare child names of the `executor` group. */
+export const KNOWN_EXECUTOR_NAMES = ['claude', 'codex'] as const;
+
+export type ExecutorRouting = 'none' | 'claude' | 'codex' | 'conflict' | 'unknown';
+
 export type SkipReason =
   | 'NOT_AN_ISSUE_EVENT'
   | 'NOT_AN_UPDATE'
@@ -137,7 +152,10 @@ export type SkipReason =
   | 'STATE_UNCHANGED'
   | 'LABELS_UNAVAILABLE'
   | 'NO_TIER_LABEL'
-  | 'HUMAN_GATED';
+  | 'HUMAN_GATED'
+  | 'ROUTED_TO_CODEX'
+  | 'EXECUTOR_CONFLICT'
+  | 'UNKNOWN_EXECUTOR';
 
 /**
  * What gets handed to GitHub as `client_payload`.
@@ -240,6 +258,40 @@ export function hasHumanGate(labelNames: readonly string[]): boolean {
 }
 
 /**
+ * Classifies executor labels with deterministic precedence.
+ *
+ * Parent-present labels arrive here in path form after `extractLabelNames`
+ * (`executor/codex`). Bare `claude` and `codex` are accepted only as the
+ * defensive parent-absent fallback. Other bare labels are unrelated and are
+ * ignored; an empty or unsupported path-form `executor/*` label is malformed
+ * routing and therefore returns `unknown` even beside a recognized route.
+ */
+export function executorRoutingFromLabels(labelNames: readonly string[]): ExecutorRouting {
+  const routes = new Set<(typeof KNOWN_EXECUTOR_NAMES)[number]>();
+  let hasUnknownPath = false;
+
+  for (const name of labelNames) {
+    const normalized = name.trim().toLowerCase();
+    if (normalized.startsWith(EXECUTOR_LABEL_PREFIX)) {
+      const route = normalized.slice(EXECUTOR_LABEL_PREFIX.length);
+      if (route === 'claude' || route === 'codex') {
+        routes.add(route);
+      } else {
+        hasUnknownPath = true;
+      }
+    } else if (normalized === 'claude' || normalized === 'codex') {
+      routes.add(normalized);
+    }
+  }
+
+  if (hasUnknownPath) return 'unknown';
+  if (routes.size > 1) return 'conflict';
+  if (routes.has('codex')) return 'codex';
+  if (routes.has('claude')) return 'claude';
+  return 'none';
+}
+
+/**
  * The whole filter. `payload` is the already-parsed Linear webhook body ---
  * `index.ts` must have verified the signature against the RAW body before
  * calling this.
@@ -306,6 +358,27 @@ export function decideDispatch(payload: unknown, options: DecideOptions = {}): D
   // Rule 8.
   if (hasHumanGate(labels)) {
     return skip('HUMAN_GATED', `Issue ${data.identifier} carries \`${HUMAN_GATE_LABEL}\`; a machine may not take it.`);
+  }
+
+  // Rule 9 --- Todo authorizes work; the executor label selects the route.
+  const executorRouting = executorRoutingFromLabels(labels);
+  if (executorRouting === 'unknown') {
+    return skip(
+      'UNKNOWN_EXECUTOR',
+      `Issue ${data.identifier} carries an empty or unsupported \`${EXECUTOR_LABEL_PREFIX}*\` route.`,
+    );
+  }
+  if (executorRouting === 'conflict') {
+    return skip(
+      'EXECUTOR_CONFLICT',
+      `Issue ${data.identifier} carries more than one recognized executor route.`,
+    );
+  }
+  if (executorRouting === 'codex') {
+    return skip(
+      'ROUTED_TO_CODEX',
+      `Issue ${data.identifier} is routed to Codex; the owner must open Codex and claim it.`,
+    );
   }
 
   return {
