@@ -426,7 +426,12 @@ After the third failure, the task must be escalated to boss-arbiter.
     **The rules, in order:**
 
     a. **Take only from `Todo`.** Never start a `Backlog` row because it looks
-       ready. Promotion to `Todo` is the owner's signal and the only one.
+       ready. Promotion to `Todo` is the owner's authorization to work and the
+       only ordinary authorization; it does not by itself choose an executor.
+       **GAM-397 is the one-time bootstrap exception:** on 2026-08-15 the owner
+       authorized its direct `Backlog → In Progress` move because the missing
+       route guard made the ordinary path unsafe. This exception is not a
+       reusable dispatch route.
 
     b. **Our issues are the ones carrying a `tier/*` label.** Linear ships its
        own onboarding issues and they live in `Todo` too; they carry no labels.
@@ -435,6 +440,19 @@ After the third failure, the task must be escalated to boss-arbiter.
        identity test. A finding filed by a skill has no `Tnnn` and is still
        ours. Keying identity to the title would make newly filed work invisible
        to every agent, which is a queue nobody may take from.
+
+       **Executor labels route authorized work; they do not authorize it.** On
+       a tiered issue in `Todo`, `gate/human` overrides every executor label and
+       forbids a machine claim. Otherwise, an explicit `executor/claude` route
+       may be claimed only by Claude, and an explicit `executor/codex` route
+       only by Codex; neither runtime may claim the other's route.
+
+       **The initial missing-route behavior is migration-only compatibility.**
+       Until GAM-398 completes the rollout, an executor label is not required
+       and a missing route belongs only to the legacy Claude path. Do not create
+       or apply `executor/codex` before GAM-398 deploys the accepted guard and
+       then creates the executor label group; that blocked issue also owns the
+       live canary. This amendment is not authorization to start the rollout.
 
     c. **Claim before reading anything else.** Move the issue `Todo → In
        Progress` the moment you pick it up, *before* opening a file. Then
