@@ -17,10 +17,21 @@ generated mirror, never hand-edited, refreshed by `scripts/linear-export.mjs`.
 
 Constitution **item 28** is binding and its order matters:
 
-1. Take only from `Todo`. `Backlog` means filed, not dispatchable.
+1. Take only from `Todo`. `Backlog` means filed, not dispatchable. `Todo` is
+   the owner's authorization to work; it does not by itself choose an executor.
+   **GAM-397 is the one-time bootstrap exception:** the owner authorized its
+   direct `Backlog → In Progress` move because the route guard did not yet
+   make the ordinary path safe. That exception is not a reusable route.
 2. Ours are the issues carrying a `tier/*` label. Linear's own onboarding
    issues sit in `Todo` too and carry no labels. Migrated rows also begin
    `Tnnn — `, but a finding filed by a skill has no `Tnnn` and is still ours.
+   For a tiered issue in `Todo`, `gate/human` overrides every executor route and
+   forbids a machine claim. Otherwise `executor/claude` belongs only to Claude
+   and `executor/codex` only to Codex; neither runtime may claim the other's
+   route. During migration, no executor label is required and a missing route
+   remains legacy Claude-only. Until blocked rollout GAM-398 deploys the
+   accepted guard and then creates the label group, do not create or apply
+   `executor/codex`; this amendment is not rollout authorization.
 3. **Claim first.** Move the issue `Todo → In Progress` before opening a single
    file, then re-read it to confirm you hold it. Linear has no compare-and-set,
    so without that read-back two agents can both claim the same row.
