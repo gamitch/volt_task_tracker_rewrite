@@ -1,9 +1,21 @@
 # GAM-407 — bounded spike: is Supabase/Postgres a viable operational run store?
 
-**Revision 2** — rewritten against `checker-premise` round 1 (REVISE; 2 BLOCKER,
-5 MAJOR, 9 MINOR, 2 NIT). The full round-1 report, including the two probe
-transcripts that broke revision 1's capability design, is preserved at
-`docs/swarm/active/GAM-407-gate-round1.md`. Round 2 of 2 (item 19a).
+**Revision 3** — all nine required revisions from `checker-premise` round 2
+(REVISE; 3 BLOCKER, 3 MAJOR, 3 MINOR, 1 NIT) applied, on top of revision 2's
+answer to round 1 (REVISE; 2 BLOCKER, 5 MAJOR, 9 MINOR, 2 NIT). Both gate reports
+are preserved at `docs/swarm/active/GAM-407-gate-round1.md` and `-round2.md`, and
+the measured facts they produced are consolidated in
+`docs/swarm/active/GAM-407-interim-findings.md`.
+
+⚠ **This packet has NOT received a DISPATCH verdict, and item 19 forbids it
+reaching a worker until it does.** Item 19a's two rounds are spent, so the next
+step is the human owner, not a third gate round. It is written to be
+dispatch-ready the moment the owner answers the one question on GAM-407
+(Definition of Ready #3: the live-project half is unmeasurable from any
+dispatched run — approve delivering the database half as a deferral under item
+20 with a linked follow-up, or hold the row). Round 2's own recommendation was
+that revisions 1-9 are mechanical corrections with measured fixes and do not
+themselves need arbitration; they are applied below.
 
 Issue: [GAM-407](https://linear.app/gamitch/issue/GAM-407/supabase-as-the-operational-run-store-is-the-plans-least-confident)
 Tier: **HEAVY** (item 26 — creates an ops schema with RLS and `security definer`
@@ -33,12 +45,22 @@ service-role key.
 
 Revision 1 quietly downgraded "must measure" to "report as unmeasured". The gate
 caught it (MAJOR-5) and it is now **escalated to the owner on the Linear issue**,
-with the two SQL statements that would close it. Pending that answer this packet
-delivers the **database-layer half** and the result is recorded **Partial**
-(item 27), with the live-project half filed as a linked follow-up before the row
-moves. Stopping the whole row would leave plan §11.1 decision 1 entirely
-untested when most of it is testable today; that trade is stated here so it is
-correctable rather than silent.
+with the two SQL statements that would close it. On the owner's approval this
+packet delivers the **database-layer half**, with the live-project half filed as
+a **linked follow-up task under item 20** (a deliberate deferral files a task,
+not just a comment) before the row moves. Stopping the whole row would leave plan
+§11.1 decision 1 entirely untested when most of it is testable today; that trade
+is stated here so it is correctable rather than silent.
+
+**Authority correction (round 2, MINOR-R2-2).** Revision 2 cited **item 27** for
+this. Item 27 governs a *user-visible surface* reading from a fixture or stub and
+explicitly excludes work with no user-visible surface; a database spike has none.
+The governing rule is **item 20** plus the linked follow-up. The outcome was
+defensible; the rule cited did not say it.
+
+**Definition of Ready #3 requires an escalation to be named *and pre-approved*.**
+It is named and posted; it is not yet approved. Until it is, this packet is not
+Ready and no worker may be dispatched.
 
 ## Current measured state
 
@@ -49,7 +71,7 @@ round-1 gate on its own cluster**. Every row below is confirmed by both.
 |---|---|
 | No run/ops/checkpoint table exists | `supabase/migrations/` holds 25 files, all product schema; latest `20260812000000_events_rls_active_membership_read.sql`. `supabase/spikes/` does not exist yet |
 | `linear-dispatch` writes no state | `index.ts` imports exactly `filter/dispatch/notify/signature`; no storage client in any non-test source |
-| Scratch cluster | `.claude/skills/scratch-postgres/scripts/start.sh` works **only under `sudo -n`** (as `runner`: `chown … Operation not permitted`). PostgreSQL **16.14**, **24 of 25** migrations; `20260719000000_cron.sql` skipped (`pg_cron` unavailable) |
+| Scratch cluster | `.claude/skills/scratch-postgres/scripts/start.sh` works **only under `sudo -n`** (as `runner`: `chown … Operation not permitted`). PostgreSQL **16.14**; the script prints `applying 25 of 25 migrations` then `SKIPPED 1 migration(s) … 006-20260719000000_cron.sql [needs pg_cron]`, i.e. 24 are actually applied |
 | Extensions | `pgcrypto`, `uuid-ossp` **available, not installed**. `pgjwt`, `pg_net`, `pg_cron`, `pgsodium` **absent** |
 | Roles | `authenticated`, `anon` are `NOSUPERUSER NOBYPASSRLS`; `postgres` is superuser **with `BYPASSRLS`**. **`service_role` does not exist** and must be created by the harness |
 | Version skew | Scratch is PG **16.14**; `supabase/config.toml` declares `major_version = 17` for the hosted target. Immaterial to RLS/CAS semantics, but it must be named, not left for a reader to find |
@@ -110,6 +132,50 @@ real on a scratch cluster, needs neither `pgjwt` nor PostgREST, and restores the
 forgery above is a *spike finding about plan §5.1*, not just a packet defect, and
 it must not survive only as prose. The harness asserts it: a claims-keyed policy
 **is** forgeable by the role it purports to constrain.
+
+**D5 — every grant is explicit, and PUBLIC is revoked first. (Round 2,
+BLOCKER-R2-1.)** Revision 2 said `reserve_run` and `advance_generation` were "not
+granted to `ops_executor`" and contained no `revoke`. **PostgreSQL grants
+`EXECUTE` on every new function to `PUBLIC` by default.** Measured: the executor
+called `reserve_run`, then called `advance_generation` on *another run*, was
+handed that run's freshly-rotated plaintext token, and published to it. Not
+granting is not the same as denying. The schema therefore ends with:
+
+```sql
+revoke execute on function ops.reserve_run(text, text)                from public;
+revoke execute on function ops.advance_generation(uuid, int)          from public;
+revoke execute on function ops.record_terminal_event(uuid, text, jsonb) from public;
+revoke execute on function ops.publish_checkpoint(text, int, jsonb)   from public;
+grant  execute on function ops.publish_checkpoint(text, int, jsonb)   to ops_executor;
+```
+
+and the harness asserts the ACLs directly — `select proname, proacl from pg_proc
+where pronamespace = 'ops'::regnamespace` — because one ACL assertion is a better
+regression guard than six behavioural negatives and would have caught this at a
+glance.
+
+**D6 — no RLS on `ops.run` or `ops.run_event`, and the packet says why. (Round 2,
+BLOCKER-R2-2.)** Revision 2 called forced RLS "defence-in-depth". Measured, it is
+a deadlock: with a `NOBYPASSRLS` owner and a claims-keyed policy, `reserve_run`
+cannot insert at all — `ERROR: 42501: new row violates row-level security policy
+for table "run"` — because the controller has no claim to set, D2 having removed
+it. **No run can ever be created**, so every scenario is unreachable. And RLS
+buys nothing here regardless: with no table grants the *privilege* check denies
+the executor before any policy is consulted (`aclcheck_error`, not a policy
+denial). **"No table grants" is the enforcement, and it is a stronger and simpler
+statement than "RLS plus no table grants."** RLS and the `nullif(current_setting
+('request.jwt.claims', true), '')::jsonb` predicate appear **only** on the D2a
+negative-control table.
+
+**D7 — `ops_executor` is a `LOGIN` role and the harness connects as it. (Round 2,
+BLOCKER-R2-3.)** `SET ROLE` is authorized against `session_user`, not
+`current_user`. Revision 2 made every role `nologin`, so the harness had to
+`set role ops_executor` from a `postgres` session — from which `set role
+ops_owner`, `set role postgres` and `set role service_role` all **succeed**, and
+AC4 would have forced an automatic FAIL for a rig artifact. With `alter role
+ops_executor login` and a direct `psql -U ops_executor` (the scratch cluster's
+`pg_hba.conf` is `local all all trust`), all three denials are real `42501`s and
+`session_user` is no longer a superuser. Strictly stronger as well as correct.
 
 **D3 — every `ops` object is owned by a `NOSUPERUSER NOBYPASSRLS` role.** The
 gate measured a `security definer` function owned by `postgres` moving a row with
@@ -175,12 +241,12 @@ extension is required — use the built-in `sha256(bytea)` (PG 11+) and
 `gen_random_uuid()` (PG 13+) rather than `pgcrypto`, so the schema does not
 inherit the hosted-extension question the spike cannot answer.
 
-**Roles, created by the schema (all `nologin`):**
+**Roles, created by the schema:**
 
 | Role | Attributes | Grants |
 |---|---|---|
-| `ops_owner` | `nosuperuser nobypassrls` | owns the schema, every table, every function |
-| `ops_executor` | `nosuperuser nobypassrls` | `usage` on `ops`; `execute` on `ops.publish_checkpoint` **only**. **No table privileges whatsoever** |
+| `ops_owner` | `nologin nosuperuser nobypassrls` | owns the schema, every table, every function |
+| `ops_executor` | **`login`** `nosuperuser nobypassrls` (D7) | `usage` on `ops`; `execute` on `ops.publish_checkpoint` **only**, after `revoke … from public` (D5). **No table privileges whatsoever** |
 
 **`ops.run`** — the §5.1 fields the criteria exercise. `head_sha`, `base_sha`,
 `branch`, `failure_class` and `failure_detail` are **required** (revision 1 omitted
@@ -214,6 +280,12 @@ that makes criterion 2 a property of the database rather than of the caller.
   `generation` **and** `version`, bumping `version`. It must distinguish
   `no_such_capability`, `stale_generation` and `version_conflict` as **named**
   outcomes.
+  - **Its return shape is pinned to `(outcome text, new_version int)` and nothing
+    more (round 2, MINOR-R2-1).** A `security definer` function that returned the
+    run row — or `capability_hash` — would hand the executor exactly the read
+    access criterion-3 negative #1 asserts it lacks, **with the harness green**.
+    The harness asserts that no `ops.run` column beyond the version reaches the
+    caller.
   - NIT-1: a zero-row CAS cannot self-classify. A **post-failure** classifying
     `select` is required and is explicitly **not** the read-then-write criterion 1
     forbids; what is forbidden is a `select … for update` preamble *deciding* the
@@ -226,24 +298,41 @@ that makes criterion 2 a property of the database rather than of the caller.
 - **`ops.record_terminal_event(p_run_id uuid, p_event_key text, …)`** — scenario
   14, idempotent on `(run_id, event_key)`.
 
-**RLS** is enabled and `force`d on `ops.run` and `ops.run_event` as
-defence-in-depth, but D3 is what makes it meaningful: because `ops_owner` is
-`NOBYPASSRLS`, the `security definer` path is genuinely subject to the policies
-it declares. Where a policy uses a JWT claim, write the predicate as
-`nullif(current_setting('request.jwt.claims', true), '')::jsonb` — the bare form
-**raises** `invalid input syntax for type json` on an empty GUC, and an
-exception-catching assertion would pass while proving nothing (MINOR-4).
+**No RLS on `ops.run` or `ops.run_event` — see D6.** The enforcement is the
+absence of table grants, which is stronger and simpler, and forced RLS with a
+`NOBYPASSRLS` owner was *measured* to deadlock `reserve_run` outright. RLS and the
+`nullif(current_setting('request.jwt.claims', true), '')::jsonb` predicate belong
+only to the D2a negative-control table, where the bare form's `invalid input
+syntax for type json` on an empty GUC would otherwise make an
+exception-catching assertion pass while proving nothing (round 1, MINOR-4).
 
 ### Worker A — `supabase/tests/run_gam407_run_store_spike.sh` + `gam407_run_store_assertions.sql`
 
 **Shape precedent: `supabase/tests/run_t503_widen_rsvp_read.sh` lines 27-45 —
-NOT `run_t205_anon_grant.sh`.** The gate measured that T205's script fails
-standalone with `ERROR: role "service_role" does not exist`; it passes in CI only
-through a hidden ordering dependency on `tests/rls/auth_stub.sql`. T503 is a
-strict superset: same trap cleanup, same `ON_ERROR_STOP=1`, same cron skip, plus
-`create role service_role nologin noinherit bypassrls` and the
-default-privileges simulation. Both must run **before** any `ops` object is
-created, or the negatives are vacuous.
+NOT `run_t205_anon_grant.sh`.** T205's script fails standalone with `ERROR: role
+"service_role" does not exist`; it passes in CI only through a hidden ordering
+dependency on `tests/rls/auth_stub.sql`. T503 runs standalone (measured: exit 0).
+
+⚠ **Correction to revision 2, which got this wrong (round 2, MAJOR-R2-1).**
+Revision 2 claimed T503 already creates `service_role` with `noinherit
+bypassrls`. **It does not.** `run_t503_widen_rsvp_read.sh:35` reads
+`create role service_role nologin;`, and `rolbypassrls` was measured as `f`.
+Hosted Supabase's `service_role` **is** `BYPASSRLS`, so **this harness must add
+`noinherit bypassrls` itself**:
+
+```sql
+create role service_role nologin noinherit bypassrls;
+```
+
+Otherwise AC4's "cannot escalate to service-role" measures something weaker than
+the hosted condition. Take T503's *structure*, not its role DDL.
+
+The `service_role` creation and the default-privileges simulation must both run
+**before** any `ops` object is created. Note what the simulation does and does
+not do (round 2, MAJOR-R2-2): `alter default privileges **in schema public**`
+produces exactly one `pg_default_acl` row, scoped to `public`. It is a valid
+control for negative #2 (product tables) and constrains **nothing** in schema
+`ops`.
 
 Prints a `PASS`/`FAIL` line per scenario; exits non-zero if any assertion fails.
 
@@ -253,11 +342,14 @@ Prints a `PASS`/`FAIL` line per scenario; exits non-zero if any assertion fails.
 | 2 | Raced claims | **Two genuinely concurrent sessions.** No advisory-lock barrier is needed — the gate measured that the loser blocks on the winner's speculative-insert token by itself. A background `psql` holding its transaction open (`begin; select ops.reserve_run(…); select pg_sleep(2); commit;`) with a second entering ~1s later is a complete proof → one row, same `run_id`, exactly one `created=true` |
 | 13 | Generation fencing | `advance_generation`, then replay `publish_checkpoint` with the **old token** → named `no_such_capability`/`stale_generation`, and `ops.run` re-read field-by-field as unchanged. Do **not** trust an absent exception |
 | 14 | Duplicate terminal event | Same `(run_id, event_key)` twice → one `ops.run_event` row, one effect on `ops.run` |
-| 15 | Store unavailable — **store-side half only** | `pg_terminate_backend` mid-statement (or a dead port) → a classifiable SQLSTATE, and on re-connect **no** row records the checkpoint as published. The "no external write was attempted" half belongs to Worker B (MAJOR-4) |
+| 15 | Store unavailable — **store-side half only** | `pg_terminate_backend` mid-statement (or a dead port) → measured `FATAL: 57P01: terminating connection due to administrator command`, psql exit 2, and on re-connect the mid-flight `update` is rolled back so **no** row records the checkpoint as published. **`\set VERBOSITY verbose` is required** or psql prints the message without the SQLSTATE and the assertion cannot key on `57P01`. The "no external write was attempted" half belongs to Worker B (MAJOR-4) |
 
-**Criterion 3's negative half — this is the criterion, not a supplement.** All
-under `set role ops_executor`, each asserted by return value or SQLSTATE, never
-by "an exception happened":
+**Criterion 3's negative half — this is the criterion, not a supplement.** Run
+these from a **direct connection as `ops_executor`** (`psql -U ops_executor`),
+**never** via `set role` from a `postgres` session — `SET ROLE` is authorized
+against `session_user`, so the `set role` form makes negatives 3 succeed and
+turns AC4 into a guaranteed FAIL (D7). Each is asserted by return value or
+SQLSTATE, never by "an exception happened":
 
 1. `select * from ops.run` → `42501` (no table grant at all).
 2. `select … from public.events` (any product table) → denied.
@@ -270,6 +362,16 @@ by "an exception happened":
 7. **Ownership assertion (D3):** for every `ops.*` function and table,
    `select rolbypassrls from pg_roles where rolname = pg_get_userbyid(proowner)`
    (and `relowner`) is **`false`**. Without this the rest is unfalsifiable.
+   Measured expectation: `ops_owner=f`, `ops_executor=f`, `service_role=f`,
+   `postgres=t`.
+7a. **ACL assertion (D5):** `select proname, proacl from pg_proc where
+   pronamespace = 'ops'::regnamespace` — every function's ACL is non-null and
+   grants `EXECUTE` to exactly the intended roles. A **null** `proacl` means the
+   PostgreSQL default is in force, i.e. `EXECUTE TO PUBLIC`, which is how
+   BLOCKER-R2-1 happened. This single assertion is a better regression guard
+   than the six behavioural negatives around it.
+7b. The return-shape assertion from `publish_checkpoint`'s spec: no `ops.run`
+   column beyond `new_version` reaches the caller.
 8. **Positive control:** the executor *can* publish for its own run with its own
    valid token. A negative-only result proves only that nothing works.
 
@@ -277,6 +379,9 @@ by "an exception happened":
 grant the executor `select, update` on it, and assert the executor **can** forge
 another run's claim and move that row. This records the round-1 finding as a
 standing, re-runnable fact about the rejected design.
+**Seed its fixture rows before `force` RLS is applied, or give it an
+owner-permitting policy (round 2, MINOR-R2-3)** — otherwise it hits the same
+insert deadlock D6 describes and the control never gets off the ground.
 
 **Both directions on criterion 1:** a correct CAS succeeds; a stale `version`, a
 stale `generation` and an unknown capability each fail **and the row is re-read
@@ -331,10 +436,13 @@ fixture path is needed and the checker can inspect the artifact.
    re-reading the row**, not by catching an exception.
 3. Criterion 2 is demonstrated under genuine concurrency (scenario 2), not only
    sequentially.
-4. Criterion 3 is demonstrated in **both directions** — all eight negatives above
-   plus the positive control — under roles created `NOSUPERUSER NOBYPASSRLS`,
-   with `service_role` present and Supabase's stock default privileges simulated
-   first. If any negative fails, criterion 3 is **FAIL**.
+4. Criterion 3 is demonstrated in **both directions** — every negative above
+   (1-7b) plus the positive control — from a **direct `ops_executor`
+   connection**, under roles created `NOSUPERUSER NOBYPASSRLS`, with
+   `service_role` created `nologin noinherit bypassrls` and Supabase's stock
+   default privileges simulated first. If any negative fails, criterion 3 is
+   **FAIL** — so negatives 3 and 4 must be run the way D5 and D7 specify, or the
+   FAIL measures the rig rather than the design.
 5. The D2a negative control passes: the rejected claims-keyed design is shown
    forgeable.
 6. Criterion 4 is demonstrated by tests asserting **zero** sink invocations on an
@@ -355,6 +463,9 @@ fixture path is needed and the checker can inspect the artifact.
     `schemas` list as in-repo evidence about PostgREST exposure, and has its own
     section naming what was **not** measured — the live project's extension set
     and plan tier, escalated to the owner and filed as a linked follow-up.
+    **The Edge-Function side of that comparison is reasoned, not measured**, and
+    the report must label it so; only the token-RPC design is built. A checker
+    reading AC10 must not be able to mistake the comparison for evidence.
 11. If any criterion is FAIL, the report ends in the stop rule: a written FAIL
     and a named owner decision, never a fallback.
 
@@ -378,12 +489,16 @@ fixture path is needed and the checker can inspect the artifact.
 
 ## Least confident decisions (item 19d)
 
-1. **Delivering the database-layer half as Partial rather than stopping the row.**
-   This is wrong if the owner considers the live extension/plan-tier measurement
+1. **Delivering the database-layer half rather than stopping the row.** This is
+   wrong if the owner considers the live extension/plan-tier measurement
    load-bearing enough that a DB-layer-only result is misleading rather than
-   partial. What settles it: the owner's answer to the escalation now posted on
-   GAM-407. Mitigated by recording the verdict as **Partial** (item 27) with a
-   linked follow-up, never as PASS.
+   partial. What settles it: the owner's answer to the escalation posted on
+   GAM-407 — and until that answer arrives, Definition of Ready #3 is unmet and
+   this packet is **not** dispatchable, however complete the rest of it is.
+   Mitigated by never recording the verdict as PASS, and by filing the
+   live-project measurement as a linked follow-up task under **item 20** (round
+   2, MINOR-R2-2: item 27 is the wrong authority — it governs user-visible
+   surfaces and a database spike has none).
 2. **The token-RPC capability (D2) as the design the spike measures.** This is
    wrong if the production design must be the Edge-Function-holds-service-role
    variant and the token-RPC result does not transfer — in particular if the ops
@@ -391,15 +506,21 @@ fixture path is needed and the checker can inspect the artifact.
    `supabase/config.toml`'s `schemas = ["public","graphql_public"]` shows it is
    not today. The report must compare both under scenario 15 and say plainly
    that only one was measured.
-3. **A scratch role as a stand-in for a hosted Supabase role.** The gate showed
-   the naive version of this argument was inverted, and D3 is the fix: what makes
-   the scratch result generalize is that no `ops` object is owned by a
-   `BYPASSRLS` role. This is still wrong if hosted Supabase grants the executor
-   something the local role lacks — a default privilege or a `service_role` grant
-   inherited through `public`. The harness simulates Supabase's stock default
-   privileges before creating any `ops` object precisely because
-   `run_t205_anon_grant.sh` found that this matters; if that simulation is
-   incomplete, so is the result.
+3. **A scratch role as a stand-in for a hosted Supabase role.** Round 1 showed
+   the naive version of this argument was inverted; round 2 then showed my
+   *replacement* safeguard was a no-op. `alter default privileges in schema
+   public` produces exactly one `pg_default_acl` row, scoped to `public`, and
+   constrains **nothing** in schema `ops` — so it is a control for negative #2
+   and nothing else. The generalization hazard that actually fired was a stock
+   **PostgreSQL** default I had never named: `EXECUTE TO PUBLIC` on new
+   functions (D5). What makes the scratch result generalize now is three
+   explicit, asserted properties — no `ops` object owned by a `BYPASSRLS` role
+   (D3), every function ACL non-null and explicitly granted (D5/7a), and a
+   genuine unprivileged `LOGIN` session doing the measuring (D7). This is still
+   wrong if hosted Supabase grants the executor something the local role lacks,
+   or if `service_role` differs from the `nologin noinherit bypassrls` the
+   harness creates. **Two rounds found two different wrong reasons to believe
+   this generalizes; treat the third with corresponding suspicion.**
 4. **Scenario 15 by killing the connection.** This is wrong if the failure that
    matters is a *partial* write — the store accepting the checkpoint and then
    failing to acknowledge — rather than an unreachable store. A connection kill
