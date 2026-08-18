@@ -69,7 +69,15 @@ record() { # status id detail
   printf '%s\n' "$line" | tee -a "$RESULTS"
 }
 
-sql1() { "${PSQLV[@]}" -d "$DBNAME" -c "$1"; }
+# Fetch one scalar as postgres. DELIBERATELY TOLERANT of failure: every value
+# it returns is fed straight into an assertion, so a broken query must surface
+# as a FAIL line and a roll-up, not as `set -e` killing the harness halfway
+# through and taking the report with it. (Measured while running mutation 2:
+# removing the unique constraint made reserve_run raise 42P10, and the strict
+# version aborted before the roll-up ever printed.) Rig failures -- creating the
+# database, applying the migrations, applying the spike schema -- still abort,
+# because those are not results.
+sql1() { "${PSQLV[@]}" -d "$DBNAME" -c "$1" 2>>"$WORK/sql1.err" || true; }
 
 exec_psql() { # run as the untrusted executor, from a DIRECT LOGIN.
   # Never `set role ops_executor` from a postgres session: SET ROLE is
@@ -180,7 +188,13 @@ echo "    $(sql1 "select coalesce(string_agg(defaclacl::text, ' '), '<none>') fr
 # directions, scenarios 1, 13 and 14.
 # ---------------------------------------------------------------------------
 echo "==> single-session assertions"
+set +e
 "${PSQL[@]}" -d "$DBNAME" -v qual="$QUAL" -f "$ASSERTIONS" | tee -a "$RESULTS"
+ASSERT_RC=${PIPESTATUS[0]}
+set -e
+if [ "$ASSERT_RC" -ne 0 ]; then
+  record FAIL single-session-assertions "psql exited $ASSERT_RC -- the assertions file did not run to completion"
+fi
 
 # ---------------------------------------------------------------------------
 # SCENARIO 2 -- raced claims, under GENUINE concurrency.
@@ -369,6 +383,12 @@ summarize() { # label regex
     printf 'FAIL %s :: %s of %s assertion(s) failed %s\n' "$label" "$fails" "$total" "$QUAL"
   fi
 }
+
+if [ -s "$WORK/sql1.err" ]; then
+  echo
+  echo "==> errors raised by driver-side scalar queries (kept, not swallowed):"
+  sed 's/^/    /' "$WORK/sql1.err"
+fi
 
 echo
 echo "==> roll-up (the per-criterion verdict the spike report carries)"
