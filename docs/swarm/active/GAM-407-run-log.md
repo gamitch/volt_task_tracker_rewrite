@@ -101,3 +101,50 @@ that is the failure signature `AGENTS.md` § "Two walls" describes, not a myster
   packet revision 2**, `run_in_background: false`, blocking. **If this line is
   the last one in this file, the run died holding this subagent** — no worker was
   dispatched and the packet has NOT cleared the gate.
+- 2026-08-18 — **`checker-premise` round 2 VERDICT: REVISE.** Returned and read in
+  full (subagent `a31f227037340fe7c`, ~94K tokens, 43 tool calls, 9.1 min).
+  Of round 1's 18 findings: **13 CLOSED, 4 PARTIALLY CLOSED, 1 NOT CLOSED.**
+  **3 new BLOCKER, 3 new MAJOR, 3 new MINOR, 1 NIT** — every one of them found by
+  *building revision 2's design on a scratch cluster and attacking it*, which is
+  exactly what round 1 said had to happen and what I had not done:
+  - **BLOCKER-R2-1 — PUBLIC holds `EXECUTE` on new functions by default.** My
+    packet said `reserve_run` and `advance_generation` were "not granted to
+    `ops_executor`" and contained no `revoke`. Measured: the executor called
+    `ops.reserve_run`, then called `ops.advance_generation` on **another run**,
+    was handed that run's freshly-rotated plaintext capability token, and
+    published to it (`{"hijacked": true}`, version 4). Total compromise of
+    criterion 3, and `advance_generation` is also an unauthenticated DoS on every
+    other executor's token.
+  - **BLOCKER-R2-2 — my "defence-in-depth" RLS deadlocks the design.** Forced RLS
+    + a `NOBYPASSRLS` owner + a claims-keyed policy means `reserve_run` cannot
+    insert at all: `ERROR: 42501: new row violates row-level security policy for
+    table "run"`. The controller has no claim to set — D2 removed it. **No run
+    can ever be created**, so every scenario is unreachable. And RLS on `ops.run`
+    defends against nobody anyway: with no table grants the privilege check
+    denies the executor *before* any policy is consulted.
+  - **BLOCKER-R2-3 — `SET ROLE` is authorized against `session_user`, not
+    `current_user`.** I required all roles `nologin`, so the harness must
+    `set role ops_executor` from a `postgres` session — from which `set role
+    ops_owner`, `set role postgres` and `set role service_role` all **succeed**.
+    AC4 would therefore have forced an automatic FAIL for a rig artifact. Fix
+    measured: `alter role ops_executor login` and connect as it directly, after
+    which all three denials are real `42501`s.
+  - MAJOR-R2-1: I closed round 1's MINOR-5 by asserting `run_t503_widen_rsvp_read.sh`
+    already creates `service_role` with `noinherit bypassrls`. Line 35 actually
+    reads `create role service_role nologin;` — measured `rolbypassrls = f`. That
+    is item 19c (unverified citation) committed while closing a finding about
+    unverified citations.
+  - MAJOR-R2-3: Definition of Ready #3 requires an escalation to be named **and
+    pre-approved**. Mine is named and posted but **pending**. Not Ready.
+  **Positive results the gate measured and I am recording as spike evidence:**
+  `sha256`/`gen_random_uuid` are PG-16 built-ins (no extension needed); the
+  single-statement CAS works with a post-failure classifying select; the
+  token-RPC capability produces real `42501` denials on every escalation route
+  once the three fixes are applied, with the positive control still publishing;
+  `advance_generation` rotating the hash fences an old token (row re-read
+  unchanged); `pg_terminate_backend` yields `57P01` with the mid-flight update
+  rolled back; `run_t503_widen_rsvp_read.sh` runs standalone (exit 0).
+- 2026-08-18 — **ITEM 19a REACHED: two REVISE rounds, no DISPATCH. No worker may
+  be dispatched** (item 19: nothing reaches a worker until `checker-premise`
+  returns DISPATCH). Escalating to the human owner rather than looping. No
+  `worker-implementer` was spawned at any point in this run.
