@@ -166,3 +166,33 @@ that is the failure signature `AGENTS.md` § "Two walls" describes, not a myster
     declares `Closes` on.
   - **GAM-410** (`tier/standard`) — fold the four findings into plan §5.1/§11.1 as
     invariants, so they survive even if GAM-407 is held.
+- 2026-08-18 — **Gates run** (`gates.py --baseline-tests 2466`, `0ff1894`, tree
+  clean): tsc `exit 0`, vite build `exit 0`, format:check `exit 0`, eslint
+  `exit 0` (0 errors / 379 warnings, the repo's standing
+  `react-refresh/only-export-components` class), vitest full `exit 0`
+  **96 files / 2466 tests, baseline +0**. Gate 6 **SKIPPED**, honestly — this
+  branch changes only `docs/swarm/active/`, so `gates.py` can derive no `src/`
+  scope. **5 of 6, and the verdict says so** rather than claiming six.
+- 2026-08-18 — **PR body written to `docs/swarm/active/GAM-407-pr-body.md`
+  BEFORE attempting the API call** (pr-body skill: the one run in nine that
+  lacked its artifact was the one killed at the timeout). Declaration checker:
+  `OK declaration closes GAM-409`, exit 0.
+- 2026-08-18 — **PR opened: https://github.com/gamitch/volt_task_tracker_rewrite/pull/196**
+  — "GAM-409: record GAM-407's premise-gate findings and its correctly blocked
+  packet". Body declares `Closes GAM-409` with `Ignore GAM-407`/`408`/`410`, so
+  merging records the evidence **without** closing a spike that is not done.
+- 2026-08-18 — **Item 19a escalation posted on GAM-407** (`commentCreate`
+  success: true) with the four findings, the parts that held, the provisional
+  read on §11.1 decision 1, and the single approve-or-hold question.
+- 2026-08-18 — **Linear states moved and read back** (item 28c's read-after-write,
+  applied to the release as well as the claim):
+  `GAM-407 => Needs Attention`, `GAM-408 => Backlog`, `GAM-409 => In Review`,
+  `GAM-410 => Backlog`. GAM-407 goes to `Needs Attention` rather than back to
+  `Todo` deliberately: in `Todo` the next agent burns a run reaching the same
+  wall. Nothing is left in `In Progress`.
+- 2026-08-18 — **RUN COMPLETE. No subagent was in flight at any point when this
+  process could have ended.** Two `checker-premise` agents were dispatched, both
+  with `run_in_background: false`, both waited for, both verdicts recorded above
+  before the next step began. No `worker-implementer` was ever spawned, because
+  item 19 forbade it. Scratch clusters: mine on port 55432 is stopped below; the
+  two gate agents each reported stopping and deleting theirs (55433, 55434).
