@@ -35,3 +35,12 @@ If this line is the last one in this file, the run died holding this subagent.
   Docs-only change under `docs/swarm/**`, which only the orchestrator may
   edit per AGENTS.md "Ownership and protected files" — consistent with FAST
   tier having no worker. Committed `968caed`, pushed.
+- **Gates run.** `npm ci` (node_modules was absent), then
+  `python3 .claude/skills/gate-run/scripts/gates.py --require-clean
+  --baseline-tests 2466` on `f12ee8e` (tree clean): tsc PASS, vite build
+  PASS, format:check PASS, eslint PASS (0 errors, 379 warnings —
+  pre-existing `react-refresh/only-export-components` class, not judged),
+  vitest full PASS (96 files / 2466 tests, baseline 2466 from GAM-410's last
+  recorded run, +0 — no regression), vitest scoped SKIPPED (docs-only
+  change, no `src/` path to scope to). Verdict: 5 of 6, correctly reported
+  as such.
