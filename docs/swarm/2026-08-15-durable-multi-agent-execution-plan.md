@@ -846,6 +846,15 @@ intermediate merge enables unfenced retry or lifecycle mutation.
 5. **Required checks from branch rules or a manifest.** This is wrong if the repository cannot maintain
    one authoritative required-check contract. The steward must not infer required checks from whichever
    jobs happened to report on one PR.
+6. **A control plane scoped to one application.** The dispatch function, the run store and the run record
+   all assume one repository and one Linear team; §5.1's authoritative record has no `repo` or `project`
+   column. This is wrong if the same process is meant to serve a second application, at which point each
+   one needs either its own control plane — N ops schemas, with §5.1's capability invariants re-proven N
+   times — or a shared one the current record cannot express. It is confirmed by a deliberate ruling that
+   this workflow belongs to this repository alone. The overturning evidence is a second application
+   entering the process; the migration it implies is bounded — a dedicated store, a `repo` column, and
+   routing by team → repository — precisely because the ops schema is required to stay additive and
+   operationally separate from product data.
 
 These doubts are gates, not reasons to abandon the design. Each names the evidence that would overturn
 the decision.
