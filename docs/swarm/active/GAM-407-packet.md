@@ -1,21 +1,39 @@
 # GAM-407 — bounded spike: is Supabase/Postgres a viable operational run store?
 
-**Revision 3** — all nine required revisions from `checker-premise` round 2
-(REVISE; 3 BLOCKER, 3 MAJOR, 3 MINOR, 1 NIT) applied, on top of revision 2's
-answer to round 1 (REVISE; 2 BLOCKER, 5 MAJOR, 9 MINOR, 2 NIT). Both gate reports
-are preserved at `docs/swarm/active/GAM-407-gate-round1.md` and `-round2.md`, and
-the measured facts they produced are consolidated in
+**Revision 4** — the owner cleared item 19a's escalation on 2026-08-18 and
+re-dispatched the row. Revision 3 answered round 2 (REVISE; 3 BLOCKER, 3 MAJOR,
+3 MINOR, 1 NIT), which answered round 1 (REVISE; 2 BLOCKER, 5 MAJOR, 9 MINOR,
+2 NIT). Both gate reports are preserved at
+`docs/swarm/active/GAM-407-gate-round1.md` and `-round2.md`, and the measured
+facts they produced are consolidated in
 `docs/swarm/active/GAM-407-interim-findings.md`.
 
-⚠ **This packet has NOT received a DISPATCH verdict, and item 19 forbids it
-reaching a worker until it does.** Item 19a's two rounds are spent, so the next
-step is the human owner, not a third gate round. It is written to be
-dispatch-ready the moment the owner answers the one question on GAM-407
-(Definition of Ready #3: the live-project half is unmeasurable from any
-dispatched run — approve delivering the database half as a deferral under item
-20 with a linked follow-up, or hold the row). Round 2's own recommendation was
-that revisions 1-9 are mechanical corrections with measured fixes and do not
-themselves need arbitration; they are applied below.
+**What changed in revision 4, and nothing else did:**
+
+1. **Definition of Ready #3 is now met.** The escalation is no longer merely
+   named — it is **pre-approved**. Owner, on GAM-407 at 12:01:52Z relaying
+   GAM-408's 11:50Z answer verbatim: *"proceed, pin the harness to PG 17"*, and
+   explicitly: *"The item-19a blocker is cleared — this is no longer an open
+   escalation, and a fresh gate round should not re-raise it as one."*
+2. **The live-project half is measured and is no longer a deferral at all.**
+   GAM-408 is `Done`. Plan tier **free**; extensions installed: `plpgsql`,
+   `pg_cron`, `pgcrypto`, `uuid-ossp`, `pg_net`, `pg_stat_statements`,
+   `supabase_vault`; server **PostgreSQL 17.6.1.141**. As this packet predicted,
+   **nothing in the design needs an extension.**
+3. **The harness is pinned to PostgreSQL 17, and every round-1/round-2 finding
+   is now provisional until re-established there.** Both gate rounds measured on
+   16.14. This is the owner's explicit instruction, not an inference, and it is
+   the substantive new work in this revision (§"PG 17" below).
+4. **A file-collision constraint from the owner:** GAM-410 / PR #198 is editing
+   `docs/swarm/2026-08-15-durable-multi-agent-execution-plan.md`. **No agent on
+   this row edits the plan document.** Findings that belong there are filed under
+   item 20 instead.
+
+⚠ **This packet has still NOT received a DISPATCH verdict, and item 19 forbids
+it reaching a worker until it does.** Item 19a's cap counts rounds against an
+open escalation; the owner has closed that escalation and re-dispatched, so one
+fresh round (round 3) is in order and must not re-raise the closed escalation as
+a finding.
 
 Issue: [GAM-407](https://linear.app/gamitch/issue/GAM-407/supabase-as-the-operational-run-store-is-the-plans-least-confident)
 Tier: **HEAVY** (item 26 — creates an ops schema with RLS and `security definer`
@@ -35,52 +53,113 @@ criterion ends in a written FAIL with evidence and an explicit owner decision on
 another store.** It never ends in a silent fallback to Linear-as-lock or a
 product-branch file. A crisp FAIL is a successful outcome of this packet.
 
-## Scope, and the one thing this run cannot do (escalated, not self-approved)
+## Scope: what this run measures, what the owner measured, and what stays unmeasured
 
 The issue requires the spike to measure the live project's **extension set** and
-**plan tier**. **No dispatched run can.** Measured in this container: no
-`SUPABASE_*`, no service-role key, no `VITE_SUPABASE_*`, no `DATABASE_URL`, no
-`.env`. That is also the correct posture — plan §5.2 says an executor holds no
-service-role key.
+**plan tier**. **No dispatched run can.** Re-measured in this container on the
+run-2 branch: no `SUPABASE_*`, no service-role key, no `VITE_SUPABASE_*`, no
+`DATABASE_URL`, no `.env`. That is also the correct posture — plan §5.2 says an
+executor holds no service-role key, and the owner reaffirmed it on re-dispatch:
+*"No service-role key goes to a dispatched run — plan §5.2."*
 
-Revision 1 quietly downgraded "must measure" to "report as unmeasured". The gate
-caught it (MAJOR-5) and it is now **escalated to the owner on the Linear issue**,
-with the two SQL statements that would close it. On the owner's approval this
-packet delivers the **database-layer half**, with the live-project half filed as
-a **linked follow-up task under item 20** (a deliberate deferral files a task,
-not just a comment) before the row moves. Stopping the whole row would leave plan
-§11.1 decision 1 entirely untested when most of it is testable today; that trade
-is stated here so it is correctable rather than silent.
+**This is no longer an open escalation and no longer a deferral.** The owner took
+the measurement from an authorized interactive connector and posted it on GAM-408
+(now `Done`), then relayed it onto this row. The result is recorded in the state
+table below. Revision 3's item-20 follow-up for the live measurement is therefore
+**withdrawn as unnecessary** — the thing it deferred has happened.
 
-**Authority correction (round 2, MINOR-R2-2).** Revision 2 cited **item 27** for
-this. Item 27 governs a *user-visible surface* reading from a fixture or stub and
-explicitly excludes work with no user-visible surface; a database spike has none.
-The governing rule is **item 20** plus the linked follow-up. The outcome was
-defensible; the rule cited did not say it.
+**Authority note, retained from revision 3 (round 2, MINOR-R2-2).** Revision 2
+cited **item 27** for the deferral. Item 27 governs a *user-visible surface*
+reading from a fixture or stub and explicitly excludes work with no user-visible
+surface; a database spike has none. The rule was **item 20**. Recorded because
+deleting a corrected citation deletes the evidence that the correction happened
+(item 30c).
 
-**Definition of Ready #3 requires an escalation to be named *and pre-approved*.**
-It is named and posted; it is not yet approved. Until it is, this packet is not
-Ready and no worker may be dispatched.
+**Definition of Ready #3 is met.** The escalation was named on GAM-408 and
+approved there at 11:50Z. A gate round that re-raises it is re-raising a closed
+question.
+
+**What remains genuinely unmeasured, and the report must say so:** the hosted
+project's *role* configuration — whether hosted `service_role`, `authenticated`
+and `anon` carry exactly the attributes this harness creates locally, and whether
+hosted Supabase grants an executor-shaped role anything the local one lacks. The
+owner's GAM-408 measurement covered extensions and plan tier, not `pg_roles`.
+This is least-confident decision 3 below and it is a **stated limit on the
+verdict**, not a deferral.
+
+## PG 17 — the pin, how it was achieved, and what it makes provisional
+
+The owner's instruction: *"Pin the harness to PostgreSQL 17. The live database is
+17.6.1.141; both gate rounds measured on 16.14. All four BLOCKER findings rest on
+GUC, RLS, role and grant semantics established on the wrong major version, so
+re-establish all four on PG 17 and treat the packet's PG-16 citations as
+provisional until you have."*
+
+**Measured by the orchestrator on the run-2 branch, 2026-08-18, before this
+revision was written:**
+
+- The container shipped **only** `/usr/lib/postgresql/16`. `apt-cache policy
+  postgresql-17` found no candidate until the PGDG repository was added.
+- Adding `deb https://apt.postgresql.org/pub/repos/apt noble-pgdg main` and
+  `apt-get install -y postgresql-17` succeeds (exit 0) and yields
+  **`postgres (PostgreSQL) 17.11 (Ubuntu 17.11-1.pgdg24.04+2)`**.
+- **No edit to the scratch-postgres skill is needed, and none is permitted** —
+  `.claude/skills/**` is protected by the constitution's Authority Boundaries.
+  `start.sh:33` reads `PGBIN=$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail
+  -1)`: it already selects the **highest** installed major. Installing the
+  package *is* the pin.
+- Re-run under 17: `applying 25 of 25 migrations`, one skipped
+  (`006-20260719000000_cron.sql [needs pg_cron]`), i.e. **24 applied**, and
+  `ready: postgres 17.11`.
+
+**The version the harness measures is 17.11; the live server is 17.6.1.141.**
+Same major, different minor, and the report must say that rather than write
+"PG 17" and let a reader assume identity. No behaviour this spike depends on is
+minor-version-scoped, but that is a claim, and it is stated as one.
+
+**Two of the four findings are already re-established on 17.11 by the
+orchestrator** (item 19c — verify your own citations before submitting):
+
+| Finding | Re-measured on PG 17.11 | Evidence |
+|---|---|---|
+| F1 — `request.jwt.claims` is a settable custom GUC | **HOLDS** | absent from `pg_settings` before and after; `set request.jwt.claims = '{"run_id":"a"}'` returns `SET`, `current_setting` reads it back |
+| F3 — `EXECUTE` defaults to `PUBLIC` on new functions | **HOLDS** | fresh `probe.f()` has `proacl` **null**, which is the default `EXECUTE TO PUBLIC` |
+| F2 — `security definer` owned by a `BYPASSRLS` role runs with RLS off | re-established **by the harness** (D3 ownership assertion) | AC12 |
+| F4 — `SET ROLE` is authorized against `session_user` | re-established **by the harness** (D7 `LOGIN` executor) | AC4 / AC12 |
+
+Also re-measured on 17.11: `sha256(bytea)` returns 64 hex chars and
+`gen_random_uuid()` works, **with no extension installed** — the built-in
+dependency D2 relies on holds on the pinned major.
+
+**F2 and F4 are not yet re-established, and the harness must do it.** AC12 makes
+that a criterion rather than a hope.
 
 ## Current measured state
 
-Measured 2026-08-18 on this branch and **independently re-measured by the
-round-1 gate on its own cluster**. Every row below is confirmed by both.
+Rows marked **(run 2)** were re-measured on this branch on 2026-08-18 under the
+PG 17 pin. Unmarked rows were measured in run 1 and independently confirmed by
+the round-1 and round-2 gates on their own clusters.
 
 | Claim | Measurement |
 |---|---|
 | No run/ops/checkpoint table exists | `supabase/migrations/` holds 25 files, all product schema; latest `20260812000000_events_rls_active_membership_read.sql`. `supabase/spikes/` does not exist yet |
 | `linear-dispatch` writes no state | `index.ts` imports exactly `filter/dispatch/notify/signature`; no storage client in any non-test source |
-| Scratch cluster | `.claude/skills/scratch-postgres/scripts/start.sh` works **only under `sudo -n`** (as `runner`: `chown … Operation not permitted`). PostgreSQL **16.14**; the script prints `applying 25 of 25 migrations` then `SKIPPED 1 migration(s) … 006-20260719000000_cron.sql [needs pg_cron]`, i.e. 24 are actually applied |
-| Extensions | `pgcrypto`, `uuid-ossp` **available, not installed**. `pgjwt`, `pg_net`, `pg_cron`, `pgsodium` **absent** |
+| **Scratch cluster (run 2)** | `.claude/skills/scratch-postgres/scripts/start.sh` works **only under `sudo -n`** (as `runner`: `chown … Operation not permitted`). After `apt-get install postgresql-17` it reports **`ready: postgres 17.11`**; `applying 25 of 25`, `SKIPPED 1 … 006-20260719000000_cron.sql [needs pg_cron]`, i.e. **24 applied** |
+| **Live Supabase project (owner-measured, GAM-408)** | Plan tier **free**. Extensions installed: `plpgsql`, `pg_cron`, `pgcrypto`, `uuid-ossp`, `pg_net`, `pg_stat_statements`, `supabase_vault`. Server **PostgreSQL 17.6.1.141**. **Nothing in this design needs any of them** |
+| **Built-ins on 17.11 (run 2)** | `sha256(bytea)` → 64 hex chars; `gen_random_uuid()` → ok. Neither needs `pgcrypto` |
 | Roles | `authenticated`, `anon` are `NOSUPERUSER NOBYPASSRLS`; `postgres` is superuser **with `BYPASSRLS`**. **`service_role` does not exist** and must be created by the harness |
-| Version skew | Scratch is PG **16.14**; `supabase/config.toml` declares `major_version = 17` for the hosted target. Immaterial to RLS/CAS semantics, but it must be named, not left for a reader to find |
 | PostgREST exposure | `supabase/config.toml` sets `schemas = ["public", "graphql_public"]`. Reaching an `ops` schema through PostgREST would require adding it there — a file this packet forbids |
-| **Live Supabase project** | **Unreachable.** No credential of any kind (see scope section) |
-| Node / vitest | Baseline `npx vitest run` = **96 files / 2466 tests**, green. `npx vitest run scripts/` = **11 files / 260 tests**. `vite.config.ts` sets no `include`, so vitest's default glob **does** collect `scripts/*.test.mjs` |
+| **Live credential in this run** | **Absent, by design** (plan §5.2). Re-checked on the run-2 branch |
+| **Node / vitest (run 2)** | `node_modules` was **absent** on this fresh container; `npm ci` exit 0. Baseline `npx vitest run` = **96 files / 2466 tests**, green. `npx vitest run scripts/` = **11 files / 260 tests**. `vite.config.ts` sets no `include`, so vitest's default glob **does** collect `scripts/*.test.mjs` |
 
-Operational note, not a measured-state claim: `node_modules` may be absent on a
-fresh container — run `npm ci` first.
+**Second-order input to §11.1 decision 1, from the owner's GAM-408 note, which
+the report must carry:** on the **free** tier a project pauses on inactivity —
+the sibling project `robotics-kanban` in this same org currently reads
+`INACTIVE`. **A store whose entire purpose is outliving executor death, hosted
+where the store itself pauses, is a genuine architectural input**, and §7
+scenario 15 ("store unavailable") is therefore not a hypothetical fault but the
+tier's steady-state behaviour. The report states this under criterion 3/§11.1,
+labelled as the owner's measurement rather than this run's.
 
 ## The five criteria, restated as things a machine can decide
 
@@ -119,7 +198,9 @@ and that nothing collides.)
 running it. `request.jwt.claims` is an unrecognised two-part custom GUC and is
 therefore `USERSET`: a `NOSUPERUSER NOBYPASSRLS` role re-set its own claim to
 another run's id and updated that row (`UPDATE 1`, re-read as `HIJACKED`), and
-`REVOKE SET ON PARAMETER` does not restrain it on PG 16. That design's security
+`REVOKE SET ON PARAMETER` does not restrain it on PG 16 — and the settability
+half is **re-measured on PG 17.11** (§"PG 17", F1), so the finding is no longer
+scoped to the wrong major. That design's security
 lives entirely in PostgREST, which this spike cannot exercise.
 
 So: **`ops_executor` gets no table grants at all** — only `execute` on
@@ -217,11 +298,21 @@ triggers fire):
 
 **Forbidden to every agent on this row:** `supabase/migrations/**` (D1),
 `.github/workflows/**` (a dispatched run cannot push it), `supabase/config.toml`,
-`src/**`, `vite.config.ts`, `docs/swarm/task-ledger.md` (frozen, item 29), any
-dependency change, and any command contacting a live Supabase, GitHub or Linear
-endpoint — other than the run log's own `git push` and the orchestrator's
-item-28 Linear status moves, which the dispatch protocol and constitution
-require.
+`src/**`, `vite.config.ts`, `docs/swarm/task-ledger.md` (frozen, item 29),
+**`.claude/skills/**` and `.claude/agents/**`** (constitution Authority
+Boundaries — and the PG 17 pin deliberately needs no skill edit, see §"PG 17"),
+**`docs/swarm/2026-08-15-durable-multi-agent-execution-plan.md`** (owner-imposed:
+GAM-410 / PR #198 is editing §5.1 concurrently; a finding that belongs in the
+plan is **filed under item 20**, not written), any dependency change, and any
+command contacting a live Supabase, GitHub or Linear endpoint — other than the
+run log's own `git push` and the orchestrator's item-28 Linear status moves,
+which the dispatch protocol and constitution require.
+
+**Orchestrator-only, and not delegated:** installing `postgresql-17`. It is a
+container-level `sudo apt-get` outside every worker's Allowed Files, it was
+already done before this revision was written, and a worker re-running it wastes
+a package install. Workers **assert** the version (AC12); they do not provision
+it.
 
 **CI note (MAJOR-6).** `.github/workflows/ci.yml` enumerates each SQL suite as an
 explicit step; there is no glob. A new harness therefore lands as a committed
@@ -238,8 +329,12 @@ body with that undeliverable half.
 
 Additive and idempotent (`create schema if not exists ops`). Self-contained: no
 extension is required — use the built-in `sha256(bytea)` (PG 11+) and
-`gen_random_uuid()` (PG 13+) rather than `pgcrypto`, so the schema does not
-inherit the hosted-extension question the spike cannot answer.
+`gen_random_uuid()` (PG 13+) rather than `pgcrypto`, both **re-measured working
+on the pinned 17.11 cluster with no extension installed**. The hosted project
+does have `pgcrypto` (GAM-408), so this is now a simplicity choice rather than a
+necessity — keep it anyway: depending on nothing is the stronger result for
+§11.1, and it keeps the spike schema portable to whatever store the owner picks
+if criterion 3 fails.
 
 **Roles, created by the schema:**
 
@@ -461,13 +556,34 @@ fixture path is needed and the checker can inspect the artifact.
     the chosen capability design and why (D2), compares the token-RPC and
     Edge-Function designs under **scenario 15**, cites `supabase/config.toml`'s
     `schemas` list as in-repo evidence about PostgREST exposure, and has its own
-    section naming what was **not** measured — the live project's extension set
-    and plan tier, escalated to the owner and filed as a linked follow-up.
+    section naming what was **not** measured. That section now says: the hosted
+    project's **role attributes** (`pg_roles`) — the extension set and plan tier
+    were measured by the owner on GAM-408 and are recorded, not deferred.
     **The Edge-Function side of that comparison is reasoned, not measured**, and
     the report must label it so; only the token-RPC design is built. A checker
     reading AC10 must not be able to mistake the comparison for evidence.
+    The report also carries the **free-tier pause** observation as an input to
+    §11.1 decision 1, attributed to the owner's GAM-408 measurement.
 11. If any criterion is FAIL, the report ends in the stop rule: a written FAIL
     and a named owner decision, never a fallback.
+12. **The PG 17 pin is asserted, not assumed, and all four prior findings are
+    re-established on it.** The harness aborts with a clear message unless
+    `show server_version_num` is **≥ 170000**, prints the exact
+    `server_version` it measured on, and the report records it beside the live
+    server's `17.6.1.141` — same major, different minor, stated as such. Both
+    findings the orchestrator has **not** already re-measured on 17.11 are
+    re-established by harness assertions rather than by prose:
+    - **F2** — `security definer` owned by a `BYPASSRLS` role runs with RLS off:
+      the D3 ownership assertion (negative 7) is the standing proof, and the
+      D2a negative-control table exercises the claims-keyed path it breaks.
+    - **F4** — `SET ROLE` authorized against `session_user`: satisfied by D7's
+      direct `psql -U ops_executor` connection; the harness asserts
+      `session_user = 'ops_executor'` **and** `usesuper = false` for it before
+      running negative 3, so a rig regression fails loudly instead of turning
+      AC4 into a false FAIL.
+    If any of the four does **not** hold on 17, that is a **finding, not a
+    failure** — record it, keep the evidence, and say which design conclusion
+    changes.
 
 ## Verification and mutation
 
@@ -489,16 +605,18 @@ fixture path is needed and the checker can inspect the artifact.
 
 ## Least confident decisions (item 19d)
 
-1. **Delivering the database-layer half rather than stopping the row.** This is
-   wrong if the owner considers the live extension/plan-tier measurement
-   load-bearing enough that a DB-layer-only result is misleading rather than
-   partial. What settles it: the owner's answer to the escalation posted on
-   GAM-407 — and until that answer arrives, Definition of Ready #3 is unmet and
-   this packet is **not** dispatchable, however complete the rest of it is.
-   Mitigated by never recording the verdict as PASS, and by filing the
-   live-project measurement as a linked follow-up task under **item 20** (round
-   2, MINOR-R2-2: item 27 is the wrong authority — it governs user-visible
-   surfaces and a database spike has none).
+1. **Treating "install `postgresql-17` from PGDG" as satisfying the owner's
+   *"pin the harness to PG 17"*.** The pin is implicit: `start.sh:33` selects the
+   highest installed major, so the harness follows the container rather than
+   declaring a version. This is wrong if the owner meant an *explicit* pin the
+   harness itself enforces — and it is wrong in a way that bites elsewhere,
+   because a machine with 16 and 17 installed but 18 added later silently moves.
+   Partially mitigated by AC12's `server_version_num >= 170000` abort, which
+   makes the *floor* explicit even though the selection is not. It is **also**
+   wrong if 17.11-vs-17.6.1.141 matters; I have asserted it does not and that
+   assertion is not measured. What would settle it: the owner saying whether a
+   version floor is the pin they meant, or the harness growing an exact-version
+   argument. **Round 3 should attack this first.**
 2. **The token-RPC capability (D2) as the design the spike measures.** This is
    wrong if the production design must be the Edge-Function-holds-service-role
    variant and the token-RPC result does not transfer — in particular if the ops
@@ -506,6 +624,17 @@ fixture path is needed and the checker can inspect the artifact.
    `supabase/config.toml`'s `schemas = ["public","graphql_public"]` shows it is
    not today. The report must compare both under scenario 15 and say plainly
    that only one was measured.
+2a. **That the owner's GAM-408 measurement closes the "live project" deliverable
+   entirely.** It closed extensions and plan tier — the two things the issue
+   named. It did **not** cover `pg_roles`, and criterion 3's whole argument is a
+   role-attribute argument. This is wrong if hosted `service_role`,
+   `authenticated` or `anon` differ from what the harness creates, in which case
+   a green AC4 measures the local rig and not Supabase. Not deferrable to another
+   run either — the same §5.2 credential constraint applies. **Mitigation is
+   honesty, not evidence:** AC10 requires the report to name hosted role
+   attributes as unmeasured, and no criterion-3 verdict may read PASS without
+   that caveat attached in the same sentence.
+
 3. **A scratch role as a stand-in for a hosted Supabase role.** Round 1 showed
    the naive version of this argument was inverted; round 2 then showed my
    *replacement* safeguard was a no-op. `alter default privileges in schema
