@@ -238,6 +238,8 @@ Before committing to the schema, a bounded spike must prove:
 - duplicate webhooks are idempotent;
 - the executor can publish a result through a run-scoped capability without receiving service-role,
   GitHub, or Linear credentials;
+- (forward reference: see §5.2a for the capability-model invariants a run-scoped capability design
+  must satisfy);
 - the controller can make GitHub and Linear writes after validating that result; and
 - controller state is backed up or summarized into durable git evidence at episode completion.
 
@@ -291,6 +293,41 @@ The controller alone may:
 
 The run-scoped capability cannot advance its own generation or choose a different issue. Revoking or
 advancing the generation makes every later submission from the old executor fail closed.
+
+### 5.2a Capability-model invariants (measured, GAM-407)
+
+The four invariants below are requirements a run-scoped capability design **must** satisfy, not
+narrative description. They were measured adversarially against a real PostgreSQL 16.14 cluster
+carrying this repository's product schema (`docs/swarm/active/GAM-407-interim-findings.md`, Part 1,
+findings F1-F4), and each is stated so it can be mechanically asserted or measured against a real
+connection:
+
+1. A capability must not be carried in a settable GUC. `request.jwt.claims` is the concrete example:
+   PostgreSQL classifies it `USERSET` as an unrecognised custom GUC, and `REVOKE SET ON PARAMETER`
+   does not restrain it — a claims-keyed capability's security lives entirely in PostgREST, not in
+   the database, and any design relying on it must say so in its threat model.
+2. Every `security definer` helper must be owned by a `NOSUPERUSER NOBYPASSRLS` role, and this must
+   be asserted mechanically (e.g. `select rolbypassrls from pg_roles where rolname =
+   pg_get_userbyid(proowner)` reads `false` for every such object) — `force row level security`
+   binds the table owner and does not defeat the `BYPASSRLS` role attribute.
+3. Every function grant must be explicit and preceded by `revoke execute … from public`, asserted
+   against `pg_proc.proacl` (a null `proacl` means `EXECUTE TO PUBLIC`, PostgreSQL's default for
+   every new function).
+4. Escalation negatives must be measured from a real `LOGIN` connection, never via `SET ROLE` from a
+   superuser session — `SET ROLE` is authorized against `session_user`, so from a superuser-rooted
+   session every `SET ROLE` to a target role succeeds regardless of the design's actual grants,
+   making an "executor cannot escalate" assertion either a false FAIL or a check quietly weakened
+   until it proves nothing.
+
+`supabase/config.toml:13` currently reads `schemas = ["public", "graphql_public"]`. Exposing an `ops`
+schema through PostgREST — which invariant 1 shows is where a claims-keyed capability's security
+actually lives — requires a config change, which is checkable, in-repo evidence for the
+Edge-Function-vs-RLS comparison §5.1's spike leaves open.
+
+These invariants constrain whatever store §5.1's spike selects; they do not presuppose Supabase and
+must not be read as pre-empting GAM-407's verdict.
+
+Source: `docs/swarm/active/GAM-407-interim-findings.md`, Part 1, findings F1-F4.
 
 ### 5.3 Credential paths
 
@@ -797,7 +834,8 @@ intermediate merge enables unfenced retry or lifecycle mutation.
 
 1. **Supabase as the operational run store.** This is wrong if a bounded spike cannot provide atomic
    compare-and-set, run-scoped publication, and acceptable operational isolation without handing the
-   executor a broader credential.
+   executor a broader credential, where "acceptable operational isolation" is now specifically
+   bounded by §5.2a's four capability-model invariants.
 2. **Controller-only checkpoint publication.** This is wrong if transferring a useful commit, patch,
    or bundle through the run-scoped controller path costs more or fails more often than the work it
    protects. The manual-resume fire drill must measure this rather than assume it.
