@@ -20,6 +20,9 @@ jobs:
   ci:
     name: Typecheck, Lint, Format, Test, Build, Bundle Size
     runs-on: ubuntu-latest
+    # GAM-402: measured 1m44s warm (run 32093928987); bound turns a hang into
+    # a named failure instead of a 6-hour default.
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -185,6 +188,8 @@ jobs:
   sql:
     name: SQL suites (RLS denial, metric views, migration guards)
     runs-on: ubuntu-latest
+    # GAM-402: measured 59s warm incl. 25s container startup (run 32093928987).
+    timeout-minutes: 10
 
     services:
       postgres:
@@ -269,6 +274,8 @@ jobs:
   skill-scripts:
     name: Skill script tests (mutation-replay, gate-run parsers)
     runs-on: ubuntu-latest
+    # GAM-402: measured 12s (run 32093928987).
+    timeout-minutes: 5
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -327,6 +334,8 @@ jobs:
   edge-functions:
     name: Edge Function tests (Deno)
     runs-on: ubuntu-latest
+    # GAM-402: measured 16s (run 32093928987).
+    timeout-minutes: 5
     steps:
       - name: Checkout
         uses: actions/checkout@v4
