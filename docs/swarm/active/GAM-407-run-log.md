@@ -631,3 +631,42 @@ and satisfies the declaration gate's rule 3 that blocked #196 (GAM-411).
   reported" → "the version bump that `ok` implies" (the victim SQL selects only
   `'published=' || outcome`; it never selects `new_version`). Harness re-run
   after the change: **37 assertions, 0 failed**, ALL PASS.
+- 2026-08-18 — **Spike report written and pushed**:
+  `docs/swarm/active/GAM-407-spike-report.md`. PASS/PARTIAL/FAIL per criterion,
+  the four capability findings, the measured-vs-reasoned design comparison, the
+  PG-16 portability result, **and the checker's twelve-item "must not claim"
+  list, carried verbatim as binding.** No criterion is FAIL, so plan §5.1's stop
+  rule does not fire.
+- 2026-08-18 — **Two more item-20 rows filed** (`Backlog`, via
+  `linear-task-writing`): **GAM-416** `tier/fast` — the three remaining
+  assertions that pass when the thing they guard does not exist; **GAM-417**
+  `tier/standard` — criterion 5's git-write half. The checker's three packet
+  NITs I fixed directly rather than deferring, since I own that document:
+  `service_role=f` → `t` with the reason kept (item 30c), the outcome vocabulary
+  scoped to `publish_checkpoint`, and AC14's inapplicable controller clause
+  struck.
+- 2026-08-18 — **Verification-log entry written in the same change as the
+  merge-ready branch** (item 24): commands, mutation table, the check that
+  changed the outcome, the four findings, and the four filed rows.
+- 2026-08-18 — **Final gates** (`482183b`, tree clean): **PASS — all six.**
+  tsc 0, vite build 0, format:check 0, eslint 0 errors / 379 standing warnings,
+  vitest full **98 files / 2505** (+39), vitest `scripts/` **13 files / 299**
+  (+39). Six of six, with a real scope for gate 6 this time.
+- 2026-08-18 — **PR body written to `docs/swarm/active/GAM-407-pr-body.md`
+  BEFORE attempting the API call**, per the `pr-body` skill. Declaration
+  checker: `OK declaration closes GAM-407`, exit 0, with four deliberate
+  `Ignore GAM-414/415/416/417` lines warned-but-accepted. Branch name
+  `claude/gam-407-run-store-spike` matches the declaration, so the rule-3
+  collision that blocked PR #196 (GAM-411) does not recur.
+- 2026-08-18 — **PR could NOT be opened — this is GAM-333's wall, measured
+  again.** Three credential routes tried, all refused:
+  `gh pr create` → `HTTP 401: Bad credentials`; `GH_TOKEN`/`GITHUB_TOKEN` →
+  `401`; the token embedded in the remote URL → `401` (it expired at epoch
+  1787058071, 31 minutes before the attempt); and the `http.extraheader` basic
+  credential that `git push` **does** still work with →
+  **`403 Resource not accessible by personal access token`**. So pushing is
+  permitted and opening a pull request is not — a permission boundary, not a
+  transient failure, and not one to route around.
+  **Everything needed is on the branch.** The body is a committed artifact and
+  the PR opens from it with one paste; that is exactly the case the `pr-body`
+  skill records nine PRs depending on.
