@@ -1,0 +1,20 @@
+--- a/.claude/skills/pr-body/SKILL.md
++++ b/.claude/skills/pr-body/SKILL.md
+@@ -62,6 +62,17 @@
+ way once (#173, #174, #175) before anyone read item 5.** If a line looks
+ contradictory, read item 5 before editing it.
+ 
++**`Ignore` does not satisfy rule 3 of the `Linear declaration` check.** Rule 3
++(`scripts/linear-declaration-check.mjs`) is a separate, stricter gate than
++Linear's own linking: it requires the branch's own identifier and line 1's
++declared identifier to match *exactly*, with no `Ignore` exemption — `Ignore`
++only suppresses Linear's linking on merge. If a packet's premise gate blocks
++the row and the run instead files a salvage row, that salvage PR needs its
++**own** branch (`claude/gam-<salvage-nnn>-*`) declaring the salvage identifier
++on line 1 — not the original blocked-row branch with `Ignore` bolted on. GAM-411
++measured this against PR #196: `claude/gam-407-*` declaring `Closes GAM-409`
++plus `Ignore GAM-407` still went red on rule 3.
++
+ **2. Write the body to a file before you try to open the PR.**
+ 
+ ```

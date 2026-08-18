@@ -47,6 +47,20 @@ Constitution **item 28** is binding and its order matters:
    Linear suppresses the link outright, even when the branch name carries that
    identifier. Otherwise merging closes a row you never worked on
    (`WORKFLOWS.md` rule 2).
+
+   **A salvage row filed after a blocked packet needs its own branch, not
+   `Ignore` on the old one.** If a run pivots from implementing the blocked row
+   to filing a salvage row instead, the branch's actual work is now the salvage
+   row's — open a fresh `claude/gam-<salvage-nnn>-short-slug` branch and declare
+   *that* identifier on line 1, rather than committing the salvage work to the
+   original blocked-row branch and adding `Ignore GAM-nnn` for it. `Ignore`
+   suppresses Linear's own linking; it does **not** satisfy this repository's
+   own `Linear declaration` CI check, whose rule 3
+   (`scripts/linear-declaration-check.mjs`) requires the branch's identifier and
+   line 1's declared identifier to match exactly and has no `Ignore` exemption.
+   GAM-411, measured against PR #196: a `claude/gam-407-*` branch declaring
+   `Closes GAM-409` plus `Ignore GAM-407` still went red on rule 3, because the
+   branch itself, not just the closing behavior, disagreed with line 1.
 6. On completion move it to `In Review` — **never `Done`**. A team automation
    closes the issue when the last linked PR merges; an agent closing its own is
    self-certification. Open the PR with **`Closes GAM-nnn` as its first body
