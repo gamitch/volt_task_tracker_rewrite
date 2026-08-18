@@ -231,3 +231,38 @@ and satisfies the declaration gate's rule 3 that blocked #196 (GAM-411).
      item 20 instead.
   Deliverables named by the owner: `supabase/spikes/**`, a migration, and a spike
   report under `docs/swarm/active/`.
+- 2026-08-18 — **PG 17 pin achieved and measured, before the packet was revised**
+  (item 19c). The container shipped only `/usr/lib/postgresql/16` and
+  `apt-cache policy postgresql-17` had no candidate. Added the PGDG apt repo,
+  `apt-get install -y postgresql-17` → exit 0, `postgres (PostgreSQL) 17.11
+  (Ubuntu 17.11-1.pgdg24.04+2)`. **No skill edit was needed and none is
+  permitted**: `start.sh:33` already picks the highest installed major, so
+  installing the package *is* the pin. Re-run: `ready: postgres 17.11`,
+  24 of 25 migrations applied (`pg_cron` one skipped). Scratch is **17.11**, live
+  is **17.6.1.141** — same major, different minor, and the report says so.
+- 2026-08-18 — **Two of the four BLOCKER findings re-established on PG 17.11 by
+  me, not assumed**: F1 `request.jwt.claims` is still an unrecognised custom GUC
+  a plain session can `set` and read back; F3 a fresh function's `proacl` is
+  still **null**, i.e. `EXECUTE TO PUBLIC` by default. Also re-measured:
+  `sha256(bytea)` → 64 hex chars and `gen_random_uuid()` work with **no**
+  extension installed. F2 and F4 are role-semantics and are re-established by the
+  harness under new **AC12** rather than by prose.
+- 2026-08-18 — **Baseline re-measured on this branch**: `npm ci` exit 0 (
+  `node_modules` was absent), `npx vitest run` exit 0 = **96 files / 2466 tests**.
+  Unchanged from run 1, so the packet's gate figures stand.
+- 2026-08-18 — **Packet revision 4 written and pushed** (`cb9b18b`). Changes:
+  Definition of Ready #3 now **met** (escalation approved, not merely named);
+  the live-project deferral **withdrawn as unnecessary** because GAM-408 measured
+  it; a new §"PG 17" recording the pin and what it makes provisional; the plan
+  document added to Forbidden Files for the GAM-410 collision; new **AC12**
+  requiring a `server_version_num >= 170000` abort and harness re-establishment
+  of F2/F4; and the item-19d list rewritten — LCD 1 is now the pin itself
+  (implicit, version-floor rather than exact) and a new LCD 2a says the owner's
+  measurement covered extensions and plan tier but **not `pg_roles`**, which is
+  what criterion 3's whole argument rests on.
+- 2026-08-18 — **DISPATCHED `checker-premise` (round 3) on packet revision 4**,
+  item 19 gate, `run_in_background: false`, blocking. The owner closed round 1/2's
+  escalation, so this round is on the *revised* packet and is instructed not to
+  re-raise it. **If this line is the last one in this file, the run died holding
+  this subagent** — the packet has NOT cleared the gate and no worker was
+  dispatched.
