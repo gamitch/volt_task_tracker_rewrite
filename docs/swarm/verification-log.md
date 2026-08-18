@@ -12574,3 +12574,102 @@ prose did, before the branch existed. Full detail in
   untouched. GAM-371's own issue text suggested covering `/accept-invite`'s
   overflow case "in the same pass" as optional scope; not taken here to keep
   the diff to the one project entry the issue sized this task at.
+
+---
+
+## GAM-407 — bounded spike: is Supabase/PostgreSQL a viable operational run store?
+
+Merged 2026-08-18 on `claude/gam-407-run-store-spike`. Tier **HEAVY** (item 26):
+`security definer` helpers, RLS on a negative-control table, and an artifact
+that decides the store every Phase 2 slice builds on.
+
+**Result: no criterion is FAIL, so plan §5.1's stop rule does not fire.**
+Criteria 1, 2, 3, 4 PASS; criterion 5 **PARTIAL** (deterministic renderer built,
+nothing writes to git — GAM-417). §7 scenarios 1, 2, 13, 14 PASS; **scenario 15
+PARTIAL** (unreachable-store case only; the ambiguous partial-write case is
+exercised nowhere). Criterion 3's PASS carries a stated limit: the hosted
+project's `pg_roles` attributes are unmeasured (GAM-414).
+
+Full per-criterion verdict and the binding "what this must not claim" list:
+`docs/swarm/active/GAM-407-spike-report.md`.
+
+### Commands run and output
+
+- `bash supabase/tests/run_gam407_run_store_spike.sh` on PostgreSQL **17.11**
+  (`170011`), 24 of 25 product migrations applied →
+  **37 assertions, 0 failed, exit 0**, `ALL PASS`. Reproduced independently by
+  `checker-reviewer` on its own cluster.
+- The same harness on PostgreSQL **16.14** → **37/0, exit 0**, with
+  `PARTIAL: measured on PG 16.14 …, not the pinned 17` on the banner and every
+  result line. **Nothing in the design is PG-17-specific** — measured twice, by
+  two agents.
+- `python3 .claude/skills/gate-run/scripts/gates.py --baseline-tests 2466
+  --scope scripts/ --baseline-scoped 260` → **PASS, all six.** tsc 0, vite build
+  0, format:check 0, eslint 0 errors / 379 standing warnings, vitest full
+  **98 files / 2505** (+39), vitest `scripts/` **13 files / 299** (+39).
+
+### Mutation evidence
+
+Four packet mutations, each replayed by the checker in its own worktree:
+
+| Mutation | Result |
+|---|---|
+| Drop `version` from the CAS `where` | RED — `ac2-single-update-cas` and `crit1-stale-version` |
+| Drop `unique (issue_identifier, todo_event_id)` | RED — 13 failures. Arrives as a hard `42P10` (`on conflict` unplannable), **not** as a duplicate row; the checker separately built the stronger variant and got `rows=2`, two distinct `run_id`s, both `created=true` |
+| `alter function ops.publish_checkpoint owner to postgres` | RED — `guard-d3-ownership` |
+| `publishExternal` calls the sinks before validating | RED — **8** tests, all six zero-invocation cases plus the ordering test |
+
+### The check that changed the outcome
+
+`checker-reviewer` **FAILED** attempt 1 on MAJOR-1 and proved it by
+construction: scenario 15's four-term conjunction had a last term
+(`after = before`) satisfied trivially whenever **no publication ever
+occurred**. With `schema.sql` completely intact it pointed the token at a
+non-resolving value and the harness still reported `37 assertions, 0 failed`,
+`ALL PASS`, exit 0 — with the line still claiming the publication rolled back.
+
+Fixed in `4c4389d` (two files) by making the assertion depend on the victim
+transaction reporting `published=ok`, which `schema.sql:252-270` sets only
+inside `if v_rows = 1`. The checker re-reviewed, re-ran its own probe (now red,
+and red for the *new* reason — the old term was still trivially green), and then
+designed a **second** probe it had not been asked for: a *valid* token with
+`p_expected_version => 999` so the CAS could not match, isolating "the update
+happened" from "the token resolved". Also red. **ACCEPT WITH FOLLOW-UPS.**
+
+### Four findings about plan §5.1's capability model, all re-established on PG 17.11
+
+1. RLS keyed on `request.jwt.claims` enforces nothing against a holder who can
+   issue SQL — `REVOKE SET ON PARAMETER` restrains nothing. Kept as a committed
+   negative control.
+2. A `security definer` function owned by a `BYPASSRLS` role runs with RLS off;
+   `force row level security` binds the owner, not the role attribute.
+3. `PUBLIC` holds `EXECUTE` on every new function by default — an executor
+   reached `advance_generation` on **another run** and was handed its plaintext
+   token.
+4. `SET ROLE` is authorized against `session_user`, so a `nologin` rig makes
+   every escalation assertion succeed.
+
+Three of the four are stock defaults. **The design is viable; the default
+configuration is not**, and every one would have shipped green under a review
+that read the code instead of running it.
+
+### Process
+
+Premise gate ran **four** rounds — REVISE, REVISE, REVISE, **DISPATCH**. Rounds 1
+and 2 ended in an item-19a escalation that the human owner closed on 2026-08-18
+(*"proceed, pin the harness to PG 17"*), which also supplied the live-project
+measurement GAM-408 carries. Workers: A (opus per item 18) `6f79372` then
+`4c4389d`; B (default pin) `77e7ea9`. Item 21 existence verified for both before
+merge.
+
+### Filed, not fixed here (item 20)
+
+- **GAM-414** `tier/fast` `gate/human` — the hosted `pg_roles` query that would
+  lift criterion 3 from PASS-with-caveat to PASS.
+- **GAM-415** `tier/standard` — CI runs all nine SQL suites on `postgres:16`
+  while `config.toml:33` declares `major_version = 17`; also carries CI-wiring
+  this harness, which is deliberately local-only.
+- **GAM-416** `tier/fast` — three harness assertions that pass when the thing
+  they guard does not exist (the same family as MAJOR-1, caught before they
+  misled anyone).
+- **GAM-417** `tier/standard` — criterion 5's git-write half.

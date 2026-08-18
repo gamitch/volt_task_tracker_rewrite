@@ -1,21 +1,66 @@
 # GAM-407 — bounded spike: is Supabase/Postgres a viable operational run store?
 
-**Revision 3** — all nine required revisions from `checker-premise` round 2
-(REVISE; 3 BLOCKER, 3 MAJOR, 3 MINOR, 1 NIT) applied, on top of revision 2's
-answer to round 1 (REVISE; 2 BLOCKER, 5 MAJOR, 9 MINOR, 2 NIT). Both gate reports
-are preserved at `docs/swarm/active/GAM-407-gate-round1.md` and `-round2.md`, and
-the measured facts they produced are consolidated in
-`docs/swarm/active/GAM-407-interim-findings.md`.
+**Revision 6 — DISPATCH.** `checker-premise` **round 4** returned **DISPATCH**
+on revision 5 (0 BLOCKER, 0 MAJOR, 5 MINOR, 4 NIT), and revision 6 applies all
+nine. **Item 19's gate is satisfied and a worker may be dispatched** — the first
+time on this row, after four rounds. Reports: `GAM-407-gate-round1.md`,
+`-round2.md`, `-round3.md`, `-round4.md`; consolidated findings in
+`GAM-407-interim-findings.md`.
 
-⚠ **This packet has NOT received a DISPATCH verdict, and item 19 forbids it
-reaching a worker until it does.** Item 19a's two rounds are spent, so the next
-step is the human owner, not a third gate round. It is written to be
-dispatch-ready the moment the owner answers the one question on GAM-407
-(Definition of Ready #3: the live-project half is unmeasurable from any
-dispatched run — approve delivering the database half as a deferral under item
-20 with a linked follow-up, or hold the row). Round 2's own recommendation was
-that revisions 1-9 are mechanical corrections with measured fixes and do not
-themselves need arbitration; they are applied below.
+Round 4 closed both of revision 5's judgement calls **by construction**: it built
+the 4-arg `publish_checkpoint` on its own PG 17.11 cluster and produced **all
+four outcomes** across nine cases, proved the two scenario-13 routes cleanly
+separable, found **no fencing bypass** via the new argument, and re-ran the
+concurrent CAS to exactly-once. Its five MINORs were all real and are applied
+below — one of them (MINOR-1) was a sentence in D2 that still described the
+tautology revision 5 had removed, which a worker reading D2 first would have
+rebuilt.
+
+**Revision 5** — answered `checker-premise` **round 3** (REVISE; 1 BLOCKER,
+2 MAJOR, 2 MINOR, 4 NIT).
+
+**Round 3 rebuilt the whole prescribed design on its own PG 17.11 cluster and
+attacked it, and the design survived** — every criterion-3 negative, the CAS,
+idempotency under genuine concurrency, generation fencing, scenario 14 (never
+previously exercised by anyone), scenario 15's store-side half and the D2a
+forgery control all reproduce on the pinned major. Its three substantive findings
+were about **claims this packet made that its own criteria did not deliver**, not
+about the database design.
+
+**What changed in revision 5:**
+
+1. **The CI patch is withdrawn and the harness is local-only** (BLOCKER-R3-1).
+   `ci.yml:196` runs the `sql` job on a `postgres:16` service container, so the
+   patch revision 4 mandated could only ever go red — and the remedy that would
+   work moves nine green SQL suites onto a new major, which is a Definition of
+   Ready #5 question the owner must answer, not a side effect of a spike.
+   Deferral filed under item 20. AC12's hard version abort becomes
+   **record-and-degrade**, and `ops_executor` gains a password so criterion 3
+   does not depend on `trust` auth.
+2. **`publish_checkpoint` takes `p_expected_generation`** (MAJOR-R3-1). Revision
+   4's signature derived the generation from the row it then filtered on — a
+   tautology that can never reject, measured. **Criterion 1 requires validating
+   all three together, so revision 4 would have reported PASS while testing two
+   thirds of it.**
+3. **The §"PG 17" F2/F4 rows are rewritten with round 3's direct measurements**
+   (MAJOR-R3-2). Revision 4 called D3/D7 "re-establishment"; they are rig guards.
+   All four findings now **hold on 17.11**, and the packet says who measured each.
+4. An item-20 successor row for the hosted `pg_roles` query, which round 3
+   correctly pointed out is closable on the same channel GAM-408 used
+   (MINOR-R3-1), plus the four NITs.
+
+**What revision 4 established and revision 5 keeps:** Definition of Ready #3 is
+met — the owner pre-approved this row on GAM-407 at 12:01:52Z, relaying GAM-408's
+11:50Z answer verbatim, *"proceed, pin the harness to PG 17"*, and stating that
+**the item-19a blocker is cleared**. The live project is measured (plan tier
+`free`; `plpgsql`, `pg_cron`, `pgcrypto`, `uuid-ossp`, `pg_net`,
+`pg_stat_statements`, `supabase_vault`; **PostgreSQL 17.6.1.141**) and **nothing
+in this design needs an extension**. GAM-410 / PR #198 is concurrently editing
+`docs/swarm/2026-08-15-durable-multi-agent-execution-plan.md`, so **no agent on
+this row edits the plan document**.
+
+✅ **DISPATCH received (round 4, 2026-08-18). Definition of Ready 1-5 are met.**
+Item 19's precondition for reaching a worker is satisfied.
 
 Issue: [GAM-407](https://linear.app/gamitch/issue/GAM-407/supabase-as-the-operational-run-store-is-the-plans-least-confident)
 Tier: **HEAVY** (item 26 — creates an ops schema with RLS and `security definer`
@@ -35,52 +80,136 @@ criterion ends in a written FAIL with evidence and an explicit owner decision on
 another store.** It never ends in a silent fallback to Linear-as-lock or a
 product-branch file. A crisp FAIL is a successful outcome of this packet.
 
-## Scope, and the one thing this run cannot do (escalated, not self-approved)
+## Scope: what this run measures, what the owner measured, and what stays unmeasured
 
 The issue requires the spike to measure the live project's **extension set** and
-**plan tier**. **No dispatched run can.** Measured in this container: no
-`SUPABASE_*`, no service-role key, no `VITE_SUPABASE_*`, no `DATABASE_URL`, no
-`.env`. That is also the correct posture — plan §5.2 says an executor holds no
-service-role key.
+**plan tier**. **No dispatched run can.** Re-measured in this container on the
+run-2 branch: no `SUPABASE_*`, no service-role key, no `VITE_SUPABASE_*`, no
+`DATABASE_URL`, no `.env`. That is also the correct posture — plan §5.2 says an
+executor holds no service-role key, and the owner reaffirmed it on re-dispatch:
+*"No service-role key goes to a dispatched run — plan §5.2."*
 
-Revision 1 quietly downgraded "must measure" to "report as unmeasured". The gate
-caught it (MAJOR-5) and it is now **escalated to the owner on the Linear issue**,
-with the two SQL statements that would close it. On the owner's approval this
-packet delivers the **database-layer half**, with the live-project half filed as
-a **linked follow-up task under item 20** (a deliberate deferral files a task,
-not just a comment) before the row moves. Stopping the whole row would leave plan
-§11.1 decision 1 entirely untested when most of it is testable today; that trade
-is stated here so it is correctable rather than silent.
+**This is no longer an open escalation.** The owner took the measurement from an
+authorized interactive connector and posted it on GAM-408 (now `Done`), then
+relayed it onto this row. The result is recorded in the state table below.
 
-**Authority correction (round 2, MINOR-R2-2).** Revision 2 cited **item 27** for
-this. Item 27 governs a *user-visible surface* reading from a fixture or stub and
-explicitly excludes work with no user-visible surface; a database spike has none.
-The governing rule is **item 20** plus the linked follow-up. The outcome was
-defensible; the rule cited did not say it.
+**But only half of it is closed, and revision 4 withdrew the whole follow-up
+(round 3, MINOR-R3-1).** GAM-408 answered *extensions* and *plan tier* — the two
+things the issue named. It did not touch `pg_roles`, and criterion 3's entire
+argument is a role-attribute argument. Revision 4 then wrote that the role half
+was "not deferrable to another run either", which is **false**: GAM-408 is the
+counterexample, on this row, today — the owner's interactive connector is not a
+dispatched run and is not bound by §5.2. So revision 5 files a **narrower
+item-20 successor** carrying one query — **GAM-414** (`tier/fast`, `gate/human`,
+`Backlog`) — rather than leaving a known, closable gap with no triage record.
 
-**Definition of Ready #3 requires an escalation to be named *and pre-approved*.**
-It is named and posted; it is not yet approved. Until it is, this packet is not
-Ready and no worker may be dispatched.
+**Authority note, retained from revision 3 (round 2, MINOR-R2-2).** Revision 2
+cited **item 27** for the deferral. Item 27 governs a *user-visible surface*
+reading from a fixture or stub and explicitly excludes work with no user-visible
+surface; a database spike has none. The rule was **item 20**. Recorded because
+deleting a corrected citation deletes the evidence that the correction happened
+(item 30c).
+
+**Definition of Ready #3 is met.** The escalation was named on GAM-408 and
+approved there at 11:50Z. A gate round that re-raises it is re-raising a closed
+question.
+
+**What remains genuinely unmeasured, and the report must say so:** the hosted
+project's *role* configuration — whether hosted `service_role`, `authenticated`
+and `anon` carry exactly the attributes this harness creates locally, and whether
+hosted Supabase grants an executor-shaped role anything the local one lacks. The
+owner's GAM-408 measurement covered extensions and plan tier, not `pg_roles`.
+This is least-confident decision 3 below and it is a **stated limit on the
+verdict**, not a deferral.
+
+## PG 17 — the pin, how it was achieved, and what it makes provisional
+
+The owner's instruction: *"Pin the harness to PostgreSQL 17. The live database is
+17.6.1.141; both gate rounds measured on 16.14. All four BLOCKER findings rest on
+GUC, RLS, role and grant semantics established on the wrong major version, so
+re-establish all four on PG 17 and treat the packet's PG-16 citations as
+provisional until you have."*
+
+**Measured by the orchestrator on the run-2 branch, 2026-08-18, before this
+revision was written:**
+
+- The container shipped **only** `/usr/lib/postgresql/16`. `apt-cache policy
+  postgresql-17` found no candidate until the PGDG repository was added.
+- Adding `deb https://apt.postgresql.org/pub/repos/apt noble-pgdg main` and
+  `apt-get install -y postgresql-17` succeeds (exit 0) and yields
+  **`postgres (PostgreSQL) 17.11 (Ubuntu 17.11-1.pgdg24.04+2)`**.
+- **No edit to the scratch-postgres skill is needed, and none is permitted** —
+  `.claude/skills/**` is protected by the constitution's Authority Boundaries.
+  `start.sh:33` reads, verbatim (round 3, NIT-R3-1 — revision 4 paraphrased it):
+  `PGBIN=$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -V | tail -1 || true)`.
+  It already selects the **highest** installed major. Installing the package
+  *is* the pin.
+- Re-run under 17: `applying 25 of 25 migrations`, one skipped
+  (`006-20260719000000_cron.sql [needs pg_cron]`), i.e. **24 applied**, and
+  `ready: postgres 17.11`.
+
+**The version the harness measures is 17.11; the live server is 17.6.1.141.**
+Same major, different minor, and the report must say that rather than write
+"PG 17" and let a reader assume identity. No behaviour this spike depends on is
+minor-version-scoped, but that is a claim, and it is stated as one.
+
+**All four findings are re-established on 17.11 — none of them by prose, and
+none of them by the harness. (Rewritten in revision 5; round 3, MAJOR-R3-2.)**
+
+Revision 4 claimed F2 and F4 were "re-established by the harness (D3 / D7)".
+**That was false and the gate was right to call it.** D3 asserts
+`rolbypassrls = false` for every `ops` object owner, which establishes that F2's
+*precondition is avoided* — it says nothing about whether a `BYPASSRLS` owner
+still defeats forced RLS on 17. Had 17 changed that behaviour, D3 would pass
+unchanged and nobody would learn anything. D7's `session_user`/`usesuper`
+assertions are the same shape: they prove the **rig** is correct, not the
+finding. **Rig guards are not findings**, and the difference matters because a
+spike report that says "four findings re-established" must be true.
+
+| Finding | On PG 17.11 | Measured by | Evidence |
+|---|---|---|---|
+| F1 — `request.jwt.claims` is a forgeable custom GUC | **HOLDS** | orchestrator, then **independently by gate round 3** | Absent from `pg_settings`; `set request.jwt.claims` returns `SET` and reads back. Round 3 went further: after `revoke set on parameter … from public` **and** `from <role>`, the role still set a **forged** claim, saw another run's row, and `UPDATE 1` — re-read as `postgres`: `r2 \| FORGED` |
+| F2 — a `security definer` function owned by a `BYPASSRLS` role runs with RLS off | **HOLDS** | **gate round 3, directly** | `probe.sd_move()`, `security definer`, owner `postgres` (`rolsuper=t rolbypassrls=t`), table with `enable` + `force row level security`, called with `reset request.jwt.claims` (`visible_with_no_claim = 0`) → `ok`; re-read as `postgres`: `id 1 \| MOVED_BY_SD`. **The row moved with RLS forced and no claim set** |
+| F3 — `EXECUTE` defaults to `PUBLIC` on new functions | **HOLDS** | orchestrator, then **independently by gate round 3** | Fresh `probe.f()` has `proacl` **null**; round 3 then called it from a role that had never been granted it |
+| F4 — `SET ROLE` is authorized against `session_user`, not `current_user` | **HOLDS** | **gate round 3, directly** | From a `postgres` session, `set role probe_exec` gives `session_user=postgres`; `set role probe_owner`, `set role postgres` and `set role service_role` then **all succeed**. From the direct login, all three are `ERROR: 42501: permission denied to set role` |
+
+Also re-measured on 17.11: `sha256(bytea)` returns 64 hex chars and
+`gen_random_uuid()` works, **with no extension installed** — the built-in
+dependency D2 relies on holds on the pinned major. And a PG-17 detail a worker
+would otherwise trip on: the default table ACL is now `arwdDxt**m**/postgres` —
+17 added the **MAINTAIN** privilege — so round 2's recorded `arwdDxt` string must
+**not** be copied into an exact-match assertion.
+
+**What the harness still owes on this front is a standing guard, not a
+re-establishment**: D3 and D7 keep the F2/F4 preconditions from creeping back in
+later. AC12 says exactly that and no more.
 
 ## Current measured state
 
-Measured 2026-08-18 on this branch and **independently re-measured by the
-round-1 gate on its own cluster**. Every row below is confirmed by both.
+Rows marked **(run 2)** were re-measured on this branch on 2026-08-18 under the
+PG 17 pin. Unmarked rows were measured in run 1 and independently confirmed by
+the round-1 and round-2 gates on their own clusters.
 
 | Claim | Measurement |
 |---|---|
 | No run/ops/checkpoint table exists | `supabase/migrations/` holds 25 files, all product schema; latest `20260812000000_events_rls_active_membership_read.sql`. `supabase/spikes/` does not exist yet |
 | `linear-dispatch` writes no state | `index.ts` imports exactly `filter/dispatch/notify/signature`; no storage client in any non-test source |
-| Scratch cluster | `.claude/skills/scratch-postgres/scripts/start.sh` works **only under `sudo -n`** (as `runner`: `chown … Operation not permitted`). PostgreSQL **16.14**; the script prints `applying 25 of 25 migrations` then `SKIPPED 1 migration(s) … 006-20260719000000_cron.sql [needs pg_cron]`, i.e. 24 are actually applied |
-| Extensions | `pgcrypto`, `uuid-ossp` **available, not installed**. `pgjwt`, `pg_net`, `pg_cron`, `pgsodium` **absent** |
+| **Scratch cluster (run 2)** | `.claude/skills/scratch-postgres/scripts/start.sh` works **only under `sudo -n`** (as `runner`: `chown … Operation not permitted`). After `apt-get install postgresql-17` it reports **`ready: postgres 17.11`**; `applying 25 of 25`, `SKIPPED 1 … 006-20260719000000_cron.sql [needs pg_cron]`, i.e. **24 applied** |
+| **Live Supabase project (owner-measured, GAM-408)** | Plan tier **free**. Extensions installed: `plpgsql`, `pg_cron`, `pgcrypto`, `uuid-ossp`, `pg_net`, `pg_stat_statements`, `supabase_vault`. Server **PostgreSQL 17.6.1.141**. **Nothing in this design needs any of them** |
+| **Built-ins on 17.11 (run 2)** | `sha256(bytea)` → 64 hex chars; `gen_random_uuid()` → ok. Neither needs `pgcrypto` |
 | Roles | `authenticated`, `anon` are `NOSUPERUSER NOBYPASSRLS`; `postgres` is superuser **with `BYPASSRLS`**. **`service_role` does not exist** and must be created by the harness |
-| Version skew | Scratch is PG **16.14**; `supabase/config.toml` declares `major_version = 17` for the hosted target. Immaterial to RLS/CAS semantics, but it must be named, not left for a reader to find |
 | PostgREST exposure | `supabase/config.toml` sets `schemas = ["public", "graphql_public"]`. Reaching an `ops` schema through PostgREST would require adding it there — a file this packet forbids |
-| **Live Supabase project** | **Unreachable.** No credential of any kind (see scope section) |
-| Node / vitest | Baseline `npx vitest run` = **96 files / 2466 tests**, green. `npx vitest run scripts/` = **11 files / 260 tests**. `vite.config.ts` sets no `include`, so vitest's default glob **does** collect `scripts/*.test.mjs` |
+| **Live credential in this run** | **Absent, by design** (plan §5.2). Re-checked on the run-2 branch |
+| **Node / vitest (run 2)** | `node_modules` was **absent** on this fresh container; `npm ci` exit 0. Baseline `npx vitest run` = **96 files / 2466 tests**, green. `npx vitest run scripts/` = **11 files / 260 tests**. `vite.config.ts` sets no `include`, so vitest's default glob **does** collect `scripts/*.test.mjs` |
 
-Operational note, not a measured-state claim: `node_modules` may be absent on a
-fresh container — run `npm ci` first.
+**Second-order input to §11.1 decision 1, from the owner's GAM-408 note, which
+the report must carry:** on the **free** tier a project pauses on inactivity —
+the sibling project `robotics-kanban` in this same org currently reads
+`INACTIVE`. **A store whose entire purpose is outliving executor death, hosted
+where the store itself pauses, is a genuine architectural input**, and §7
+scenario 15 ("store unavailable") is therefore not a hypothetical fault but the
+tier's steady-state behaviour. The report states this under criterion 3/§11.1,
+labelled as the owner's measurement rather than this run's.
 
 ## The five criteria, restated as things a machine can decide
 
@@ -119,14 +248,24 @@ and that nothing collides.)
 running it. `request.jwt.claims` is an unrecognised two-part custom GUC and is
 therefore `USERSET`: a `NOSUPERUSER NOBYPASSRLS` role re-set its own claim to
 another run's id and updated that row (`UPDATE 1`, re-read as `HIJACKED`), and
-`REVOKE SET ON PARAMETER` does not restrain it on PG 16. That design's security
+`REVOKE SET ON PARAMETER` does not restrain it on PG 16 — and the settability
+half is **re-measured on PG 17.11** (§"PG 17", F1), so the finding is no longer
+scoped to the wrong major. That design's security
 lives entirely in PostgREST, which this spike cannot exercise.
 
 So: **`ops_executor` gets no table grants at all** — only `execute` on
-`ops.publish_checkpoint(p_token text, …)`, which derives `run_id` and
-`generation` from a secret it verifies *inside* the function. That negative is
-real on a scratch cluster, needs neither `pgjwt` nor PostgREST, and restores the
-"weaker case generalizes upward" argument the gate correctly called inverted.
+`ops.publish_checkpoint(p_token text, …)`, which derives **`run_id` only** from a
+secret it verifies *inside* the function, and validates `generation` and
+`version` against the **caller's asserted values**. That negative is real on a
+scratch cluster, needs neither `pgjwt` nor PostgREST, and restores the "weaker
+case generalizes upward" argument the gate correctly called inverted.
+
+⚠ **Corrected in revision 6 (round 4, MINOR-1).** Revision 5 left this sentence
+reading "derives `run_id` **and generation**" — verbatim the tautology revision 5
+had just removed elsewhere, and flatly contradicting the function's own spec
+below. A worker reading D2 first would have rebuilt the defect. **The
+authoritative statement of the signature is `ops.publish_checkpoint`'s entry
+under "Required behavior", not this paragraph.**
 
 **D2a — the broken design is kept as a committed negative control.** The
 forgery above is a *spike finding about plan §5.1*, not just a packet defect, and
@@ -145,8 +284,8 @@ granting is not the same as denying. The schema therefore ends with:
 revoke execute on function ops.reserve_run(text, text)                from public;
 revoke execute on function ops.advance_generation(uuid, int)          from public;
 revoke execute on function ops.record_terminal_event(uuid, text, jsonb) from public;
-revoke execute on function ops.publish_checkpoint(text, int, jsonb)   from public;
-grant  execute on function ops.publish_checkpoint(text, int, jsonb)   to ops_executor;
+revoke execute on function ops.publish_checkpoint(text, int, int, jsonb) from public;
+grant  execute on function ops.publish_checkpoint(text, int, int, jsonb) to ops_executor;
 ```
 
 and the harness asserts the ACLs directly — `select proname, proacl from pg_proc
@@ -212,25 +351,81 @@ triggers fire):
 - `docs/swarm/active/GAM-407-run-log.md`
 - `docs/swarm/active/GAM-407-gate-round*.md`
 - `docs/swarm/active/GAM-407-pr-body.md`
-- `docs/swarm/active/GAM-407-ci-sql-step.patch` (see MAJOR-6 remedy below)
 - `docs/swarm/verification-log.md` (item 24 — same commit as the merge)
+
+`GAM-407-ci-sql-step.patch` is **removed** from this list — see the CI note
+below; producing it was BLOCKER-R3-1.
 
 **Forbidden to every agent on this row:** `supabase/migrations/**` (D1),
 `.github/workflows/**` (a dispatched run cannot push it), `supabase/config.toml`,
-`src/**`, `vite.config.ts`, `docs/swarm/task-ledger.md` (frozen, item 29), any
-dependency change, and any command contacting a live Supabase, GitHub or Linear
-endpoint — other than the run log's own `git push` and the orchestrator's
-item-28 Linear status moves, which the dispatch protocol and constitution
-require.
+`src/**`, `vite.config.ts`, `docs/swarm/task-ledger.md` (frozen, item 29),
+**every path in the constitution's Authority Boundaries** —
+`.claude/skills/**`, `.claude/agents/**`, `.claude/settings.json`,
+`docs/swarm/constitution.md`, `docs/swarm/verification-log.md` (orchestrator-only,
+at integration) and `docs/swarm/dispute-log.md`. That list is the constitution's,
+not this packet's, and it binds whether or not a packet repeats it (round 3,
+NIT-R3-4: revision 4's shorter list read as exhaustive and was not). The PG 17 pin
+deliberately needs no skill edit — see §"PG 17".
+**`docs/swarm/2026-08-15-durable-multi-agent-execution-plan.md`** (owner-imposed:
+GAM-410 / PR #198 is editing §5.1 concurrently; a finding that belongs in the
+plan is **filed under item 20**, not written), any dependency change, and any
+command contacting a live Supabase, GitHub or Linear endpoint — other than the
+run log's own `git push` and the orchestrator's item-28 Linear status moves,
+which the dispatch protocol and constitution require.
 
-**CI note (MAJOR-6).** `.github/workflows/ci.yml` enumerates each SQL suite as an
-explicit step; there is no glob. A new harness therefore lands as a committed
-script **nothing invokes** — the "green-but-never-executed" condition that
-already cost this repo T701. A dispatched run cannot push workflow files, so the
-orchestrator produces `docs/swarm/active/GAM-407-ci-sql-step.patch`
-(`git format-patch`, precedents `GAM-314-workflow-wiring.patch` and
-`GAM-325-lane-d-workflows.patch`, delivered by PRs #159/#160) and leads the PR
-body with that undeliverable half.
+**Orchestrator-only, and not delegated:** installing `postgresql-17`. It is a
+container-level `sudo apt-get` outside every worker's Allowed Files, it was
+already done before this revision was written, and a worker re-running it wastes
+a package install. Workers **assert** the version (AC12); they do not provision
+it.
+
+**CI note — revised, and the CI patch is now deliberately NOT produced
+(round 3, BLOCKER-R3-1).**
+
+Revision 4 mandated `docs/swarm/active/GAM-407-ci-sql-step.patch` wiring the
+harness into `ci.yml`. **Round 3 measured that this patch could only ever go
+red.** `.github/workflows/ci.yml:196` runs the `sql` job against a
+**`postgres:16` service container**, and `run_t503_widen_rsvp_read.sh:22` — this
+packet's own named shape precedent — creates a scratch *database* on that ambient
+server rather than starting a cluster. AC12's abort would fire on `16xxxx` and
+fail the job. The alternative reading fails too: the `sql` job installs only
+`postgresql-client` (`ci.yml:222-225`), so `start.sh:34` exits 2 with `no
+PostgreSQL server binaries found`.
+
+**Decision: the harness is local-only and deliberately not CI-wired, and the PR
+body says so plainly.** Three reasons, in order of weight:
+
+1. **The remedy that would work is not this row's to authorize.** Bumping
+   `ci.yml:196` to `postgres:17` moves **nine currently-green SQL suites**
+   (`tests/rls/run.sh`, `supabase/tests/run.sh`, T700, T801, T205, T322, T503,
+   T195, T509) onto a new major. That is a Definition of Ready #5 reversal of
+   previously-passed work and needs explicit authorization. **It must not be
+   smuggled in as a side effect of a spike's CI wiring.**
+2. **This row ships evidence, not infrastructure.** The issue's own constraint
+   says the spike schema "must not quietly become the production run store —
+   Phase 2 proper does that." A CI step that runs the spike harness on every push
+   is precisely that quiet promotion.
+3. The harness's output is a **one-shot report**, not a standing guard. T701's
+   green-but-never-executed hazard is about guards that silently stop guarding;
+   nothing here is guarding anything yet.
+
+**This is a knowing deferral, so it files a row, not a comment (item 20).**
+Filed as **GAM-415** (`tier/standard`, `Bug`, `Backlog`), carrying both halves:
+CI-wiring the run-store harness when Phase 2 builds the real store, **and** the
+pre-existing skew it surfaced — `supabase/config.toml:33` declares
+`major_version = 17` while `.github/workflows/ci.yml:196` has run all nine SQL
+suites on `postgres:16` since before this row existed. That second half is a real
+finding about the repo, independent of this spike, and GAM-415 recommends doing
+the image bump and the harness wiring as two separate changes.
+
+**Consequence for D7 (the other half of BLOCKER-R3-1).** D7's basis was *"the
+scratch cluster's `pg_hba.conf` is `local all all trust`"*. That is
+scratch-cluster-only; a TCP/`scram-sha-256` server would reject a passwordless
+`ops_executor` and criterion 3's negatives would not run at all. **So the schema
+creates `ops_executor` with a password and the harness exports `PGPASSWORD`**,
+which costs one line, is harmless under `trust`, and makes the harness portable
+to any server a later phase points it at. The packet does not depend on this —
+it removes a dependency.
 
 ## Required behavior
 
@@ -238,8 +433,20 @@ body with that undeliverable half.
 
 Additive and idempotent (`create schema if not exists ops`). Self-contained: no
 extension is required — use the built-in `sha256(bytea)` (PG 11+) and
-`gen_random_uuid()` (PG 13+) rather than `pgcrypto`, so the schema does not
-inherit the hosted-extension question the spike cannot answer.
+`gen_random_uuid()` (PG 13+) rather than `pgcrypto`, both **re-measured working
+on the pinned 17.11 cluster with no extension installed**. The hosted project
+does have `pgcrypto` (GAM-408), so this is now a simplicity choice rather than a
+necessity — keep it anyway: depending on nothing is the stronger result for
+§11.1, and it keeps the spike schema portable to whatever store the owner picks
+if criterion 3 fails.
+
+⚠ **The capability token's randomness source is `gen_random_uuid()`, and this is
+not a free choice (round 4, MINOR-3).** The idiomatic answer, `gen_random_bytes`,
+is **pgcrypto** — measured absent on the scratch cluster and present on the
+hosted project, i.e. exactly the local-red/hosted-green asymmetry this schema
+exists to avoid. Build the token inline from two concatenated UUIDs
+(`replace(gen_random_uuid()::text,'-','') || replace(gen_random_uuid()::text,'-','')`,
+244 bits), store only its `sha256` hex, and **do not call `gen_random_bytes`.**
 
 **Roles, created by the schema:**
 
@@ -273,13 +480,37 @@ that makes criterion 2 a property of the database rather than of the caller.
   **and a boolean saying whether this call created it**, and — only when it
   created it — the **plaintext capability token** (returned once; only its
   `sha256` hex is stored). Not granted to `ops_executor`.
-- **`ops.publish_checkpoint(p_token text, p_expected_version int, p_payload jsonb)`**
-  — criterion 3's capability *and* criterion 1's compare-and-set. It looks the run
-  up **by `sha256(p_token)`**, derives `run_id` and `generation` from that row,
+- **`ops.publish_checkpoint(p_token text, p_expected_generation int,
+  p_expected_version int, p_payload jsonb)`** — criterion 3's capability *and*
+  criterion 1's compare-and-set.
+
+  ⚠ **`p_expected_generation` is new in revision 5, and it is the fix for
+  round 3's MAJOR-R3-1 — which was not a naming defect but a hole in criterion 1
+  itself.** Revision 4's signature took no generation, so the function derived
+  the generation from the very row it then filtered on. That predicate is
+  tautological and **can never reject**: measured, no input produced
+  `stale_generation` (`ok → version_conflict → no_such_capability` — three
+  outcomes, not four). Criterion 1 requires one atomic update to validate
+  `run_id`, `generation` **and** `version` *together*; a conjunct that cannot
+  fail validates nothing, so revision 4 would have reported criterion 1 PASS
+  while testing two thirds of it. **The executor must assert the generation it
+  believes it holds**, exactly as it already asserts the version.
+
+  It looks the run up **by `sha256(p_token)`**, derives `run_id` from that row,
   and then performs **one `update` statement** whose `where` names `run_id`,
-  `generation` **and** `version`, bumping `version`. It must distinguish
-  `no_such_capability`, `stale_generation` and `version_conflict` as **named**
-  outcomes.
+  `generation` **and** `version` — comparing generation against
+  `p_expected_generation`, the caller's claim, not the row's own value — bumping
+  `version`. It must distinguish `no_such_capability`, `stale_generation` and
+  `version_conflict` as **named** outcomes, and with this signature all three are
+  now constructible.
+
+  **`stale_generation` is reachable by two distinct routes and the harness must
+  exercise both**, because they fail differently: (i) the executor passes a
+  `p_expected_generation` that does not match the row — a stale *belief* — and
+  (ii) `advance_generation` has rotated `capability_hash`, so the old token no
+  longer resolves at all and the outcome is `no_such_capability`. Route (ii) is
+  the fencing proof; route (i) is the criterion-1 proof. Reporting only (ii) is
+  what revision 4 did.
   - **Its return shape is pinned to `(outcome text, new_version int)` and nothing
     more (round 2, MINOR-R2-1).** A `security definer` function that returned the
     run row — or `capability_hash` — would hand the executor exactly the read
@@ -334,13 +565,23 @@ produces exactly one `pg_default_acl` row, scoped to `public`. It is a valid
 control for negative #2 (product tables) and constrains **nothing** in schema
 `ops`.
 
+⚠ **On PG 17 that ACL string gains an `m`, and revision 5 attributed it
+backwards (round 3 NIT-R3-2, attribution corrected by round 4 NIT-1).**
+**Round 2 recorded `arwdDxt`, measured on PG 16. PostgreSQL 17 adds the
+`MAINTAIN` privilege and produces `arwdDxtm`** — measured on 17.11 by two
+independent gate rounds as
+`{postgres=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,anon=arwdDxtm/postgres,service_role=arwdDxtm/postgres}`.
+**Do not write an exact-match assertion against round 2's PG-16 `arwdDxt`
+string**; it would be red on the pinned major. Immaterial to the design either
+way, since `ops_executor` receives nothing from it.
+
 Prints a `PASS`/`FAIL` line per scenario; exits non-zero if any assertion fails.
 
 | # | Scenario | The assertion that makes it real |
 |---|---|---|
 | 1 | Same Todo webhook twice | Two identical `ops.reserve_run` calls → **one** row, same `run_id` both times, `created=true` then `created=false` |
 | 2 | Raced claims | **Two genuinely concurrent sessions.** No advisory-lock barrier is needed — the gate measured that the loser blocks on the winner's speculative-insert token by itself. A background `psql` holding its transaction open (`begin; select ops.reserve_run(…); select pg_sleep(2); commit;`) with a second entering ~1s later is a complete proof → one row, same `run_id`, exactly one `created=true` |
-| 13 | Generation fencing | `advance_generation`, then replay `publish_checkpoint` with the **old token** → named `no_such_capability`/`stale_generation`, and `ops.run` re-read field-by-field as unchanged. Do **not** trust an absent exception |
+| 13 | Generation fencing | **Both routes (revision 5).** (i) publish with a *stale* `p_expected_generation` and the current token → named `stale_generation`; (ii) `advance_generation`, then replay with the **old token** → named `no_such_capability` (the hash rotated, so it no longer resolves). In both, `ops.run` is re-read field-by-field as unchanged. Do **not** trust an absent exception |
 | 14 | Duplicate terminal event | Same `(run_id, event_key)` twice → one `ops.run_event` row, one effect on `ops.run` |
 | 15 | Store unavailable — **store-side half only** | `pg_terminate_backend` mid-statement (or a dead port) → measured `FATAL: 57P01: terminating connection due to administrator command`, psql exit 2, and on re-connect the mid-flight `update` is rolled back so **no** row records the checkpoint as published. **`\set VERBOSITY verbose` is required** or psql prints the message without the SQLSTATE and the assertion cannot key on `57P01`. The "no external write was attempted" half belongs to Worker B (MAJOR-4) |
 
@@ -362,7 +603,17 @@ SQLSTATE, never by "an exception happened":
 7. **Ownership assertion (D3):** for every `ops.*` function and table,
    `select rolbypassrls from pg_roles where rolname = pg_get_userbyid(proowner)`
    (and `relowner`) is **`false`**. Without this the rest is unfalsifiable.
-   Measured expectation: `ops_owner=f`, `ops_executor=f`, `service_role=f`,
+   ⚠ **Corrected post-DISPATCH (checker-reviewer ruling, 2026-08-18):
+   `service_role=t`, not `f`.** The `f` was a measurement of
+   `run_t503_widen_rsvp_read.sh:35`'s `create role service_role nologin;`,
+   carried forward into this expectation list by inertia — while AC4 and the
+   harness section **normatively require** the harness to create it
+   `nologin noinherit bypassrls`, after which `t` is the only reachable value.
+   Both could not hold; Worker A took the requirement over the stale
+   measurement, documented it, and the checker endorsed it. D3's load-bearing
+   property is unaffected: `service_role` owns no `ops` object, and
+   `guard-d3-ownership` asserts that separately.
+   Measured expectation: `ops_owner=f`, `ops_executor=f`, `service_role=t`,
    `postgres=t`.
 7a. **ACL assertion (D5):** `select proname, proacl from pg_proc where
    pronamespace = 'ops'::regnamespace` — every function's ACL is non-null and
@@ -399,7 +650,8 @@ suite already collects.
 
 - `validateCheckpointCandidate(candidate, expected)` → a result naming every
   rejection reason: `wrong_run`, `stale_generation`, `version_conflict`,
-  `missing_head_sha`, `malformed_evidence`, `store_unavailable`.
+  **`no_such_capability`**, `missing_head_sha`, `malformed_evidence`,
+  `store_unavailable`.
 - `publishExternal(candidate, expected, sinks)` with `sinks = { github, linear }`
   — invokes **neither** sink unless validation passed, and records call order.
 - Tests must assert the **negative**: on an invalid candidate, `github` and
@@ -407,9 +659,24 @@ suite already collects.
   about ordering.
 - Tests must cover scenario 15's other half (MAJOR-4): a store error thrown
   during publication yields a named failure class and **zero** external writes.
-- **Name fidelity:** the rejection reasons must match the outcome names
-  `schema.sql` actually returns. The checker verifies this against `schema.sql`,
-  not against Worker B's own tests.
+- **Name fidelity — scoped, and the list corrected (round 4, MINOR-4).** The
+  store's **`publish_checkpoint`** returns exactly four outcomes — and the
+  scoping matters (checker NIT-2): `advance_generation` also returns
+  `no_such_run`, and `record_terminal_event` returns `recorded`/`duplicate`.
+  `publish_checkpoint`'s four are: `ok`, `stale_generation`,
+  `version_conflict`, `no_such_capability`. **`no_such_capability` was missing
+  from Worker B's list above and must be added** — it is the outcome that carries
+  §5.2 fencing (scenario 13 route ii), so omitting it left the fencing case with
+  no controller-side name at all.
+
+  The rule binds **only the store-derived subset**: `stale_generation`,
+  `version_conflict` and `no_such_capability` must match `schema.sql`'s outcome
+  names exactly, and the checker verifies those three against `schema.sql`, not
+  against Worker B's own tests. `wrong_run`, `missing_head_sha`,
+  `malformed_evidence` and `store_unavailable` are **controller-local** and have
+  no store counterpart; checking them against `schema.sql` would bounce Worker B
+  for being correct. Revision 5 said "the rejection reasons must match" without
+  that scoping, which was unsatisfiable as written.
 
 ### Worker B — `scripts/run-store-episode-summary.mjs` + `.test.mjs`
 
@@ -429,11 +696,24 @@ fixture path is needed and the checker can inspect the artifact.
    `PASS`/`FAIL` line for scenarios 1, 2, 13, 14 and **the store-side half of**
    15. Scenario 15's external-write half is Worker B's, asserted in
    `run-store-controller.test.mjs`, and the report states which artifact owns
-   which half.
+   which half. **The harness is local-only and is deliberately not wired into
+   `ci.yml`** — see the CI note; that is a knowing deferral with a filed row, not
+   an oversight.
 2. Criterion 1 is demonstrated by **one** `update` statement whose `where`
    carries `run_id`, `generation` and `version`, asserted mechanically via
    `pg_get_functiondef`. All three failure cases are shown rejected **by
    re-reading the row**, not by catching an exception.
+
+   ⚠ **The mechanical assertion is necessary and not sufficient, and revision 4
+   treated it as sufficient (round 3, MINOR-R3-2 / MAJOR-R3-1).** A `where`
+   clause can name `generation` and still be incapable of rejecting on it — which
+   is exactly what revision 4's signature did, comparing the row's generation
+   against itself. So AC2 additionally requires a **behavioural** demonstration:
+   a call passing a `p_expected_generation` that does not match the row returns
+   `stale_generation` and the row is re-read unmoved. **If `stale_generation` is
+   never observed, criterion 1 is PARTIAL, not PASS**, however green the
+   `pg_get_functiondef` check is. Generation *fencing* is a separate proof and
+   belongs to scenario 13's hash-rotation route.
 3. Criterion 2 is demonstrated under genuine concurrency (scenario 2), not only
    sequentially.
 4. Criterion 3 is demonstrated in **both directions** — every negative above
@@ -461,13 +741,72 @@ fixture path is needed and the checker can inspect the artifact.
     the chosen capability design and why (D2), compares the token-RPC and
     Edge-Function designs under **scenario 15**, cites `supabase/config.toml`'s
     `schemas` list as in-repo evidence about PostgREST exposure, and has its own
-    section naming what was **not** measured — the live project's extension set
-    and plan tier, escalated to the owner and filed as a linked follow-up.
+    section naming what was **not** measured. That section now says: the hosted
+    project's **role attributes** (`pg_roles`) — the extension set and plan tier
+    were measured by the owner on GAM-408 and are recorded, not deferred.
     **The Edge-Function side of that comparison is reasoned, not measured**, and
     the report must label it so; only the token-RPC design is built. A checker
     reading AC10 must not be able to mistake the comparison for evidence.
+    The report also carries the **free-tier pause** observation as an input to
+    §11.1 decision 1, attributed to the owner's GAM-408 measurement.
 11. If any criterion is FAIL, the report ends in the stop rule: a written FAIL
     and a named owner decision, never a fallback.
+12. **The PG version is recorded and degraded honestly — it is NOT an abort.
+    (Rewritten in revision 5; round 3, BLOCKER-R3-1 and MAJOR-R3-2.)**
+
+    Revision 4 required the harness to abort unless `server_version_num ≥
+    170000`. On the only CI that would ever run it — a `postgres:16` service
+    container — that abort is a guaranteed red. Instead:
+
+    - The harness reads `show server_version` and `show server_version_num`,
+      **prints both on its first line**, and continues either way.
+    - If `server_version_num < 170000` it prints
+      `PARTIAL: measured on PG <v>, not the pinned 17` and **every scenario line
+      it subsequently prints carries that qualifier**. It does not silently
+      present a PG-16 result as a PG-17 one, and it does not refuse to run.
+    - The report records the harness's measured version beside the live server's
+      `17.6.1.141` — same major, different minor, **stated as such**, not
+      collapsed to "PG 17".
+
+    **F1-F4 are already re-established on 17.11 (§"PG 17") and this criterion
+    does not re-litigate them.** What the harness owes is the two *standing
+    guards* that keep their preconditions from returning: the D3 ownership
+    assertion (`rolbypassrls = false` for every `ops` object owner) and D7's
+    `session_user = 'ops_executor'` + `usesuper = false` check before negative 3,
+    so a rig regression fails loudly instead of turning AC4 into a false FAIL.
+    **The report must describe these as guards, not as proofs of F2/F4** — that
+    conflation was MAJOR-R3-2.
+
+    If anything measured here contradicts §"PG 17", that is a **finding, not a
+    failure** — record it, keep the evidence, and say which design conclusion
+    changes.
+
+13. **`ops_executor` has a password and the harness exports `PGPASSWORD`.**
+    D7's basis — `local all all trust` — is a property of the scratch cluster,
+    not of PostgreSQL. One line removes the dependency and costs nothing under
+    `trust`.
+
+    ⚠ **The assertion is `pg_authid`, NOT "the connection succeeded" (round 4,
+    MINOR-2).** Revision 5 asserted it by connecting successfully, which is
+    **vacuous on the cluster it runs on**: measured on 17.11, a *wrong* password
+    and *no* password both connect under `local all all trust`, so the criterion
+    passed whether or not the password existed. Assert instead:
+
+    ```sql
+    select rolpassword is not null from pg_authid where rolname = 'ops_executor';
+    ```
+
+    which is superuser-readable and was measured returning `t` with
+    `left(rolpassword,14) = 'SCRAM-SHA-256$'`. The portability benefit of the
+    password is real and unaffected; only revision 5's *check* was unfalsifiable.
+
+14. **Both `int` arguments are passed by name, everywhere (round 4, NIT-2).**
+    `publish_checkpoint(text, int, int, jsonb)` has two adjacent `int`s that are
+    **both `1` on every freshly reserved run**, so a swapped pair is silently
+    indistinguishable at exactly the state the harness starts from. The harness
+    uses (**the clause naming `run-store-controller.mjs` is inapplicable and is
+    struck — that module issues no SQL**; checker NIT-3)
+    `p_expected_generation => …, p_expected_version => …`.
 
 ## Verification and mutation
 
@@ -489,48 +828,73 @@ fixture path is needed and the checker can inspect the artifact.
 
 ## Least confident decisions (item 19d)
 
-1. **Delivering the database-layer half rather than stopping the row.** This is
-   wrong if the owner considers the live extension/plan-tier measurement
-   load-bearing enough that a DB-layer-only result is misleading rather than
-   partial. What settles it: the owner's answer to the escalation posted on
-   GAM-407 — and until that answer arrives, Definition of Ready #3 is unmet and
-   this packet is **not** dispatchable, however complete the rest of it is.
-   Mitigated by never recording the verdict as PASS, and by filing the
-   live-project measurement as a linked follow-up task under **item 20** (round
-   2, MINOR-R2-2: item 27 is the wrong authority — it governs user-visible
-   surfaces and a database spike has none).
-2. **The token-RPC capability (D2) as the design the spike measures.** This is
-   wrong if the production design must be the Edge-Function-holds-service-role
-   variant and the token-RPC result does not transfer — in particular if the ops
-   schema would have to be exposed through PostgREST at all, which
-   `supabase/config.toml`'s `schemas = ["public","graphql_public"]` shows it is
-   not today. The report must compare both under scenario 15 and say plainly
-   that only one was measured.
-3. **A scratch role as a stand-in for a hosted Supabase role.** Round 1 showed
-   the naive version of this argument was inverted; round 2 then showed my
-   *replacement* safeguard was a no-op. `alter default privileges in schema
-   public` produces exactly one `pg_default_acl` row, scoped to `public`, and
-   constrains **nothing** in schema `ops` — so it is a control for negative #2
-   and nothing else. The generalization hazard that actually fired was a stock
-   **PostgreSQL** default I had never named: `EXECUTE TO PUBLIC` on new
-   functions (D5). What makes the scratch result generalize now is three
-   explicit, asserted properties — no `ops` object owned by a `BYPASSRLS` role
-   (D3), every function ACL non-null and explicitly granted (D5/7a), and a
-   genuine unprivileged `LOGIN` session doing the measuring (D7). This is still
-   wrong if hosted Supabase grants the executor something the local role lacks,
-   or if `service_role` differs from the `nologin noinherit bypassrls` the
-   harness creates. **Two rounds found two different wrong reasons to believe
-   this generalizes; treat the third with corresponding suspicion.**
-4. **Scenario 15 by killing the connection.** This is wrong if the failure that
-   matters is a *partial* write — the store accepting the checkpoint and then
-   failing to acknowledge — rather than an unreachable store. A connection kill
-   proves the named-failure requirement but not the ambiguity requirement. If
-   the ambiguous case is not exercised, the report says scenario 15 is
-   **partially** exercised, not PASS.
-5. **Splitting across two workers.** Revision 1's seam was real and the gate
-   found it before either worker started (`missing head SHA` named a column the
-   schema did not have). The fix is in the specification, not the review:
-   `head_sha` and `failure_class` are now required columns, and the rejection
-   names are pinned in both sections. This is still wrong if further names drift;
-   the checker verifies `run-store-controller.mjs`'s names against what
-   `schema.sql` returns, not against Worker B's tests.
+**Five entries, per item 19d (round 3, NIT-R3-3: revision 4 had six).** Round 3
+returned SOUND on 2, 3 and 4, WRONG on 1 and 5, and split the old entry 2a. What
+follows is the list as it stands *after* those verdicts — the two it broke are
+replaced by the doubts revision 5's fixes actually create, not restated.
+
+1. **That withdrawing the CI patch is the right call rather than the convenient
+   one.** BLOCKER-R3-1 offered three remedies; I took "local-only, deferral
+   filed" over "bump `ci.yml:196` to `postgres:17`". This is wrong if the owner
+   would rather authorize the service-image bump now — nine green SQL suites onto
+   a new major is a real Definition of Ready #5 decision, but it is *their*
+   decision, and by deferring it I have chosen for them by default. It is **also**
+   wrong in the way T701 was wrong: a committed harness nothing invokes rots, and
+   "Phase 2 will wire it" is exactly the sentence item 20 exists because people
+   write. What would settle it: the owner saying whether to bump the image. The
+   deferral row is filed either way, so the cost of being wrong is one follow-up,
+   not a lost result. **Attack this first.**
+2. **The token-RPC capability (D2) as the design the spike measures.** Round 3
+   returned SOUND — it built the design end to end on 17.11 and every
+   criterion-3 negative was a real `42501` from a genuine unprivileged login.
+   The residual doubt is unchanged and is about *transfer*, not correctness: this
+   is wrong if the production design must be the
+   Edge-Function-holds-service-role variant and the token-RPC result does not
+   carry over — in particular if the `ops` schema would ever be exposed through
+   PostgREST, which `supabase/config.toml`'s `schemas = ["public",
+   "graphql_public"]` shows it is not today. The report must compare both under
+   scenario 15 and say plainly that **only one was measured**.
+3. **A scratch role as a stand-in for a hosted Supabase role, and the hosted
+   `pg_roles` gap underneath it.** Round 1 showed the naive version of this
+   argument was inverted; round 2 showed my *replacement* safeguard was a no-op
+   (`alter default privileges in schema public` produces one `pg_default_acl`
+   row, scoped to `public`, and constrains nothing in `ops`). The hazard that
+   actually fired was a stock PostgreSQL default I had never named — `EXECUTE TO
+   PUBLIC` on new functions (D5). What makes the result generalize now is three
+   asserted properties: no `ops` object owned by a `BYPASSRLS` role (D3), every
+   function ACL non-null and explicitly granted (D5/7a), and a genuine
+   unprivileged `LOGIN` session doing the measuring (D7) — all three re-measured
+   by round 3 on 17.11. **It is still wrong if hosted `service_role`,
+   `authenticated` or `anon` differ from what the harness creates**, in which
+   case a green AC4 measures the rig and not Supabase. Revision 4 called this
+   "not deferrable to another run" and **that was false** (round 3, MINOR-R3-1):
+   GAM-408 is the counterexample on this very row — the owner's interactive
+   connector is not a run and is not bound by §5.2. An item-20 row now carries
+   the one query that closes it. Until it is answered, AC10 requires hosted role
+   attributes to be named as unmeasured and **no criterion-3 verdict may read
+   PASS without that caveat in the same sentence**. *Three rounds have now found
+   three different wrong reasons to believe this generalizes; treat the fourth
+   with corresponding suspicion.* Carried by **GAM-414**.
+4. **Scenario 15 by killing the connection.** Round 3 returned SOUND and
+   reproduced it on 17.11 (`57P01`, psql exit 2, mid-flight update rolled back).
+   The doubt is unchanged: this is wrong if the failure that matters is a
+   *partial* write — the store accepting the checkpoint and then failing to
+   acknowledge — rather than an unreachable store. A connection kill proves the
+   named-failure requirement but not the ambiguity requirement. If the ambiguous
+   case is not exercised, the report says scenario 15 is **partially** exercised,
+   not PASS. **Newly sharpened by the owner's GAM-408 note:** on the `free` tier
+   the project pauses on inactivity, so "store unavailable" is the tier's
+   steady-state behaviour rather than an injected fault — which makes the
+   unexercised ambiguous case the more interesting half, not the less.
+5. **Adding `p_expected_generation` rather than deleting `stale_generation`.**
+   Round 3 offered both and I took the signature change, because criterion 1
+   literally requires one update to validate `run_id`, `generation` **and**
+   `version` together and the alternative would have shipped a criterion the
+   spike quietly stopped testing. This is wrong if the real controller cannot
+   know its generation at publish time — in which case the honest result is that
+   **criterion 1 as plan §5.1 words it is not satisfiable by this design**, which
+   is a finding worth having and not a defect to route around. It is also the
+   fourth revision of the Worker A ⇄ Worker B name contract; round 3 broke my
+   claim that seam was closed, so the checker verifies
+   `run-store-controller.mjs`'s rejection names against what `schema.sql`
+   actually returns — **not** against Worker B's own tests.
