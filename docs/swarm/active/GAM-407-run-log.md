@@ -315,3 +315,54 @@ and satisfies the declaration gate's rule 3 that blocked #196 (GAM-411).
   - **All nine of round 2's required revisions verified still correctly applied.**
     F1 and F3 independently re-established on 17.11, confirming my own
     measurements.
+- 2026-08-18 — **Round 3 report preserved** as
+  `docs/swarm/active/GAM-407-gate-round3.md`, including its positive-results
+  table, which is spike evidence in its own right and is reused in the report.
+- 2026-08-18 — **Packet revision 5 written and pushed** (`56f101a`). All six
+  required revisions applied. The two judgement calls, stated so a wrong one is
+  correctable:
+  1. **BLOCKER-R3-1 — took the gate's remedy #2+#3, not #1.** The harness is
+     **local-only and deliberately not CI-wired**, and AC12's hard abort becomes
+     **record-and-degrade** (print `server_version`, and on < 170000 print
+     `PARTIAL: measured on PG <v>, not the pinned 17` and qualify every
+     subsequent line). Remedy #1 — bumping `ci.yml:196` to `postgres:17` — would
+     move **nine currently-green SQL suites** onto a new major, which is a
+     Definition of Ready #5 reversal **the owner authorizes, not me**. Two
+     supporting reasons: the issue's own constraint says the spike schema must
+     not quietly become the production store, and a CI step running the spike
+     harness on every push is exactly that promotion. Also added AC13:
+     `ops_executor` gets a password so criterion 3 does not depend on the scratch
+     cluster's `trust` auth.
+  2. **MAJOR-R3-1 — took option (a), the signature change, not the deletion.**
+     `publish_checkpoint` now takes `p_expected_generation`. This is the more
+     invasive fix and I took it because criterion 1 as plan §5.1 words it
+     requires one update to validate `run_id`, `generation` **and** `version`
+     together — deleting the name would have left the packet reporting criterion
+     1 PASS while testing two thirds of it. AC2 now additionally requires
+     `stale_generation` to be **observed behaviourally**, or criterion 1 is
+     PARTIAL however green the `pg_get_functiondef` check is.
+  Also: F2/F4 rows rewritten with round 3's direct measurements and correctly
+  attributed (D3/D7 are described as standing **rig guards**, not as proofs); the
+  LCD list rebuilt to five entries carrying the doubts revision 5's own fixes
+  create; all four NITs applied, including PG 17's `arwdDxt`**`m`** MAINTAIN bit,
+  which would have made a worker's exact-match ACL assertion red.
+- 2026-08-18 — **Two item-20 rows filed** (both `Backlog` — `Todo` is the owner's
+  authorization, not mine to grant, item 28a). Both written through the
+  `linear-task-writing` skill, every citation re-verified against current `main`:
+  - **GAM-414** (`tier/fast`, `gate/human`, `provenance/premise-gate`) — the
+    hosted `pg_roles` query. Round 3 was right that revision 4's "not deferrable
+    to another run either" was **false**: GAM-408 is the counterexample on this
+    same row. One SQL statement on the owner's channel upgrades criterion 3 from
+    PASS-with-caveat to PASS.
+  - **GAM-415** (`tier/standard`, `Bug`, `provenance/premise-gate`) — CI runs all
+    nine SQL suites on `postgres:16` while `config.toml:33` declares
+    `major_version = 17`. Verified today: `ci.yml:196` `image: postgres:16`,
+    suites at `:231-256` with no glob, `config.toml:33` `major_version = 17`.
+    Not a hypothetical difference either — PG 17's new **MAINTAIN** privilege
+    changes the default ACL string these suites assert against.
+- 2026-08-18 — **DISPATCHED `checker-premise` (round 4) on packet revision 5**,
+  `run_in_background: false`, blocking. Round 3 opened a fresh gate cycle by
+  owner authorization, so this is round 2 of 2 in that cycle and item 19a's cap
+  binds again after it. **If this line is the last one in this file, the run died
+  holding this subagent** — the packet has NOT cleared the gate and no worker was
+  dispatched.
