@@ -403,3 +403,25 @@ and satisfies the declaration gate's rule 3 that blocked #196 (GAM-411).
     negative 7b), NIT-4 (route (i) `stale_generation` is a synthetic stale belief
     and is **not production-reachable**; the fencing is the hash rotation, and
     the report must not credit the CAS conjunct with it).
+- 2026-08-18 — **Packet revision 6 written and pushed** (`3e3780b`). All five
+  MINORs and four NITs applied, including the two the workers would otherwise
+  have tripped on: D2's contradictory sentence, and AC13's unfalsifiable
+  password check replaced with `select rolpassword is not null from pg_authid`.
+  Added **AC14** (named argument notation) because two adjacent `int` parameters
+  that are both `1` on a fresh run make a swapped pair undetectable.
+- 2026-08-18 — **Orchestrator precondition from round 4's MINOR-5 satisfied
+  before dispatching Worker A**: `show server_version_num` = **170011**,
+  `server_version` = `17.11 (Ubuntu 17.11-1.pgdg24.04+2)`. A `PARTIAL: measured
+  on PG 16` result is a re-provision trigger, not an accepted deliverable.
+- 2026-08-18 — **Two isolated worktrees created** (item 23; `AGENTS.md` forbids
+  two editing agents in one tree): `/tmp/gam407-a` on `claude/gam-407-worker-a`
+  and `/tmp/gam407-b` on `claude/gam-407-worker-b`, both from `3e3780b`, each
+  with `node_modules` symlinked. Their file sets are disjoint
+  (`supabase/spikes` + `supabase/tests` vs `scripts/`).
+- 2026-08-18 — **DISPATCHED Worker A (`worker-implementer`, `model: "opus"` per
+  item 18 — migration-shaped SQL and `security definer` helpers, two of item
+  18's four triggers) and Worker B (`worker-implementer`, default pin) in one
+  message, both `run_in_background: false`, both blocking.** **If this line is
+  the last one in this file, the run died holding these two subagents** — no
+  worker output was verified, nothing was integrated, and the branch carries
+  only the packet and the gate reports.
