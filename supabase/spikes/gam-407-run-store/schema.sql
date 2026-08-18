@@ -242,13 +242,20 @@ begin
   -- CRITERION 1: exactly ONE update statement, whose where clause validates
   -- run_id, generation and version TOGETHER. There is no `select ... for
   -- update` preamble deciding this update.
+  --
+  -- clock_timestamp(), not now(): now() is TRANSACTION-scoped, so inside a
+  -- single transaction (which is what a plpgsql DO block is) `updated_at`
+  -- would compare equal across a row that had genuinely moved, and every
+  -- "re-read proves the row did not move" assertion would carry one silently
+  -- vacuous conjunct. Measured during mutation 1: the mutant moved the row and
+  -- still reported `updated_at unchanged=t`.
   update ops.run r
      set version     = r.version + 1,
          result_refs = coalesce(p_payload, '{}'::jsonb),
          head_sha    = coalesce(p_payload ->> 'head_sha', r.head_sha),
          status      = coalesce(p_payload ->> 'status',   r.status),
          phase       = coalesce(p_payload ->> 'phase',    r.phase),
-         updated_at  = now()
+         updated_at  = clock_timestamp()
    where r.run_id     = v_run_id
      and r.generation = p_expected_generation
      and r.version    = p_expected_version
@@ -313,7 +320,7 @@ begin
          version         = r.version + 1,
          capability_hash = encode(sha256(v_token::bytea), 'hex'),
          active_executor = null,
-         updated_at      = now()
+         updated_at      = clock_timestamp()
    where r.run_id  = p_run_id
      and r.version = p_expected_version
   returning r.generation, r.version into v_gen, v_ver;
@@ -378,7 +385,7 @@ begin
            failure_class  = p_payload ->> 'failure_class',
            failure_detail = p_payload ->> 'failure_detail',
            version        = r.version + 1,
-           updated_at     = now()
+           updated_at     = clock_timestamp()
      where r.run_id = p_run_id;
     outcome := 'recorded';
   else
