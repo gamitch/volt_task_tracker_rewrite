@@ -603,7 +603,17 @@ SQLSTATE, never by "an exception happened":
 7. **Ownership assertion (D3):** for every `ops.*` function and table,
    `select rolbypassrls from pg_roles where rolname = pg_get_userbyid(proowner)`
    (and `relowner`) is **`false`**. Without this the rest is unfalsifiable.
-   Measured expectation: `ops_owner=f`, `ops_executor=f`, `service_role=f`,
+   ⚠ **Corrected post-DISPATCH (checker-reviewer ruling, 2026-08-18):
+   `service_role=t`, not `f`.** The `f` was a measurement of
+   `run_t503_widen_rsvp_read.sh:35`'s `create role service_role nologin;`,
+   carried forward into this expectation list by inertia — while AC4 and the
+   harness section **normatively require** the harness to create it
+   `nologin noinherit bypassrls`, after which `t` is the only reachable value.
+   Both could not hold; Worker A took the requirement over the stale
+   measurement, documented it, and the checker endorsed it. D3's load-bearing
+   property is unaffected: `service_role` owns no `ops` object, and
+   `guard-d3-ownership` asserts that separately.
+   Measured expectation: `ops_owner=f`, `ops_executor=f`, `service_role=t`,
    `postgres=t`.
 7a. **ACL assertion (D5):** `select proname, proacl from pg_proc where
    pronamespace = 'ops'::regnamespace` — every function's ACL is non-null and
@@ -650,7 +660,10 @@ suite already collects.
 - Tests must cover scenario 15's other half (MAJOR-4): a store error thrown
   during publication yields a named failure class and **zero** external writes.
 - **Name fidelity — scoped, and the list corrected (round 4, MINOR-4).** The
-  store returns exactly four outcomes: `ok`, `stale_generation`,
+  store's **`publish_checkpoint`** returns exactly four outcomes — and the
+  scoping matters (checker NIT-2): `advance_generation` also returns
+  `no_such_run`, and `record_terminal_event` returns `recorded`/`duplicate`.
+  `publish_checkpoint`'s four are: `ok`, `stale_generation`,
   `version_conflict`, `no_such_capability`. **`no_such_capability` was missing
   from Worker B's list above and must be added** — it is the outcome that carries
   §5.2 fencing (scenario 13 route ii), so omitting it left the fencing case with
@@ -791,7 +804,8 @@ fixture path is needed and the checker can inspect the artifact.
     `publish_checkpoint(text, int, int, jsonb)` has two adjacent `int`s that are
     **both `1` on every freshly reserved run**, so a swapped pair is silently
     indistinguishable at exactly the state the harness starts from. The harness
-    and `run-store-controller.mjs` use
+    uses (**the clause naming `run-store-controller.mjs` is inapplicable and is
+    struck — that module issues no SQL**; checker NIT-3)
     `p_expected_generation => …, p_expected_version => …`.
 
 ## Verification and mutation
