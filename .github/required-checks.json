@@ -1,0 +1,28 @@
+{
+  "$comment": "GAM-401 -- the machine-readable required-check contract (durable-execution plan Phase 0 acceptance; consumed by the Phase 5 steward). PROVISIONAL until the owner diffs it against the live branch-protection required set, which no agent session can read (GAM-399 decision 4). Check names are check-run names, i.e. the job-level `name:` fields of the workflows -- renaming a job silently detaches it from branch protection, which is exactly the drift scripts/required-checks-validate.mjs exists to catch. Names below were measured live from the jobs API of run 32093928987 on 2026-08-18, plus the `Linear declaration` gate that .github/pull_request_template.md:5 documents as required.",
+  "status": "provisional",
+  "approval": "pending GAM-399 decision 4",
+  "branch": "main",
+  "requiredChecks": [
+    {
+      "name": "Typecheck, Lint, Format, Test, Build, Bundle Size",
+      "workflow": ".github/workflows/ci.yml"
+    },
+    {
+      "name": "SQL suites (RLS denial, metric views, migration guards)",
+      "workflow": ".github/workflows/ci.yml"
+    },
+    {
+      "name": "Skill script tests (mutation-replay, gate-run parsers)",
+      "workflow": ".github/workflows/ci.yml"
+    },
+    {
+      "name": "Edge Function tests (Deno)",
+      "workflow": ".github/workflows/ci.yml"
+    },
+    {
+      "name": "Linear declaration",
+      "workflow": ".github/workflows/linear-declaration-gate.yml"
+    }
+  ]
+}
