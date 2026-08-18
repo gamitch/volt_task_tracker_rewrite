@@ -375,7 +375,7 @@ if [ "$S15_READY" = "1" ] && [ "$S15_KILLED" = "1" ] && [ "$S15_RC" -ne 0 ] \
    && grep -q '^published=ok$' "$WORK/s15.out" \
    && [ -n "$S15_BEFORE" ] \
    && [ "$S15_AFTER" = "$S15_BEFORE" ]; then
-  record PASS scenario-15-store-side "a publication WAS in flight -- the victim transaction reported [$S15_PUBLISHED] -- and then the connection was killed mid-statement: psql exit $S15_RC, stderr [$S15_ERR]. On re-connect the four observed columns of that run row are back at their pre-publication values (version|generation|head_sha|status: before=$S15_BEFORE after=$S15_AFTER), so the version bump the transaction had already reported is NOT visible: the in-flight publication rolled back. Scoped to those four columns of ops.run -- this assertion does not read result_refs, phase, updated_at or any other table. The failure is NAMED (57P01), not silent"
+  record PASS scenario-15-store-side "a publication WAS in flight -- the victim transaction reported [$S15_PUBLISHED] -- and then the connection was killed mid-statement: psql exit $S15_RC, stderr [$S15_ERR]. On re-connect the four observed columns of that run row are unchanged from their pre-publication values (version|generation|head_sha|status: before=$S15_BEFORE after=$S15_AFTER), so the version bump that `ok` implies is NOT visible: the in-flight publication rolled back. Scoped to those four columns of ops.run -- this assertion does not read result_refs, phase, updated_at or any other table. The failure is NAMED (57P01), not silent"
 else
   record FAIL scenario-15-store-side "ready=$S15_READY killed=$S15_KILLED rc=$S15_RC stderr=[$S15_ERR] in-flight=[$S15_PUBLISHED] before=$S15_BEFORE after=$S15_AFTER"
 fi

@@ -598,3 +598,36 @@ and satisfies the declaration gate's rule 3 that blocked #196 (GAM-411).
   `run_in_background: false`, blocking. **If this line is the last one in this
   file, the run died holding this subagent** — attempt 2 is committed and pushed
   but **unverified**, and no spike report exists.
+- 2026-08-18 — **`checker-reviewer` re-review VERDICT: ACCEPT WITH FOLLOW-UPS.
+  MAJOR-1 CLOSED.** Subagent `ad5eecf13eaa6a7de`, opus, ~45K tokens, 27 tool
+  calls, 4.5 min. It closed the finding **by construction on its own probe**, and
+  then went looking for a replacement vacuity in the fix — which is the right
+  instinct, because a fix to a vacuity finding is a natural place for a second
+  one to hide. Three vectors, all closed:
+  - **Probe D, which it designed and I did not ask for**, is stronger evidence
+    than the acceptance test: it left the token *valid* and set
+    `p_expected_version => 999` so the CAS could not match. Result
+    `in-flight=[published=version_conflict]`, assertion **red** — the token
+    resolved, nothing was published, and the old term was *still* trivially
+    green. That discriminates "the update happened" from "the token was valid",
+    which is exactly the property scenario 15 needs.
+  - It traced `ok` into `schema.sql:252-270` and confirmed it is set **only**
+    inside `if v_rows = 1`, so `published=ok` certifies a one-row CAS update
+    rather than a resolvable token.
+  - It measured the one realistic flake vector — psql's block-buffered stdout
+    losing the line to the FATAL kill — at **15/15 iterations clean**.
+  - Both of Worker A's unrequested judgement calls **upheld**: the `^…$` anchor
+    is *stricter than what the checker prescribed* (measured under `-At`, `-t`
+    and no flags — the unanchored form would have matched all three; the
+    anchored one fails **closed**), and the scope correction fixes an
+    overstatement the checker said it *should have caught in round 1*.
+  - Mutation 3 re-verified red for its stated reason. `schema.sql` blob-identical
+    across both attempts (`20270f11…`), verified rather than assumed.
+- 2026-08-18 — **NIT-A and NIT-B applied by me as integrator**, because the
+  checker asked for them before the report quotes the line: "are **back at**
+  their pre-publication values" → "are **unchanged from**" (the moved state was
+  never observed from a second session, so "back at" implies a departure and
+  return nobody watched), and "the version bump the transaction had already
+  reported" → "the version bump that `ok` implies" (the victim SQL selects only
+  `'published=' || outcome`; it never selects `new_version`). Harness re-run
+  after the change: **37 assertions, 0 failed**, ALL PASS.
