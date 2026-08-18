@@ -366,3 +366,40 @@ and satisfies the declaration gate's rule 3 that blocked #196 (GAM-411).
   binds again after it. **If this line is the last one in this file, the run died
   holding this subagent** — the packet has NOT cleared the gate and no worker was
   dispatched.
+- 2026-08-18 — **`checker-premise` round 4 VERDICT: DISPATCH.** Returned and read
+  in full (subagent `aed665c932b17afec`, ~91K tokens, 31 tool calls, 8.4 min).
+  **0 BLOCKER, 0 MAJOR, 5 MINOR, 4 NIT.** **Item 19's gate is satisfied and a
+  worker may now be dispatched** — the first time on this row, after four rounds.
+  It closed both judgement calls **by construction, not by reading**: it built
+  the 4-arg `publish_checkpoint` on its own 17.11 cluster (port 55438) and
+  produced **all four outcomes** (`ok`, `version_conflict`, `stale_generation`,
+  `no_such_capability`) across nine cases, proved the two scenario-13 routes are
+  cleanly separable, found **no fencing bypass** via the new argument, and
+  re-ran the concurrent CAS to exactly-once. It also verified GAM-414 and
+  GAM-415 exist in Linear with the stated tiers and states.
+  - Round 3's ten findings: **all CLOSED**, and its "latent reversal" (nine green
+    SQL suites onto a new major) **removed** by declining remedy #1.
+  - **MINOR-1 is the one that would have cost a rework**: D2's prose at
+    `:243-245` still said the function "derives `run_id` **and generation**" from
+    the token — verbatim the tautology revision 5 removed, contradicting
+    `:454-476`. A worker reading D2 first would have rebuilt it.
+  - MINOR-2: **AC13 is vacuous as written.** Measured — on `local all all trust`
+    a *wrong* password and *no* password both connect, so "the harness connects
+    successfully" cannot detect the regression it exists to prevent. Falsifiable
+    substitute measured: `select rolpassword is not null from pg_authid`.
+  - MINOR-3: the capability token's randomness source was never specified, and
+    the idiomatic `gen_random_bytes` is **pgcrypto and absent locally** (present
+    hosted — a local-red/hosted-green asymmetry). Use `gen_random_uuid()`.
+  - MINOR-4: Worker B's rejection list omits `no_such_capability` — the outcome
+    that carries the fencing — while the name-fidelity rule would bounce four
+    legitimately controller-local names. Scope the rule to the store-derived set.
+  - MINOR-5: record-and-degrade lets a PG-16 run satisfy AC1 and exit 0. Honest,
+    but the wrong deliverable — **the orchestrator must verify
+    `server_version_num >= 170000` before dispatching Worker A.**
+  - NIT-1 (my `arwdDxtm` attribution is inverted — that string is 17's, not round
+    2's), NIT-2 (two adjacent `int` args, indistinguishable when both are 1 —
+    use named notation), NIT-3 (the outcome name is a generation oracle to a
+    valid-token holder; true, not a criterion-3 violation, do not over-report
+    negative 7b), NIT-4 (route (i) `stale_generation` is a synthetic stale belief
+    and is **not production-reachable**; the fencing is the hash rotation, and
+    the report must not credit the CAS conjunct with it).
