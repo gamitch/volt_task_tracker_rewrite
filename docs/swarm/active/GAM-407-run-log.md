@@ -50,3 +50,36 @@ that is the failure signature `AGENTS.md` § "Two walls" describes, not a myster
   gate, `run_in_background: false`, blocking. **If this line is the last one in
   this file, the run died holding this subagent** — nothing after this point was
   measured, and the packet has NOT passed the premise gate.
+- 2026-08-18 — **`checker-premise` round 1 VERDICT: REVISE.** Returned and read in
+  full (subagent `af0c1c13ab9c3528f`, ~115K tokens, 50 tool calls, 12.7 min).
+  **2 BLOCKER, 5 MAJOR, 9 MINOR, 2 NIT.** It re-measured every environment claim
+  in the packet (all confirmed, incl. the 96/2466 baseline and that vitest does
+  collect `scripts/*.test.mjs`) and then broke the design by running it:
+  - **BLOCKER-1 — the packet's D2 rationale is inverted.** `request.jwt.claims`
+    is an unrecognised two-part custom GUC, therefore `USERSET`. The gate
+    *demonstrated* an `ops_executor` role (`NOSUPERUSER NOBYPASSRLS`) re-setting
+    its own claim to another run's id and updating that row (`UPDATE 1`, row
+    re-read as `HIJACKED`). `REVOKE SET ON PARAMETER "request.jwt.claims"` does
+    not restrain it on PG 16. So the scratch cluster is **not** the weaker case —
+    it is a stronger-attacker case, and my "holds a fortiori" sentence was
+    backwards.
+  - **BLOCKER-2 — RLS and `security definer` cancel as I specified them.** A
+    `security definer` function owned by `postgres` (superuser, `BYPASSRLS`)
+    runs with RLS off; `force row level security` binds the owner, not the role
+    attribute. Measured: the RPC moved a row with **no claim set at all**.
+  - MAJOR-3: my cited harness precedent `run_t205_anon_grant.sh` **does not run**
+    standalone (`ERROR: role "service_role" does not exist`); it passes in CI only
+    via a hidden ordering dependency on `tests/rls/auth_stub.sql`.
+    `run_t503_widen_rsvp_read.sh` is the superset that works.
+  - MAJOR-4: I assigned scenario 15's "no external write" half to Worker A, whose
+    Allowed Files exclude the module that would prove it.
+  - **MAJOR-5: an owner escalation, not a packet defect.** The issue says the
+    spike "must measure" the live project's extension set and plan tier. This
+    container has no Supabase credential of any kind. I had converted "must
+    measure" into "report as unmeasured" — Definition of Ready #3 says an
+    escalation must be named **and pre-approved**, and GAM-399 decision 5
+    authorized running the spike, not dropping a stated deliverable.
+  - MAJOR-6: `ci.yml` enumerates SQL suites explicitly (no glob), so a new
+    harness would never be invoked; the repo's `format-patch` precedent applies.
+  - MAJOR-7: AC6 named a generated artifact with no allowed path to write it.
+  Round 2 of 2 remains before item 19a forces owner escalation.
