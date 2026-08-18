@@ -569,3 +569,32 @@ and satisfies the declaration gate's rule 3 that blocked #196 (GAM-411).
   scenario-15 fix, `run_in_background: false`, blocking. **If this line is the
   last one in this file, the run died holding this subagent** — the branch
   carries merged work that a checker has **FAILED**, and no spike report exists.
+- 2026-08-18 — **Worker A attempt 2 VERDICT: fix delivered, self-reported, NOT
+  self-certified.** Subagent `ad4d347b015b02577`, opus, ~40K tokens, 22 tool
+  calls, 3.2 min. HEAD `4c4389d`, **exactly two files** changed
+  (`run_gam407_run_store_spike.sh`, `README.md`); `schema.sql` and
+  `gam407_run_store_assertions.sql` byte-identical to `91d1621`, as instructed.
+  - **The acceptance test the checker set is RED**: probe C, with `schema.sql`
+    entirely intact and the token pointed at a no-such-run value, now yields
+    `EXIT=1`, `37 assertions, 1 failed`, `in-flight=[published=no_such_capability]`.
+    The old assertion's only substantive term (`before=…reserved
+    after=…reserved`) is **still satisfied** there — the red comes purely from
+    the new `published=ok` term, which is precisely the hole.
+  - Unmutated re-run still **37/0, exit 0** on 17.11, run twice (once after
+    reverting both probes, to prove the reverts were complete).
+  - Mutation 2 now fails on the degenerate case too: `before= after=`, previously
+    PASS, now caught by both new terms.
+  - Two judgement calls it made and declared rather than hid: it anchored the
+    grep as `'^published=ok$'` rather than the unanchored form the dispatch
+    wrote (the term fails **closed** if `-At` is ever dropped), and it **removed
+    an overstatement I had not asked it to touch** — "no row records the
+    checkpoint as published" is a universal claim over all rows and tables that
+    a four-column re-read of one row cannot support. The wording is now scoped
+    to the four columns actually read.
+  - It checked, specifically, whether MINOR-2/MINOR-3/NIT-1 needed fixing
+    together for coherence, and reported **no** with reasons, keeping the diff
+    at two files.
+- 2026-08-18 — **DISPATCHED `checker-reviewer` (re-review of attempt 2)**,
+  `run_in_background: false`, blocking. **If this line is the last one in this
+  file, the run died holding this subagent** — attempt 2 is committed and pushed
+  but **unverified**, and no spike report exists.
