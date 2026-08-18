@@ -154,3 +154,15 @@ that is the failure signature `AGENTS.md` § "Two walls" describes, not a myster
   `BYPASSRLS` owner, F3 PUBLIC `EXECUTE` hijack, F4 `SET ROLE` rig artifact), the
   parts measured to work, the `config.toml` transport evidence, and what is still
   unknown. This is explicitly **not** the PASS/FAIL spike report GAM-407 asks for.
+- 2026-08-18 — **Item 20 deferrals filed as Linear rows, not comments.** All three
+  land in `Backlog` — `Todo` is the owner's authorization to work and is not mine
+  to grant (item 28a):
+  - **GAM-408** (`tier/fast`, `gate/human`) — the live extension-set / plan-tier
+    measurement no dispatched run can perform, plus the one approve-or-hold
+    question that unblocks GAM-407.
+  - **GAM-409** (`tier/fast`, `executor/claude`) — the investigation/salvage row
+    `AGENTS.md` item 5 prescribes, so this branch's evidence can merge **without**
+    closing GAM-407, whose spike is genuinely unfinished. This is the row the PR
+    declares `Closes` on.
+  - **GAM-410** (`tier/standard`) — fold the four findings into plan §5.1/§11.1 as
+    invariants, so they survive even if GAM-407 is held.
