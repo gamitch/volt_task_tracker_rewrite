@@ -670,3 +670,30 @@ and satisfies the declaration gate's rule 3 that blocked #196 (GAM-411).
   **Everything needed is on the branch.** The body is a committed artifact and
   the PR opens from it with one paste; that is exactly the case the `pr-body`
   skill records nine PRs depending on.
+- 2026-08-18 — **Completion comment posted on GAM-407** (`commentCreate` success:
+  true): the per-criterion verdict, the four findings, the PG-16 portability
+  result, the free-tier input the owner alone can weigh, the four filed rows,
+  and the one thing needed from the owner — opening the PR from the committed
+  body artifact.
+- 2026-08-18 — **Linear states moved and read back** (item 28c's read-after-write
+  applied to the release as well as the claim): `GAM-407 => In Review`
+  (**never `Done`** — item 28e; the merge closes it, not me), and
+  `GAM-414/415/416/417 => Backlog` confirmed. **Nothing is left in
+  `In Progress`**, so the `assert-released` job has nothing to catch.
+- 2026-08-18 — **Cleanup.** Scratch cluster on port 55432 stopped and its data
+  directory deleted. Both worker worktrees removed (`/tmp/gam407-a`,
+  `/tmp/gam407-b`); `git worktree list` shows only the shared tree. Every
+  subagent reported stopping and deleting its own cluster: 55437 (gate 3), 55438
+  (gate 4), 55440 + 55441 (Worker A, incl. its PG-16 cluster), 55445 + 55446
+  (checker), 55450 (Worker A attempt 2), 55455 (checker re-review).
+- 2026-08-18 — **RUN COMPLETE. No subagent was in flight at any point when this
+  process could have ended.** Six subagents were dispatched — `checker-premise`
+  rounds 3 and 4, Worker A, Worker B, `checker-reviewer`, and Worker A attempt 2
+  plus its re-review — **every one with `run_in_background: false`, every one
+  waited for, and every verdict written into this file before the next step
+  began.** The two workers were dispatched in a single message and ran
+  concurrently in isolated worktrees; both were still blocking.
+  **What is NOT done, stated plainly:** the pull request is not open, because
+  this run's credentials are refused for that operation and permitted for
+  `git push`. That is the only outstanding step, the body is committed, and
+  GAM-407 sits in `In Review` describing it.
