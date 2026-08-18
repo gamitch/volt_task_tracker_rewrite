@@ -87,8 +87,8 @@ argument is a role-attribute argument. Revision 4 then wrote that the role half
 was "not deferrable to another run either", which is **false**: GAM-408 is the
 counterexample, on this row, today — the owner's interactive connector is not a
 dispatched run and is not bound by §5.2. So revision 5 files a **narrower
-item-20 successor** carrying one query, rather than leaving a known, closable gap
-with no triage record.
+item-20 successor** carrying one query — **GAM-414** (`tier/fast`, `gate/human`,
+`Backlog`) — rather than leaving a known, closable gap with no triage record.
 
 **Authority note, retained from revision 3 (round 2, MINOR-R2-2).** Revision 2
 cited **item 27** for the deferral. Item 27 governs a *user-visible surface*
@@ -388,12 +388,14 @@ body says so plainly.** Three reasons, in order of weight:
    green-but-never-executed hazard is about guards that silently stop guarding;
    nothing here is guarding anything yet.
 
-**This is a knowing deferral, so it files a row, not a comment (item 20).** The
-orchestrator files a follow-up carrying both halves: CI-wiring the run-store
-harness when Phase 2 builds the real store, **and** the pre-existing skew it
-surfaced — `supabase/config.toml:33` declares `major_version = 17` while CI has
-tested every SQL suite on `postgres:16` since before this row existed. That
-second half is a real finding about the repo, independent of this spike.
+**This is a knowing deferral, so it files a row, not a comment (item 20).**
+Filed as **GAM-415** (`tier/standard`, `Bug`, `Backlog`), carrying both halves:
+CI-wiring the run-store harness when Phase 2 builds the real store, **and** the
+pre-existing skew it surfaced — `supabase/config.toml:33` declares
+`major_version = 17` while `.github/workflows/ci.yml:196` has run all nine SQL
+suites on `postgres:16` since before this row existed. That second half is a real
+finding about the repo, independent of this spike, and GAM-415 recommends doing
+the image bump and the harness wiring as two separate changes.
 
 **Consequence for D7 (the other half of BLOCKER-R3-1).** D7's basis was *"the
 scratch cluster's `pg_hba.conf` is `local all all trust`"*. That is
@@ -794,7 +796,7 @@ replaced by the doubts revision 5's fixes actually create, not restated.
    attributes to be named as unmeasured and **no criterion-3 verdict may read
    PASS without that caveat in the same sentence**. *Three rounds have now found
    three different wrong reasons to believe this generalizes; treat the fourth
-   with corresponding suspicion.*
+   with corresponding suspicion.* Carried by **GAM-414**.
 4. **Scenario 15 by killing the connection.** Round 3 returned SOUND and
    reproduced it on 17.11 (`57P01`, psql exit 2, mid-flight update rolled back).
    The doubt is unchanged: this is wrong if the failure that matters is a
