@@ -56,7 +56,7 @@ At the database layer, plan §5.1's compare-and-set and idempotency semantics
 only under a configuration that three of the four findings show is not the
 default and is not what a careful reader would first write.
 
-## What is in this PR
+## What changed
 
 | File | What it is |
 | -- | -- |
@@ -114,7 +114,7 @@ The premise gate earned its cost here exactly as item 26 says it must: it did no
 review the plan, it *ran* it, and everything that changed an outcome came from
 execution rather than reading.
 
-## Gates
+## Verification
 
 `python3 .claude/skills/gate-run/scripts/gates.py --baseline-tests 2466` on
 `0ff1894`, tree clean:
