@@ -83,3 +83,21 @@ that is the failure signature `AGENTS.md` § "Two walls" describes, not a myster
     harness would never be invoked; the repo's `format-patch` precedent applies.
   - MAJOR-7: AC6 named a generated artifact with no allowed path to write it.
   Round 2 of 2 remains before item 19a forces owner escalation.
+- 2026-08-18 — **MAJOR-5 escalated to the owner on GAM-407** (comment posted,
+  `commentCreate` success: true). It names the two SQL statements that would
+  close the gap, states that I am proceeding with the database-layer half as
+  **Partial** (item 27) rather than stopping the whole row, and offers to stop
+  if the owner prefers. Both BLOCKER findings are surfaced there too, because
+  they are results about plan §5.1 regardless of what the rest of the spike does.
+- 2026-08-18 — **Packet revision 2 written**, all 18 findings addressed. The two
+  substantive redesigns: (D2) the capability is now execute-only on a
+  token-verifying RPC that derives run/generation from `sha256(token)` inside the
+  function — `ops_executor` holds **no table grants at all** — and (D3) every
+  `ops` object is owned by a `NOSUPERUSER NOBYPASSRLS` role with a mechanical
+  ownership assertion, without which every criterion-3 result is unfalsifiable.
+  The broken claims-keyed design is kept as a committed **negative control**
+  (D2a) so the round-1 finding survives as a re-runnable fact rather than prose.
+- 2026-08-18 — **DISPATCHED `checker-premise` (round 2, final under item 19a) on
+  packet revision 2**, `run_in_background: false`, blocking. **If this line is
+  the last one in this file, the run died holding this subagent** — no worker was
+  dispatched and the packet has NOT cleared the gate.
