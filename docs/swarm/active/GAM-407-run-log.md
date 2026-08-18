@@ -46,3 +46,7 @@ that is the failure signature `AGENTS.md` § "Two walls" describes, not a myster
      Baseline after install: `npx vitest run` = **96 files / 2466 tests**, all
      passing. That is the number the packet's gates 5/6 are written against.
 - 2026-08-18 — **Packet written**: `docs/swarm/active/GAM-407-packet.md`.
+- 2026-08-18 — **DISPATCHED `checker-premise` (round 1) on the packet**, item 19
+  gate, `run_in_background: false`, blocking. **If this line is the last one in
+  this file, the run died holding this subagent** — nothing after this point was
+  measured, and the packet has NOT passed the premise gate.
