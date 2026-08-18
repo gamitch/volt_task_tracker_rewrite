@@ -44,3 +44,15 @@ If this line is the last one in this file, the run died holding this subagent.
   recorded run, +0 — no regression), vitest scoped SKIPPED (docs-only
   change, no `src/` path to scope to). Verdict: 5 of 6, correctly reported
   as such.
+- **PR opened.** Wrote `docs/swarm/active/GAM-412-pr-body.md`, checked with
+  `node .claude/skills/pr-body/scripts/check.mjs` -> `OK declaration closes
+  GAM-412`, committed and pushed before attempting the API call. Opened PR
+  #199 (`gh pr create`) from `claude/gam-412-durable-exec-multi-app-doubt`
+  onto `main`, body-file identical to the committed artifact.
+- **Issue moved to In Review.** `issueUpdate` to state id
+  `eff082c5-938e-4236-99d7-b9d97a4d3deb` returned `success:true`; a fresh
+  `issue { state }` read-back confirmed `state.name == "In Review"`. Never
+  moved to Done — that is the merge automation's job, not this run's. Run
+  complete: claim held throughout, premise verified before editing, entry 6
+  appended verbatim, 5-of-6 gates PASS with no regression, PR #199 open
+  awaiting human merge. Nothing left in flight.
