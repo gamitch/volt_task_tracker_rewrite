@@ -1,7 +1,8 @@
 # Durable multi-agent product development: canonical execution plan and architecture
 
-**Status:** Proposal for owner approval. No implementation, Linear transition, secret change,
-workflow change, or constitution amendment is authorized merely by this document.
+**Status:** Approved as canonical by the owner on 2026-08-18 (GAM-399, decision 1). No
+implementation, Linear transition, secret change, workflow change, or constitution amendment is
+authorized merely by this document — Todo promotion remains the only ordinary authorization.
 
 **Written:** 2026-08-15 against `main` at `438d342`. Re-measure every repository claim before
 turning a phase into a Linear issue.

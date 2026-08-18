@@ -1,8 +1,8 @@
 # Item 28 amendment draft: the atomic claim (GAM-400)
 
-**Status: DRAFT for owner approval. Approving this text is GAM-399 decision 3.
-Nothing here is in force, and `constitution.md` is not edited until BOTH gates
-below are met.**
+**Status: APPROVED by the owner on 2026-08-18 (GAM-399, decision 3) — gate 1 of
+2 satisfied. Nothing here is in force, and `constitution.md` is not edited,
+until gate 2 (the Phase 2 controller spike) is also met.**
 
 Written 2026-08-18 against `constitution.md` item 28 as amended for GAM-397,
 implementing §5.4 and §5.7 of
