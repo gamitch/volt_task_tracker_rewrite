@@ -196,3 +196,38 @@ that is the failure signature `AGENTS.md` § "Two walls" describes, not a myster
   before the next step began. No `worker-implementer` was ever spawned, because
   item 19 forbade it. Scratch clusters: mine on port 55432 is stopped below; the
   two gate agents each reported stopping and deleting theirs (55433, 55434).
+
+---
+
+## Run 2 — 2026-08-18, re-dispatched after the owner cleared the item-19a escalation
+
+Branch: `claude/gam-407-run-store-spike` (run 1's branch carried PR #196, which the
+owner closed; its evidence merged as PR #197 from `claude/gam-409-premise-gate-findings`
+and is on `main`). This branch does GAM-407's own work, so it declares `Closes GAM-407`
+and satisfies the declaration gate's rule 3 that blocked #196 (GAM-411).
+
+- 2026-08-18 — **Claimed (run 2).** Read `AGENTS.md` § "Where work comes from" and
+  `docs/swarm/constitution.md` items 18/19/26/28 before touching Linear. Moved
+  GAM-407 `Todo → In Progress` (`issueUpdate` success: true) and **read back**:
+  state `In Progress`. Labels re-read: `tier/heavy`, `executor/claude`,
+  `provenance/other`, `Improvement` — **no `gate/human`**, route is mine. Tier is
+  already `heavy`, so item 28d does not apply; item 26 concurrence unchanged from
+  run 1 (HEAVY: additive migration + `security definer` + the external dispatch
+  path; item 18's `model: "opus"` override applies to the schema worker).
+- 2026-08-18 — **Owner's re-dispatch conditions read from the GAM-407 comment of
+  12:01:52Z and treated as binding:**
+  1. *"proceed, pin the harness to PG 17"* — the Definition-of-Ready #3
+     pre-approval both gate rounds found missing. **The item-19a blocker is
+     cleared; a fresh gate round must not re-raise it.**
+  2. **Live measurement is done** (GAM-408, now `Done`): plan tier `free`;
+     extensions `plpgsql, pg_cron, pgcrypto, uuid-ossp, pg_net,
+     pg_stat_statements, supabase_vault`; **PostgreSQL 17.6.1.141**. Nothing in
+     the design needs an extension. Both gate rounds measured on **16.14**, so all
+     four BLOCKER findings are provisional until re-established on 17.
+  3. **No service-role key reaches this run** (plan §5.2) — unchanged, and correct.
+  4. **File collision:** GAM-410 / PR #198 is editing
+     `docs/swarm/2026-08-15-durable-multi-agent-execution-plan.md`. **This row does
+     not touch the plan document.** Findings that belong there are filed under
+     item 20 instead.
+  Deliverables named by the owner: `supabase/spikes/**`, a migration, and a spike
+  report under `docs/swarm/active/`.
