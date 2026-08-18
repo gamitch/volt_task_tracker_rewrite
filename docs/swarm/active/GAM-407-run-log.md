@@ -425,3 +425,62 @@ and satisfies the declaration gate's rule 3 that blocked #196 (GAM-411).
   the last one in this file, the run died holding these two subagents** — no
   worker output was verified, nothing was integrated, and the branch carries
   only the packet and the gate reports.
+- 2026-08-18 — **Worker A VERDICT: complete, self-reported, NOT self-certified.**
+  Subagent `ad080423907f60444`, opus, ~166K tokens, 63 tool calls, 21.4 min.
+  HEAD `6f79372` on `claude/gam-407-worker-a`; three commits, four new files
+  (schema 459 lines, README 168, harness 416, assertions 563). Harness:
+  **37 assertions, 0 failed, exit 0** on PG **17.11** (`170011`). Gates: all six
+  PASS. **The mutations did their job and found two real defects in the worker's
+  own first cut**, which is the whole argument for item 26's mutation rule:
+  - Mutation 1 exposed a **vacuous conjunct in the worker's own assertions** —
+    `now()` is transaction-scoped, so `updated_at unchanged=t` could never fail
+    inside a `DO` block. Fixed with `clock_timestamp()` (`a31281d`). Four
+    "row did not move" assertions had been carrying a conjunct that could not
+    fail.
+  - Mutation 2 exposed that the harness **aborted mid-run** under `set -e`
+    instead of reporting (`6f79372`).
+  - Mutation 3 turned the D3 ownership guard red as specified.
+  - **Honest caveat the worker volunteered:** mutation 2's red arrives as a hard
+    `42P10` (`on conflict` unplannable) rather than as two duplicate rows.
+    Scenarios 1 and 2 both go red as required, but by the function raising, not
+    by the database permitting a duplicate.
+  - **A packet contradiction the worker found and deliberately deviated from,
+    flagging it for the checker:** criterion-3 negative 7 records the expectation
+    `service_role=f`, while AC4 and the harness section require creating it
+    `nologin noinherit bypassrls`. Both cannot hold. It asserts
+    `service_role=t`, documents the discrepancy in the README, and keeps D3's
+    load-bearing property (`no ops object owned by a BYPASSRLS role`) asserted
+    separately. **The worker is right and the packet line is the stale one** —
+    it survived from a revision where `service_role` was created `nologin` only.
+  - **A spike finding nobody asked for:** the worker stood up a second cluster on
+    PG **16.14** and ran the whole harness against it — **37/0, green**, with
+    AC12's degrade path printing `PARTIAL: measured on PG 16.14 …` on every line.
+    **Nothing in the design is PG-17-specific.** That materially strengthens the
+    §11.1 answer and it was measured, not argued.
+  - Not measured, and the worker says so: hosted `pg_roles` (GAM-414), the
+    Edge-Function variant (reasoned only), and **scenario 15's ambiguous case** —
+    only the unreachable-store case is exercised, so **scenario 15 is PARTIAL**.
+  - One thing to check before integration: `schema.sql` carries a hardcoded
+    scratch-only password literal, which AC13 requires and which may trip a
+    secret scanner.
+- 2026-08-18 — **Worker B VERDICT: complete, self-reported, NOT self-certified.**
+  Subagent `a5f113e76b245cad9`, sonnet (default pin — no item-18 trigger fires on
+  two pure JS modules), ~127K tokens, 42 tool calls, 12.0 min. HEAD `77e7ea9` on
+  `claude/gam-407-worker-b`; four new files. Scoped suite **13 files / 299 tests**
+  (baseline 11/260, so +39); full suite **98 files / 2505** (baseline 96/2466).
+  Gates: all six PASS. Mutation 4 (sinks called before validation) → **exit 1,
+  8 failed**, and the 8 are exactly the zero-invocation assertions plus the
+  ordering test; reverted, green re-run confirmed.
+  - Name split implemented as the packet requires: store-derived
+    `stale_generation`, `version_conflict`, `no_such_capability`;
+    controller-local `wrong_run`, `missing_head_sha`, `malformed_evidence`,
+    `store_unavailable`.
+  - **One modelling decision flagged for the checker:** the packet pins the
+    signature but not the candidate shape, so the worker carried the store's
+    response on `candidate.storeOutcome` and added `attemptStoreCall(callStore)`
+    that genuinely calls a throwing function, so scenario 15's "thrown during
+    publication" is literal rather than pre-built data.
+  - It did **not** read `/tmp/gam407-a`, as instructed — so the store-derived
+    names are pinned from the packet and their agreement with Worker A's actual
+    `schema.sql` is unverified by either worker. **That cross-worker seam is the
+    checker's first job**; it is the seam three gate rounds kept reopening.
