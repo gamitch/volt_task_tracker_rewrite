@@ -512,3 +512,60 @@ and satisfies the declaration gate's rule 3 that blocked #196 (GAM-411).
   file, the run died holding this subagent** — the work is merged to the branch
   and pushed, but **no independent check has passed on it** and no spike report
   exists.
+- 2026-08-18 — **`checker-reviewer` VERDICT: FAIL (rework required).** Subagent
+  `a1da821f90852a659`, opus, ~151K tokens, 39 tool calls, 9.1 min. **1 MAJOR,
+  3 MINOR, 3 NIT, 0 BLOCKER.** It ran rather than read: two private clusters
+  (55445 PG 17.11, 55446 PG 16.14), a private worktree, the packet's four
+  mutations **and three probes of its own**. Sabotage check clean; no worker
+  commit touches `.claude/`, `docs/swarm/`, migrations, workflows or `src/`.
+  - **It confirmed Worker A's headline rather than taking it**: 37 assertions,
+    0 failed, exit 0 on 17.11 — reproduced independently.
+  - **MAJOR-1 — scenario 15's rollback conjunct is vacuous, and it proved it by
+    construction.** The four-term conjunction's last term (`S15_AFTER =
+    S15_BEFORE`) is satisfied trivially whenever **no publication ever
+    occurred**. With `schema.sql` completely untouched it pointed the token at a
+    no-such-run value; the harness reported `37 assertions, 0 failed`, `ALL
+    PASS`, exit 0 — **and the line still read "the in-flight publication ROLLED
+    BACK"**. This is the exact defect class four premise-gate rounds were
+    chasing, surviving to the last artifact. The claim is independently true
+    (round 3 measured it); **this artifact does not measure it**, and both the
+    detail line and `README.md:95` state it as measured. One-line fix available:
+    `$WORK/s15.out` already contains the `published=ok` line and is never
+    inspected.
+  - MINOR-1: criterion 5 renders markdown but **nothing writes to git** — plan
+    §5.1 says "summarized into git". AC7 is fully satisfied; the *criterion* is
+    PARTIAL and the report must scope the claim.
+  - MINOR-2/MINOR-3: two more anchoring gaps of the same family — three
+    assertions compare two possibly-empty strings (only scenario 15 lacks an
+    anchor, which is why MAJOR-1 is MAJOR and these are MINOR), and
+    `guard-d3-ownership` passes on an **empty** `ops` schema because
+    `string_agg` over zero rows is null.
+  - **Rulings on the three items I referred to it, all three settled by
+    measurement rather than argument:**
+    1. `service_role=f` vs `bypassrls` — **Worker A endorsed, the packet line is
+       stale**, and the checker found the packet's own proof at lines 547-552:
+       `f` was a measurement *of T503's role*, carried forward by inertia.
+    2. Mutation 2's `42P10` — **adequate**, and it did not argue the point: it
+       built the stronger variant (constraint dropped **and** conflict target
+       rewritten so the DB genuinely permits a duplicate) and got `rows=2`, two
+       distinct `run_id`s, both `created=true`, 26 ms with no blocking. No
+       rewrite required.
+    3. Worker B's `candidate.storeOutcome` + `attemptStoreCall` — **accepted**,
+       and judged the better call, because keeping `publishExternal` synchronous
+       and pure is what makes the zero-invocation assertion mean anything.
+  - Password literal: **not a finding** under item 25 — it authenticates to
+    nothing that outlives the harness, and it removes a `trust`-auth dependency.
+  - **Worker A's PG 16.14 bonus claim: independently verified.** The checker
+    built its own 16.14 cluster: 37/0, exit 0, with the `PARTIAL` qualifier on
+    the banner and on every result line. Safe for the report as portability
+    evidence.
+  - It supplied an eleven-item list of things **the spike report must not
+    claim**. That list is now binding on the report.
+- 2026-08-18 — **Attempt 2 of 3 (Loop Limit).** Returning to Worker A for the
+  MAJOR-1 fix only. Worker B's `77e7ea9` is **accepted as-is** and is not
+  re-dispatched. The spike report is deliberately **not** written until MAJOR-1
+  closes, because the stop-rule constraint list depends on its outcome.
+- 2026-08-18 — **DISPATCHED Worker A (attempt 2, `model: "opus"`)** for the
+  scenario-15 fix, `run_in_background: false`, blocking. **If this line is the
+  last one in this file, the run died holding this subagent** — the branch
+  carries merged work that a checker has **FAILED**, and no spike report exists.
