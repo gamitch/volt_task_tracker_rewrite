@@ -266,3 +266,52 @@ and satisfies the declaration gate's rule 3 that blocked #196 (GAM-411).
   re-raise it. **If this line is the last one in this file, the run died holding
   this subagent** — the packet has NOT cleared the gate and no worker was
   dispatched.
+- 2026-08-18 — **`checker-premise` round 3 VERDICT: REVISE.** Returned and read in
+  full (subagent `a30e6172561071873`, ~107K tokens, 41 tool calls, 12.1 min).
+  **1 BLOCKER, 2 MAJOR, 2 MINOR, 4 NIT.** It did what rounds 1 and 2 established
+  is the only version of this job worth paying for: it **rebuilt the entire
+  prescribed design on its own PG 17.11 cluster (port 55437) and attacked it**.
+  **The design survived.** Every criterion-3 negative, the CAS, idempotency,
+  generation fencing, scenario 14 (never previously exercised), scenario 15 and
+  the D2a forgery control all reproduce on the pinned major. It did not re-raise
+  the owner-closed escalation.
+  - **BLOCKER-R3-1 — the PG 17 pin collides with CI, and my new AC12 turned that
+    into a guaranteed red.** `.github/workflows/ci.yml:196` runs the `sql` job
+    against a **`postgres:16` service container**, and T503 — my own named shape
+    precedent — creates a scratch *database* on that ambient server rather than
+    starting a cluster. So the MAJOR-6 CI patch I mandated would ship a step
+    whose only possible effect is failure. Second half, same root: D7's whole
+    basis is the scratch cluster's `local all all trust`; CI is TCP with
+    `scram-sha-256`, where a passwordless `ops_executor` cannot authenticate at
+    all. The version skew is pre-existing (`config.toml` says `major_version =
+    17`, CI tests on 16) — this packet is just the first artifact to make it
+    load-bearing.
+  - **MAJOR-R3-1 — `stale_generation` is unreachable under D2's signature, and
+    that means criterion 1 was not actually being tested.** `publish_checkpoint`
+    takes no generation, so deriving it from the row it then filters on is
+    tautological: measured, no input produces `stale_generation`
+    (`ok → version_conflict → no_such_capability`, three names, not four). The
+    name survived from revision 1's signature, which D2 changed. Worker A cannot
+    produce a name Worker B is required to emit — the exact cross-worker seam
+    my own LCD 5 claimed was closed.
+  - **MAJOR-R3-2 — AC12 does not re-establish F2 or F4, and my §"PG 17" table
+    said it does.** D3 checks `rolbypassrls = false` for `ops` owners: that
+    proves the F2 *precondition is avoided*, not that a `BYPASSRLS` owner still
+    defeats forced RLS on 17. Rig-correctness guards mislabelled as findings.
+    **The gate then closed both by direct measurement on 17.11** — F2 HOLDS
+    (a `postgres`-owned `security definer` moved a row with forced RLS and no
+    claim), F4 HOLDS (`set role` from a `postgres` session escalates to
+    `ops_owner`, `postgres` and `service_role`; the direct login gets three real
+    `42501`s).
+  - MINOR-R3-1: my "not deferrable to another run either" is false — GAM-408 is
+    the counterexample, on this row, today. One `pg_roles` query on the owner's
+    channel converts LCD 2a and most of LCD 3 from honesty into evidence.
+    Withdrawing revision 3's item-20 row without a narrower successor left a
+    known, closable gap with no triage record.
+  - MINOR-R3-2, NIT-R3-1…4: AC2 wording, an inexact `start.sh:33` quote, PG 17's
+    new `MAINTAIN` bit in the default ACL string (`arwdDxtm`, not `arwdDxt`), six
+    LCD entries where item 19d says three to five, and an under-inclusive
+    Forbidden list.
+  - **All nine of round 2's required revisions verified still correctly applied.**
+    F1 and F3 independently re-established on 17.11, confirming my own
+    measurements.
