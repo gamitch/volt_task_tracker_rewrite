@@ -359,13 +359,25 @@ S15_RC=$?
 set -e
 S15_ERR="$(tr '\n' ' ' < "$WORK/s15.err" | cut -c1-240)"
 S15_AFTER="$(sql1 "select version || '|' || generation || '|' || coalesce(head_sha, 'null') || '|' || status from ops.run where run_id = '$S15_RUN'")"
+# The victim transaction's OWN report of the publication it had in flight. Read
+# from $WORK/s15.out, which was captured above and, until this was added, was
+# never inspected. Without it `after = before` is satisfied TRIVIALLY whenever
+# no publication ever happened -- a token that resolves to no run returns
+# no_such_capability, moves nothing, and the two re-reads agree by
+# construction. Demonstrated by the round-1 checker: with schema.sql entirely
+# intact, pointing S15_TOKEN at a non-resolving token left this assertion
+# GREEN. `[ -n "$S15_BEFORE" ]` closes the degenerate form of the same hole,
+# where both re-reads are the empty string (measured under mutation 2).
+S15_PUBLISHED="$(tr '\n' ' ' < "$WORK/s15.out" | cut -c1-120)"
 
 if [ "$S15_READY" = "1" ] && [ "$S15_KILLED" = "1" ] && [ "$S15_RC" -ne 0 ] \
    && grep -q '57P01' "$WORK/s15.err" \
+   && grep -q '^published=ok$' "$WORK/s15.out" \
+   && [ -n "$S15_BEFORE" ] \
    && [ "$S15_AFTER" = "$S15_BEFORE" ]; then
-  record PASS scenario-15-store-side "connection killed mid-statement: psql exit $S15_RC, stderr [$S15_ERR]; the in-flight publication ROLLED BACK -- no row records the checkpoint as published (before=$S15_BEFORE after=$S15_AFTER). The failure is NAMED (57P01), not silent"
+  record PASS scenario-15-store-side "a publication WAS in flight -- the victim transaction reported [$S15_PUBLISHED] -- and then the connection was killed mid-statement: psql exit $S15_RC, stderr [$S15_ERR]. On re-connect the four observed columns of that run row are back at their pre-publication values (version|generation|head_sha|status: before=$S15_BEFORE after=$S15_AFTER), so the version bump the transaction had already reported is NOT visible: the in-flight publication rolled back. Scoped to those four columns of ops.run -- this assertion does not read result_refs, phase, updated_at or any other table. The failure is NAMED (57P01), not silent"
 else
-  record FAIL scenario-15-store-side "ready=$S15_READY killed=$S15_KILLED rc=$S15_RC stderr=[$S15_ERR] before=$S15_BEFORE after=$S15_AFTER"
+  record FAIL scenario-15-store-side "ready=$S15_READY killed=$S15_KILLED rc=$S15_RC stderr=[$S15_ERR] in-flight=[$S15_PUBLISHED] before=$S15_BEFORE after=$S15_AFTER"
 fi
 
 # ---------------------------------------------------------------------------
