@@ -1,10 +1,23 @@
 # GAM-407 — bounded spike: is Supabase/Postgres a viable operational run store?
 
-**Revision 5** — answers `checker-premise` **round 3** (REVISE; 1 BLOCKER,
-2 MAJOR, 2 MINOR, 4 NIT), whose report is at
-`docs/swarm/active/GAM-407-gate-round3.md`. Rounds 1 and 2 are at
-`-gate-round1.md` and `-gate-round2.md`; their consolidated findings are in
+**Revision 6 — DISPATCH.** `checker-premise` **round 4** returned **DISPATCH**
+on revision 5 (0 BLOCKER, 0 MAJOR, 5 MINOR, 4 NIT), and revision 6 applies all
+nine. **Item 19's gate is satisfied and a worker may be dispatched** — the first
+time on this row, after four rounds. Reports: `GAM-407-gate-round1.md`,
+`-round2.md`, `-round3.md`, `-round4.md`; consolidated findings in
 `GAM-407-interim-findings.md`.
+
+Round 4 closed both of revision 5's judgement calls **by construction**: it built
+the 4-arg `publish_checkpoint` on its own PG 17.11 cluster and produced **all
+four outcomes** across nine cases, proved the two scenario-13 routes cleanly
+separable, found **no fencing bypass** via the new argument, and re-ran the
+concurrent CAS to exactly-once. Its five MINORs were all real and are applied
+below — one of them (MINOR-1) was a sentence in D2 that still described the
+tautology revision 5 had removed, which a worker reading D2 first would have
+rebuilt.
+
+**Revision 5** — answered `checker-premise` **round 3** (REVISE; 1 BLOCKER,
+2 MAJOR, 2 MINOR, 4 NIT).
 
 **Round 3 rebuilt the whole prescribed design on its own PG 17.11 cluster and
 attacked it, and the design survived** — every criterion-3 negative, the CAS,
@@ -46,8 +59,8 @@ in this design needs an extension**. GAM-410 / PR #198 is concurrently editing
 `docs/swarm/2026-08-15-durable-multi-agent-execution-plan.md`, so **no agent on
 this row edits the plan document**.
 
-⚠ **This packet has still NOT received a DISPATCH verdict, and item 19 forbids
-it reaching a worker until it does.**
+✅ **DISPATCH received (round 4, 2026-08-18). Definition of Ready 1-5 are met.**
+Item 19's precondition for reaching a worker is satisfied.
 
 Issue: [GAM-407](https://linear.app/gamitch/issue/GAM-407/supabase-as-the-operational-run-store-is-the-plans-least-confident)
 Tier: **HEAVY** (item 26 — creates an ops schema with RLS and `security definer`
@@ -241,10 +254,18 @@ scoped to the wrong major. That design's security
 lives entirely in PostgREST, which this spike cannot exercise.
 
 So: **`ops_executor` gets no table grants at all** — only `execute` on
-`ops.publish_checkpoint(p_token text, …)`, which derives `run_id` and
-`generation` from a secret it verifies *inside* the function. That negative is
-real on a scratch cluster, needs neither `pgjwt` nor PostgREST, and restores the
-"weaker case generalizes upward" argument the gate correctly called inverted.
+`ops.publish_checkpoint(p_token text, …)`, which derives **`run_id` only** from a
+secret it verifies *inside* the function, and validates `generation` and
+`version` against the **caller's asserted values**. That negative is real on a
+scratch cluster, needs neither `pgjwt` nor PostgREST, and restores the "weaker
+case generalizes upward" argument the gate correctly called inverted.
+
+⚠ **Corrected in revision 6 (round 4, MINOR-1).** Revision 5 left this sentence
+reading "derives `run_id` **and generation**" — verbatim the tautology revision 5
+had just removed elsewhere, and flatly contradicting the function's own spec
+below. A worker reading D2 first would have rebuilt the defect. **The
+authoritative statement of the signature is `ops.publish_checkpoint`'s entry
+under "Required behavior", not this paragraph.**
 
 **D2a — the broken design is kept as a committed negative control.** The
 forgery above is a *spike finding about plan §5.1*, not just a packet defect, and
@@ -419,6 +440,14 @@ necessity — keep it anyway: depending on nothing is the stronger result for
 §11.1, and it keeps the spike schema portable to whatever store the owner picks
 if criterion 3 fails.
 
+⚠ **The capability token's randomness source is `gen_random_uuid()`, and this is
+not a free choice (round 4, MINOR-3).** The idiomatic answer, `gen_random_bytes`,
+is **pgcrypto** — measured absent on the scratch cluster and present on the
+hosted project, i.e. exactly the local-red/hosted-green asymmetry this schema
+exists to avoid. Build the token inline from two concatenated UUIDs
+(`replace(gen_random_uuid()::text,'-','') || replace(gen_random_uuid()::text,'-','')`,
+244 bits), store only its `sha256` hex, and **do not call `gen_random_bytes`.**
+
 **Roles, created by the schema:**
 
 | Role | Attributes | Grants |
@@ -536,13 +565,15 @@ produces exactly one `pg_default_acl` row, scoped to `public`. It is a valid
 control for negative #2 (product tables) and constrains **nothing** in schema
 `ops`.
 
-⚠ **On PG 17 that ACL string is `arwdDxt`+`m`, not `arwdDxt` (round 3,
-NIT-R3-2).** 17 added the **MAINTAIN** privilege, so round 2's recorded
-`arwdDxtm/postgres` — measured on 17.11 as
-`{authenticated=arwdDxtm/postgres,anon=arwdDxtm/postgres,service_role=arwdDxtm/postgres}`
-— is what a 17 cluster produces. **Do not write an exact-match assertion against
-round 2's PG-16 string**; it would be red on the pinned major. Immaterial to the
-design either way, since `ops_executor` receives nothing from it.
+⚠ **On PG 17 that ACL string gains an `m`, and revision 5 attributed it
+backwards (round 3 NIT-R3-2, attribution corrected by round 4 NIT-1).**
+**Round 2 recorded `arwdDxt`, measured on PG 16. PostgreSQL 17 adds the
+`MAINTAIN` privilege and produces `arwdDxtm`** — measured on 17.11 by two
+independent gate rounds as
+`{postgres=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,anon=arwdDxtm/postgres,service_role=arwdDxtm/postgres}`.
+**Do not write an exact-match assertion against round 2's PG-16 `arwdDxt`
+string**; it would be red on the pinned major. Immaterial to the design either
+way, since `ops_executor` receives nothing from it.
 
 Prints a `PASS`/`FAIL` line per scenario; exits non-zero if any assertion fails.
 
@@ -609,7 +640,8 @@ suite already collects.
 
 - `validateCheckpointCandidate(candidate, expected)` → a result naming every
   rejection reason: `wrong_run`, `stale_generation`, `version_conflict`,
-  `missing_head_sha`, `malformed_evidence`, `store_unavailable`.
+  **`no_such_capability`**, `missing_head_sha`, `malformed_evidence`,
+  `store_unavailable`.
 - `publishExternal(candidate, expected, sinks)` with `sinks = { github, linear }`
   — invokes **neither** sink unless validation passed, and records call order.
 - Tests must assert the **negative**: on an invalid candidate, `github` and
@@ -617,9 +649,21 @@ suite already collects.
   about ordering.
 - Tests must cover scenario 15's other half (MAJOR-4): a store error thrown
   during publication yields a named failure class and **zero** external writes.
-- **Name fidelity:** the rejection reasons must match the outcome names
-  `schema.sql` actually returns. The checker verifies this against `schema.sql`,
-  not against Worker B's own tests.
+- **Name fidelity — scoped, and the list corrected (round 4, MINOR-4).** The
+  store returns exactly four outcomes: `ok`, `stale_generation`,
+  `version_conflict`, `no_such_capability`. **`no_such_capability` was missing
+  from Worker B's list above and must be added** — it is the outcome that carries
+  §5.2 fencing (scenario 13 route ii), so omitting it left the fencing case with
+  no controller-side name at all.
+
+  The rule binds **only the store-derived subset**: `stale_generation`,
+  `version_conflict` and `no_such_capability` must match `schema.sql`'s outcome
+  names exactly, and the checker verifies those three against `schema.sql`, not
+  against Worker B's own tests. `wrong_run`, `missing_head_sha`,
+  `malformed_evidence` and `store_unavailable` are **controller-local** and have
+  no store counterpart; checking them against `schema.sql` would bounce Worker B
+  for being correct. Revision 5 said "the rejection reasons must match" without
+  that scoping, which was unsatisfiable as written.
 
 ### Worker B — `scripts/run-store-episode-summary.mjs` + `.test.mjs`
 
@@ -727,8 +771,28 @@ fixture path is needed and the checker can inspect the artifact.
 13. **`ops_executor` has a password and the harness exports `PGPASSWORD`.**
     D7's basis — `local all all trust` — is a property of the scratch cluster,
     not of PostgreSQL. One line removes the dependency and costs nothing under
-    `trust`. Asserted by the harness connecting successfully as `ops_executor`
-    with `PGPASSWORD` set.
+    `trust`.
+
+    ⚠ **The assertion is `pg_authid`, NOT "the connection succeeded" (round 4,
+    MINOR-2).** Revision 5 asserted it by connecting successfully, which is
+    **vacuous on the cluster it runs on**: measured on 17.11, a *wrong* password
+    and *no* password both connect under `local all all trust`, so the criterion
+    passed whether or not the password existed. Assert instead:
+
+    ```sql
+    select rolpassword is not null from pg_authid where rolname = 'ops_executor';
+    ```
+
+    which is superuser-readable and was measured returning `t` with
+    `left(rolpassword,14) = 'SCRAM-SHA-256$'`. The portability benefit of the
+    password is real and unaffected; only revision 5's *check* was unfalsifiable.
+
+14. **Both `int` arguments are passed by name, everywhere (round 4, NIT-2).**
+    `publish_checkpoint(text, int, int, jsonb)` has two adjacent `int`s that are
+    **both `1` on every freshly reserved run**, so a swapped pair is silently
+    indistinguishable at exactly the state the harness starts from. The harness
+    and `run-store-controller.mjs` use
+    `p_expected_generation => …, p_expected_version => …`.
 
 ## Verification and mutation
 
