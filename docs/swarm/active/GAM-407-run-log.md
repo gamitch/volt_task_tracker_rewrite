@@ -484,3 +484,31 @@ and satisfies the declaration gate's rule 3 that blocked #196 (GAM-411).
     names are pinned from the packet and their agreement with Worker A's actual
     `schema.sql` is unverified by either worker. **That cross-worker seam is the
     checker's first job**; it is the seam three gate rounds kept reopening.
+- 2026-08-18 — **Item 21 existence verification (not assumed).** Both workers'
+  HEADs moved and both changes are in the **committed blob**, not merely in a
+  working tree: A `6f79372`, 4 files / +1613 lines, worktree clean; B `77e7ea9`,
+  4 files / +942 lines, worktree clean. Every path is inside the packet's Allowed
+  Files; nothing under `supabase/migrations/`, `.github/`, `src/`, `docs/` or
+  `.claude/` was touched by either.
+- 2026-08-18 — **Merged both into `claude/gam-407-run-store-spike`** (`c043598`,
+  `6308d57`) and pushed. Disjoint file sets, no conflicts.
+- 2026-08-18 — **The cross-worker name seam checked by me before the checker,
+  because it is the seam three gate rounds kept reopening and neither worker
+  could see the other's artifact.** `schema.sql` returns `ok`,
+  `stale_generation`, `version_conflict`, `no_such_capability`;
+  `run-store-controller.mjs`'s `STORE_OUTCOMES` is the same four, with the
+  rejection subset derived from it. **They agree exactly.** The four
+  controller-local names are correctly absent from `schema.sql`.
+- 2026-08-18 — **Gates run on the merged branch** (`gates.py --baseline-tests
+  2466 --scope scripts/ --baseline-scoped 260`, `6308d57`, tree clean):
+  **VERDICT PASS — all six.** tsc 0, vite build 0, format:check 0, eslint 0
+  (0 errors / 379 warnings, the repo's standing
+  `react-refresh/only-export-components` class), vitest full **98 files / 2505**
+  (+39), vitest `scripts/` **13 files / 299** (+39). Six of six this time — the
+  branch now carries `scripts/` changes, so gate 6 has a real scope, unlike
+  run 1 where it was honestly SKIPPED.
+- 2026-08-18 — **DISPATCHED `checker-reviewer` on the merged work**,
+  `run_in_background: false`, blocking. **If this line is the last one in this
+  file, the run died holding this subagent** — the work is merged to the branch
+  and pushed, but **no independent check has passed on it** and no spike report
+  exists.
