@@ -148,3 +148,9 @@ that is the failure signature `AGENTS.md` § "Two walls" describes, not a myster
   be dispatched** (item 19: nothing reaches a worker until `checker-premise`
   returns DISPATCH). Escalating to the human owner rather than looping. No
   `worker-implementer` was spawned at any point in this run.
+- 2026-08-18 — **Interim findings written and pushed**:
+  `docs/swarm/active/GAM-407-interim-findings.md`. Four BLOCKER-class facts about
+  plan §5.1's capability model (F1 claims-GUC forgery, F2 `security definer` +
+  `BYPASSRLS` owner, F3 PUBLIC `EXECUTE` hijack, F4 `SET ROLE` rig artifact), the
+  parts measured to work, the `config.toml` transport evidence, and what is still
+  unknown. This is explicitly **not** the PASS/FAIL spike report GAM-407 asks for.
