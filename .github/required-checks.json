@@ -1,7 +1,7 @@
 {
-  "$comment": "GAM-401 -- the machine-readable required-check contract (durable-execution plan Phase 0 acceptance; consumed by the Phase 5 steward). PROVISIONAL until the owner diffs it against the live branch-protection required set, which no agent session can read (GAM-399 decision 4). Check names are check-run names, i.e. the job-level `name:` fields of the workflows -- renaming a job silently detaches it from branch protection, which is exactly the drift scripts/required-checks-validate.mjs exists to catch. Names below were measured live from the jobs API of run 32093928987 on 2026-08-18, plus the `Linear declaration` gate that .github/pull_request_template.md:5 documents as required.",
-  "status": "provisional",
-  "approval": "pending GAM-399 decision 4",
+  "$comment": "GAM-401 -- the machine-readable required-check contract (durable-execution plan Phase 0 acceptance; consumed by the Phase 5 steward). The owner confirmed this list matches the live branch-protection required set on 2026-08-18 (GAM-399 decision 4); changing the required checks means changing branch protection AND this file in the same act. Check names are check-run names, i.e. the job-level `name:` fields of the workflows -- renaming a job silently detaches it from branch protection, which is exactly the drift scripts/required-checks-validate.mjs exists to catch. Names below were measured live from the jobs API of run 32093928987 on 2026-08-18, plus the `Linear declaration` gate that .github/pull_request_template.md:5 documents as required.",
+  "status": "approved",
+  "approval": "owner confirmed against the live branch-protection required set 2026-08-18 (GAM-399 decision 4)",
   "branch": "main",
   "requiredChecks": [
     {
