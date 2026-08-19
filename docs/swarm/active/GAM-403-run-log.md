@@ -155,3 +155,25 @@ the work after that point never happened.
   specificity plus an opus `checker-reviewer` afterwards, which is what
   AGENTS.md prescribes for a non-item-18 HEAVY worker. **If this line is the
   last one in this file, the run died holding this subagent.**
+- `22:28Z` — **WORKER VERDICT: complete, attempt 1 of 3, no dispute.** Commit
+  `cee61bd`, two files, 547 + 503 lines, 38 new tests. Self-reported all nine
+  §3 criteria PASS, including the two that matter most: criterion 4's negative
+  control (garbage token → `exit 128: Invalid username or token` →
+  `EXIT CODE: 1`, so the `-c` fix holds against the BLOCKER) and criterion 6's
+  mutation replay in its own worktree (`3 failed | 35 passed`, exit 1, the
+  packet-named test among the red). Suite 99 files / 2543 tests / 0 failures =
+  baseline + exactly its 38.
+  Two things it disclosed rather than concealed, both to its credit:
+  1. **It leaked a credential into its own transcript** — it ran `git remote -v`
+     early, which echoed `origin` with the live `ghs_` App token in the userinfo.
+     Not in any committed file, and orchestrator verification below confirms
+     that. Assessment: the token is an Actions-minted, job-scoped installation
+     token that dies with this run, and the transcript is not published, so
+     there is nothing to rotate — but it is recorded here because a disclosed
+     exposure is the only kind anyone can act on.
+  2. A judgment call it flagged: it also SKIPs check 6 (`ci-trigger`) on a
+     missing credential, though that check is a string comparison rather than a
+     network call, on the grounds that comparing an empty token is meaningless.
+     Defensible, not dictated by the packet — handed to the checker to weigh.
+  Verification by the orchestrator (item 21 — existence is verified, not
+  assumed) follows before any of this is treated as done.
