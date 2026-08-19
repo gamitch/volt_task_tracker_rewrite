@@ -117,3 +117,42 @@ subagent's verdict; gates run; PR opened.
   the last round item 19a allows; a third REVISE escalates to the owner instead
   of looping. *If this line is the last one in this file, the run died holding
   this subagent.*
+- **VERDICT round 2: DISPATCH** (MINOR only — no BLOCKER, no MAJOR), with six
+  fold-ins to apply before the worker sees it. This gate also ran rather than
+  read: three probes in its own worktree, since removed, shared tree verified
+  clean.
+  * **Verified the revisions by measurement, not by reading them:** re-ran the
+    AC2a/AC2b pairing both ways (`mode=pathonly` → AC2a passes, AC2b fails;
+    `mode=full` → both pass), reproduced the `Cannot redefine property: reload`
+    failure and the `vi.stubGlobal` fix (`reloadCalls=1`), and drove a real
+    `lazy(() => Promise.reject(…))` through the boundary in **both** Suspense
+    placements — so R2's remaining freedom is safe.
+  * **Caught a contradiction I left behind:** §4's Allowed Files still said
+    `router.tsx` owned "the reset key", contradicting the R2 rewrite. That is
+    exactly the line round 1's MAJOR was about, surviving in a second place.
+  * **N2, the best finding of the round:** *no acceptance criterion proved the
+    boundary is actually mounted in the real tree.* A worker could ship a
+    perfect component, omit the `router.tsx` mount entirely, and every AC —
+    including the full suite — would still pass, because **no test anywhere
+    mounts `AppRoutes`**. It then built the ~20-line remedy against the real
+    `AppShell` and measured it: `fallback=true`, `[role="main"]` present,
+    `navCount=2`, fallback nested inside main, real `SeasonProvider`/`KpiStrip`
+    executing. That answers open doubt 4 with "yes, required, and here it is".
+  * **Open doubt 1 ruled sound: item 27 does not apply.** Item 27 is about a
+    surface reading from a fixture or stub; this surface is real and usable —
+    it proved that under the real shell. The chrome gap is item 20's territory
+    and GAM-422 satisfies it. **One condition attached:** the packet bound only
+    the PR body to disclose the narrowing, and *the owner reads the Linear row,
+    not the PR* — so GAM-387's close comment must carry it too.
+  * **Open doubt 2 ruled sound and closed the question:** `setSearchParams`
+    appears nowhere in `src/`, no in-app link or `navigate()` carries a query
+    string, so the app cannot produce a same-path search change at all — R3's
+    key costs nothing. `CheckinResult` already re-runs on `searchParamsKey`.
+  * **Three of my own citations were off by one** (`dep-BK3b2jBa.js` lines), and
+    my "sourced from the installed Vite" claim was **false for the three browser
+    strings** — they are browser-authored and appear nowhere under
+    `node_modules/vite/`. Only the mechanism and `Unable to preload CSS` are
+    sourced. Corrected rather than deleted, per item 30c.
+  * **N4:** the *preferred* `vite:preloadError` detector cannot be exercised by
+    AC3 — a jsdom lazy rejection never routes through `__vitePreload`, so it
+    would ship untested unless a second test dispatches the event.
