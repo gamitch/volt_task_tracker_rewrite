@@ -46,3 +46,8 @@ the work after that point never happened.
   worker are the preflight script and its tests only; the workflow half is
   orchestrator-owned and ships as a patch (GAM-328 wall). Five **Least confident
   decisions** declared per item 19d.
+- `21:40Z` — **DISPATCHED `checker-premise` (round 1, opus pin, `run_in_background: false`).**
+  Target: `docs/swarm/active/GAM-403-packet.md`, charter §0 first — the five
+  Least confident decisions in packet §5. **If this line is the last one in this
+  file, the run died holding this subagent** and the gate verdict below was never
+  recorded.
