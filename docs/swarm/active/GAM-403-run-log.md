@@ -146,3 +146,12 @@ the work after that point never happened.
   a worker is that checker's own written instruction — "fix those two lines and
   dispatch; do not re-gate" — plus its measured confirmation that the fix landed.
   A third round was available in neither letter nor spirit.
+- `22:17Z` — **DISPATCHED `worker-implementer` (attempt 1 of max 3, pinned
+  default model, `run_in_background: false`).** Item 18's opus override is
+  **not** passed and that is deliberate: none of its four triggers is met — no
+  migration, no RLS or security definer, no metric-view SQL, no auth/session/
+  role logic. This is CI credential plumbing, and item 25 forbids bumping a
+  worker because a topic sounds sensitive. The mitigation is the packet's
+  specificity plus an opus `checker-reviewer` afterwards, which is what
+  AGENTS.md prescribes for a non-item-18 HEAVY worker. **If this line is the
+  last one in this file, the run died holding this subagent.**
