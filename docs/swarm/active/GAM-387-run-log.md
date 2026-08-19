@@ -32,3 +32,22 @@ subagent's verdict; gates run; PR opened.
 - **Claim read back** (item 28c — Linear has no compare-and-set): `GAM-387`
   reads `In Progress` with labels `other`, `Bug`, `heavy`. We hold it.
 - **Branch created**: `claude/gam-387-error-boundary` off `main` at `debe8e4`.
+- **Premises re-measured** against the working tree at `debe8e4` before writing
+  the packet (item 19c). Confirmed: no production error boundary (all 8 grep
+  hits are test files); `react-error-boundary` absent from dependencies; 14
+  `React.lazy` routes at `src/app/router.tsx:120-140`; one `<Suspense>` at
+  `:189` wrapping `<Routes>` at `:190`. **Corrected one issue claim:** the
+  provider stack is not `BrowserRouter > AuthProvider > AppRoutes` — it is
+  `BrowserRouter > AuthProvider > ThemeModeProvider > LayerProvider >
+  ThemedShell > AppShell > AppRoutes` (`src/App.tsx:69-81`), which means the nav
+  chrome already sits *above* `AppRoutes`, so the issue's route-level
+  prescription is achievable without editing `App.tsx`. **Found one thing the
+  issue does not contain:** four routes render chromeless (`/login`,
+  `/accept-invite`, `/kiosk/:sessionId`, `/meetings/live/:sessionId`), so on
+  those the fallback must carry its own way out — nav is not there to survive.
+- **Packet written**: `docs/swarm/active/GAM-387-packet.md`. Tier HEAVY, worker
+  on pinned default (no item 18 trigger applies). Five Least confident decisions
+  declared (item 19d).
+- **`node_modules` was empty on this container**; `npm ci` started so gates can
+  actually run. One packet evidence line that leaned on a `node_modules` check
+  was corrected to cite the manifest instead.
