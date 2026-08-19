@@ -89,3 +89,22 @@ not a run that merely ran out of things to say.
   - Two MINOR harness facts and two NITs to fold in; one item 20 follow-up
     identified (the default-wipe is its own defect, and a third copy of the
     DST-buggy comparison now exists in `EditMeetingSessionDialog.tsx:311-321`).
+  Verdict recorded in commit `d5cda65`, pushed.
+- **Both BLOCKERs re-verified by the orchestrator before revising**, rather than
+  taken on the subagent's word: `outreach-lifecycle.spec.ts:191-192` does fill
+  `11:59 PM` twice and is the only persona spec that touches time fields;
+  `vite.config.ts:42-58` does exclude `tests/e2e-personas/**` from vitest; and
+  the default-wipe follows by reading — `sessionDetails` starts `{}` (`:1027`),
+  `updateSessionDetail:1204-1210` seeds both fields `undefined`, and
+  `syncSessionDetails:860`'s `??` then cannot re-seed the untouched one.
+- **Packet revised to revision 2.** New §3-bis (the default-wipe, and why it
+  makes the intuitive test order unfalsifiable), new §5-bis (the e2e conflict
+  and the exact `11:58 PM` / `11:59 PM` ruling, with `<=` deliberately NOT
+  weakened to `<`), §2 rewritten — `min` and the comparison guard **disjoint**
+  interaction orders on this dialog, so revision 1's inherited "`min` is
+  secondary" framing was false here — `tests/e2e-personas/outreach-lifecycle.spec.ts`
+  added to Allowed Files under a narrow two-line mandate, AC2/AC3/AC4/AC7
+  rewritten around the End-then-Start order with an explicit `1 session` (not
+  `0 sessions`) anti-criterion, harness facts and the 2505-test baseline added
+  to AC8, and a **fresh** §9 of five new doubts (the old five are retired as
+  SOUND and recorded as such).
