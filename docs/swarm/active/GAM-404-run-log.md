@@ -64,3 +64,50 @@ that signature unmistakable.
   light-to-medium per 19b, `run_in_background: false`, orchestrator is
   blocking on it now.** *If this line is the last one in this file, the run
   died holding this subagent.*
+- **VERDICT RECEIVED: `checker-premise` round 1 → REVISE** (1 BLOCKER, 3
+  MAJOR, 4 MINOR). Subagent returned; nothing left in flight. It executed the
+  packet's own pseudocode in a throwaway `/tmp` tree against real copies of
+  the sibling modules (item 23 respected — shared tree never touched),
+  reproduced both named mutations reddening, and ran `npx vitest run
+  scripts/` (13 files / 299 tests green baseline). Findings that change the
+  work:
+  * **BLOCKER — the prescribed test-fixture reuse is impossible.**
+    `scripts/linear-escalation-notify.test.mjs` exports nothing, so
+    `import { ESCALATION_COMMENT, issueWith } from './linear-escalation-notify.test.mjs'`
+    is a hard `SyntaxError` at collection time.
+  * **MAJOR — coverage claim overstated.** `if: failure()` only fires when
+    the `assert-released` job's own Assert step fails. A `work` job that
+    itself fails or is cancelled, but leaves Linear in a state
+    `classifyState` treats as released (e.g. still `Todo` because the claim
+    never landed, or already `In Review`), produces **no notification at
+    all** — exactly the issue's own title. Fix: widen the new step's `if:`
+    to also fire on `needs.work.result == 'failure' \|\| 'cancelled'`, and
+    feed that into classification.
+  * **MAJOR — "never two Slack pings" is false.** If the escalation step
+    posts and then this script's own Linear read throws (a transient
+    network blip), a second, duplicate ping goes out. Correct the claim to
+    "at most one, except a duplicate is preferred to silence on a read
+    failure" and say so in the Slack body.
+  * **MAJOR — Allowed Files self-contradicts criterion 8.** Listing
+    `.github/workflows/claude-linear-dispatch.yml` as an editable Allowed
+    File is incompatible with the credential wall (no commit touching that
+    path can be pushed); criterion 8 ("read the committed YAML") is
+    therefore unmeasurable on this branch. Deliver the edit as a
+    `git format-patch` artifact under `docs/swarm/active/`, per the GAM-314
+    precedent, and grade the patch mechanically instead.
+  * MINOR findings: `UNEXPECTED_STATE_*` is actually reachable today (not
+    "defensive-only" as packet §6 claimed) via `assert-released`'s
+    `not-found`/`error`/null-state paths; `detectEscalation`'s exact
+    state-name match and my hand-rolled trim/lowercase check can disagree —
+    fix by importing `classifyState` from the sibling script instead of
+    reimplementing the check (also closes the reachability finding, since
+    that becomes the same source of truth `assert-released` itself uses);
+    the `title` env var was threaded through but never consumed; two
+    citation slips (`:74` should be `:103` for the timeout setting).
+  * **§3's refusal to touch `classifyState` affirmed SOUND**, and handed a
+    stronger argument than mine: `linear-assert-released.mjs` is a gate that
+    exits 1, while every notify concern in this codebase is bound by
+    "never a gate, always exit 0" — mixing an always-0 concern into an
+    exit-1 script is the wrong shape regardless of dependency direction.
+  Revising the packet now — round 2 of the item 19a cap, the last round
+  before an owner escalation rather than a round 3.
