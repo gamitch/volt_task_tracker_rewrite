@@ -31,8 +31,22 @@ is a live gap and not a theoretical one.
 That deferral is filed, not promised: **GAM-422**
 (<https://linear.app/gamitch/issue/GAM-422/a-throw-in-the-app-chrome-topnav-sidenav-kpistrip-or-seasonprovider>),
 in `Backlog`, under item 20. No acceptance criterion below claims chrome
-coverage, and the PR body must say so rather than implying the issue is
-closed whole.
+coverage.
+
+**Orchestrator obligations, not the worker's — both required before this closes:**
+
+1. The **PR body** states the narrowed scope and links GAM-422, rather than
+   implying GAM-387 is closed whole.
+2. **GAM-387's own close comment carries the same disclosure and the GAM-422
+   link.** Round 2 attached this as a condition on its ruling, and the reason is
+   the one that matters: *the owner reads the Linear row, not the PR.* A
+   narrowing disclosed only in a PR body is not disclosed to the person deciding
+   what is done.
+3. The PR **states and defends the HEAVY tier choice** (item 26: "a judgement
+   the orchestrator must state and defend in the PR, so a wrong call is visible
+   and correctable rather than silent"), including that none of item 26's named
+   HEAVY triggers apply and that the tier was taken under the "if two tiers are
+   arguable, take the heavier one" clause.
 
 ## 2. Premises the author re-measured against this tree (item 19c)
 
@@ -106,7 +120,9 @@ really is the only recovery, which is why R4 is not optional politeness.
 
 - `src/app/RouteErrorBoundary.tsx` — **new**, the boundary component.
 - `src/app/RouteErrorBoundary.test.tsx` — **new**, its tests.
-- `src/app/router.tsx` — wiring only (import, mount, and the reset key).
+- `src/app/router.tsx` — **import and mount only.** No `useLocation()`, no key
+  computation, no error logic; see R2. (An earlier draft said "and the reset
+  key" here and it was wrong in exactly the way R2 describes.)
 
 **Forbidden — do not create, edit, or stage anything else.** Explicitly:
 `src/App.tsx`, `src/app/AppShell.tsx`, `src/app/guards.tsx`, any file under
@@ -162,13 +178,18 @@ chunk/dynamic-import failure and render a recovery action that calls
 `window.location.reload()`. Everything else gets the generic fallback. Both
 branches must be tested.
 
-*The strings below are sourced from the installed Vite, not invented.* Vite's
-`preload()` helper rethrows the **browser's own** error unchanged
-(`node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64858-64866`), so the
-message is browser-dependent — Chrome `Failed to fetch dynamically imported
+*Provenance, stated precisely — round 2 caught this overstated.* The **mechanism**
+and the `Unable to preload CSS` string are sourced from the installed Vite. The
+**three browser strings are not** — they are authored by the browser, appear
+nowhere under `node_modules/vite/` (0 grep hits), and are unverifiable from this
+tree. Treat them as best-known values, not measured ones.
+
+Vite's `preload()` helper rethrows the **browser's own** error unchanged
+(`node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64857`, `:64860-64866`), so
+the message is browser-dependent — Chrome `Failed to fetch dynamically imported
 module`, Firefox `error loading dynamically imported module`, Safari `Importing
 a module script failed`. **But the same helper also authors its own error** at
-`:64844`: `new Error("Unable to preload CSS for " + dep)`, which matches neither
+`:64843`: `new Error("Unable to preload CSS for " + dep)`, which matches neither
 those strings nor `ChunkLoadError`. So the predicate is:
 
 - `error.name === 'ChunkLoadError'` (Webpack's name — this project is Vite, but
@@ -176,13 +197,18 @@ those strings nor `ChunkLoadError`. So the predicate is:
 - `/dynamically imported module|Importing a module script failed|unable to preload|Loading chunk/i`
   against the message.
 
-**Preferred, and worth the extra few lines:** Vite dispatches a cancelable
-`vite:preloadError` event on `window` before rethrowing
-(`dep-BK3b2jBa.js:64849-64857`), with the real error on `e.payload`. That is a
-first-party signal immune to browser message drift. Use it as the primary
-detector if the worker can do so cleanly, keeping the string predicate as the
-fallback; if not, the string predicate alone is acceptable. State which was
-done and why.
+**Optional, and conditional:** Vite dispatches a cancelable `vite:preloadError`
+event on `window` before rethrowing (`dep-BK3b2jBa.js:64850-64858`), with the
+real error on `e.payload` — a first-party signal immune to browser message
+drift.
+
+**You may only build this path if you also test it.** Round 2 measured that a
+jsdom `lazy(() => Promise.reject(…))` never routes through `__vitePreload`, so
+the event never fires and AC3 cannot reach this code — it would ship untested.
+The condition: a second test that dispatches `new Event('vite:preloadError')`
+with a `payload` and asserts the reload branch. If you are not writing that
+test, **use the string predicate alone** — that is a fully acceptable outcome,
+not a lesser one. State which you did and why.
 
 **R5 — Honest fallback copy.** PRD DES-14 (sentence case) and DES-16 (say what
 happened and what to do; no apologies, no "Oops"). The fallback must **not**
@@ -232,7 +258,8 @@ reverts the fix too).
 
 | # | Criterion | Mutation that must turn it red |
 | -- | -- | -- |
-| AC1 | A child that throws during render produces visible fallback text, not an empty container, **and the surrounding chrome is still in the DOM**. | Make `getDerivedStateFromError` return no error → the assertion on fallback text goes red. |
+| AC1 | A child that throws during render produces visible fallback text, not an empty container, **and the real chrome survives** — asserted against the **real `AppShell`**, not a hand-built stand-in. See the recipe below; assert the fallback renders, `container.querySelectorAll('nav').length > 0`, and the fallback sits inside `[role="main"]`. | Make `getDerivedStateFromError` return no error → the fallback assertion goes red. |
+| AC1b | **The boundary is actually mounted in `src/app/router.tsx`.** | Round 2 found the hole this closes: **no test in this repo mounts `AppRoutes`**, so a worker could ship a flawless `RouteErrorBoundary.tsx`, omit the `router.tsx` mount entirely, and every other criterion — the full suite included — would still pass. Assert that rendering `AppRoutes` with a route whose component throws yields the fallback; removing the wrapper from `router.tsx` turns it red. |
 | AC2a | **Navigation recovers.** After a route throws, navigating to a *different path* renders that route's content rather than the fallback. | Delete the reset-on-location logic in `RouteErrorBoundary.tsx` → red **while AC1 still passes**. This pairing is the point, and it only works because R3 puts the reset inside the unit under test. |
 | AC2b | **Same path, different search recovers too.** After a throw at `/checkin?s=1&t=A`, navigating to `/checkin?s=1&t=B` renders the route rather than the fallback. | Reduce the key to `location.pathname` only → **AC2b goes red while AC2a stays green**. Round 1 measured exactly this. Without AC2b the suite certifies a boundary that strands a student on GAM-352's own page. |
 | AC3 | A **real `lazy(() => Promise.reject(…))` rejection** propagating through `<Suspense>` renders the reload action; a plain generic throw does not. | Invert the chunk-error predicate → the generic case starts offering reload and the chunk case stops, both red. Drive this through an actual lazy rejection, not a hand-thrown `Error` with a message written to match the predicate — round 1 flagged the latter as circular, and a lazy rejection was measured to reach the boundary. |
@@ -265,6 +292,31 @@ vi.unstubAllGlobals();
 There is **no existing precedent for this in the repo** (`grep -rn
 "location.reload\|stubGlobal('location'" src/ tests/` → no hits), so this recipe
 is the specification, not a hint.
+
+**Recipe for AC1's real-`AppShell` assertion — built and measured by round 2,
+not proposed.** ~20 lines, no new dependency, no edit to any forbidden file
+(importing `./AppShell` is not editing it):
+
+```tsx
+<MemoryRouter initialEntries={['/']}>
+  <LoginAs user={COACH}>
+    <AppShell>
+      <RouteErrorBoundary><Boom /></RouteErrorBoundary>
+    </AppShell>
+  </LoginAs>
+</MemoryRouter>
+// assert: fallback present; container.querySelectorAll('nav').length > 0;
+//         [role="main"] contains the fallback
+```
+
+`LoginAs` comes from `src/test-utils/authHarness.tsx`. **Query `[role="main"]`,
+never `<main>`** — the installed Astryx `AppShell` renders a `<div role="main">`,
+as `src/app/AppShell.test.tsx:28-36` already documents. Round 2's run of this
+recipe returned `fallback=true`, `navCount=2`, fallback nested inside main, with
+the real `SeasonProvider` and `KpiStrip` executing alongside it — so nothing in
+the real provider stack misbehaves under a caught error. Expect `KpiStrip`'s own
+"Season unavailable" banner in the output; that is the unconfigured-Supabase
+test environment behaving as designed, not a failure.
 
 ## 7. GAM-352 (acceptance criterion 5 of the issue)
 

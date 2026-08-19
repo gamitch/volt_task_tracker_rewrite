@@ -156,3 +156,17 @@ subagent's verdict; gates run; PR opened.
   * **N4:** the *preferred* `vite:preloadError` detector cannot be exercised by
     AC3 — a jsdom lazy rejection never routes through `__vitePreload`, so it
     would ship untested unless a second test dispatches the event.
+- **Six fold-ins applied** to the packet, closing round 2's findings: §4's
+  contradictory "and the reset key" struck; **AC1 rewritten to assert against
+  the real `AppShell`** with the measured recipe, and **AC1b added** to close the
+  N2 hole (nothing proved the `router.tsx` mount existed); R4's provenance claim
+  corrected to distinguish the sourced mechanism from the browser-authored
+  strings, with three off-by-one line cites fixed; the `vite:preloadError` path
+  made conditional on its own test; and the two disclosure obligations plus the
+  item 26 tier defence recorded as the orchestrator's, not the worker's.
+- **Gate closed at DISPATCH after two rounds** — item 19a's cap respected, no
+  escalation needed. Definition of Ready items 1-5 satisfied.
+- **DISPATCHED `worker-implementer`** (pinned default model — no item 18 trigger
+  applies; recorded per item 18's "record the tier used") with
+  `run_in_background: false`. *If this line is the last one in this file, the run
+  died holding this subagent.*
