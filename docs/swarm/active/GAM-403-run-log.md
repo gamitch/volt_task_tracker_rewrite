@@ -208,3 +208,8 @@ the work after that point never happened.
   from the agent step's `env`, the prompt carries the paragraph, and
   `git apply --check` on the branch exits 0 (87 insertions, 2 deletions). The
   workflow file itself is left untouched on the branch.
+- `22:42Z` — **DISPATCHED `checker-reviewer` (opus pin, `run_in_background: false`)**
+  over both halves: the worker's commit `cee61bd` against packet §3, and the
+  orchestrator's own patch `GAM-403-dispatch-preflight.patch`, which nothing has
+  independently reviewed yet. **If this line is the last one in this file, the
+  run died holding this subagent.**
