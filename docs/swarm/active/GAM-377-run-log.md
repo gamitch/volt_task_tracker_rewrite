@@ -54,3 +54,38 @@ not a run that merely ran out of things to say.
   subagent** — not "the gate is still running", not "results pending". Dead,
   holding it, exactly the way runs 31354278407 / 31385764526 / 31514339272 /
   31523233268 / 31527801235 died.
+- **VERDICT round 1: REVISE (2 × BLOCKER).** Subagent returned; run did not die
+  holding it. The gate *ran* the prescription rather than reading it — a
+  worktree (item 23), `npm ci`, five vitest experiment suites and the full
+  suite. All five of my declared doubts (§9) came back **SOUND**; both BLOCKERs
+  were things I had not declared, which is item 19d working as designed.
+  - **BLOCKER-1 — the fix breaks a shipped e2e persona spec, silently.**
+    `tests/e2e-personas/outreach-lifecycle.spec.ts:191-192` fills Start and End
+    both `11:59 PM` — an **equal pair**, which §4a's `<=` turns into an error,
+    disabling the submit the spec clicks at `:213`. The six `gate-run` gates do
+    **not** run Playwright (`vite.config.ts` excludes `tests/e2e-personas/**`;
+    `ci.yml` has no e2e job), so AC8 would go green while the W2 lifecycle chain
+    broke. The spec's `:187-189` comment makes 23:59 load-bearing, and that file
+    is outside my §6 Allowed Files — so a worker would have had to stall or ship
+    the break. GAM-290 never hit this: that spec is the only persona spec that
+    fills time fields at all.
+  - **BLOCKER-2 — my acceptance criteria name a sequence that cannot exercise
+    the guard.** Measured on the pristine tree: the first edit to either
+    per-session time field **wipes the other field's default**, because
+    `updateSessionDetail:1203-1211` seeds `{startTime: undefined, endTime:
+    undefined, …}` and `syncSessionDetails:852-867`'s `??` then never falls back
+    to `DEFAULT_START_TIME`/`DEFAULT_END_TIME`. So "set End before Start" yields
+    `computeEndTimeError(undefined, …) === undefined`, no error copy, and a
+    button disabled by the **pre-existing** `sessionsPayload.length > 0` — AC3
+    would have passed for the wrong reason and **AC7's mutation was measured as
+    a survivor** on that sequence. The only order that reaches the guard is
+    End-first, then Start later.
+  - Also returned: the DST claim is **confirmed by execution** (`wall 07:00 →
+    13:00Z`, `wall 08:00 → 13:00Z`, collapsed — AC1's regression case is real),
+    and the negative-hours chain is now **verified at the SQL** rather than
+    inherited — `20260724000001_planned_hours_future_guard.sql:69` computes
+    `epoch/3600.0` with no clamp and filters on `starts_at`, the later value in
+    an inverted pair.
+  - Two MINOR harness facts and two NITs to fold in; one item 20 follow-up
+    identified (the default-wipe is its own defect, and a third copy of the
+    DST-buggy comparison now exists in `EditMeetingSessionDialog.tsx:311-321`).
