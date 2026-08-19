@@ -107,4 +107,11 @@ not a run that merely ran out of things to say.
   rewritten around the End-then-Start order with an explicit `1 session` (not
   `0 sessions`) anti-criterion, harness facts and the 2505-test baseline added
   to AC8, and a **fresh** §9 of five new doubts (the old five are retired as
-  SOUND and recorded as such).
+  SOUND and recorded as such). Commit `c0fed2d`, pushed.
+- **DISPATCHED: `checker-premise` round 2** on packet revision 2, with
+  `run_in_background: false`. **This is the last round item 19a allows** — a
+  third REVISE escalates to the human owner rather than looping, and I will
+  escalate rather than dispatch a round 3.
+  **If this line is the last one in this file, the run died holding this
+  subagent.** Not "awaiting the gate", not "verification in progress". Dead,
+  holding it.
