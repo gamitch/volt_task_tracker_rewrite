@@ -23,3 +23,25 @@ not a run that merely ran out of things to say.
   **read back**: `{"identifier":"GAM-377","state":{"name":"In Progress"}}`.
   Item 28c's read-after-write is satisfied; the claim is held, not hoped.
 - **Run log created** and pushed as the first file write, before any packet work.
+  Commit `9683853`, pushed.
+- **Tier confirmed HEAVY** under item 26 without needing item 28d's judgement —
+  the label is `heavy`, not `tier/unreviewed`. It is also the correct call on the
+  merits: the change guards a **write path**, and the value it guards feeds
+  metric SQL (`OUTREACH_FIXED_FLAGS.countsVolunteerHours: true`). HEAVY means
+  packet → `checker-premise` → worker → `checker-reviewer`.
+- **Citations re-verified first-hand before writing the packet** (item 19c),
+  against base `debe8e4`, rather than trusting the issue text:
+  `OutreachEventDialog.tsx:1200` `isValid` is presence-only (verbatim match);
+  the two per-session `TimeInput`s at `:1492-1503` carry no `min` and no
+  `status`; `computeEndTimeError` is at `ScheduleMeetingsDialog.tsx:534` as
+  described; `OUTREACH_FIXED_FLAGS` at `:660-663`. Two things the issue did not
+  say, both found by checking: `timeStringToMinutesSinceMidnight`
+  (`ScheduleMeetingsDialog.tsx:512`) is **module-private and not exported**, so
+  the port cannot be a bare cross-import; and `TimeInput`'s `status` and `min`
+  props are real (`astryx-api.md:1755` and `:1747`), so item 2 is satisfied.
+- **Packet written** — `docs/swarm/active/GAM-377-packet.md`, with the item 19d
+  **Least confident decisions** list (5 entries). It rules on the open question
+  the issue left ("whole save vs per-day"): block the whole save AND mark the
+  offending day, because silently skipping the bad day is the accept-show-discard
+  shape this codebase has a standing ruling against. Not yet dispatched to a
+  worker — item 19 forbids that until `checker-premise` returns DISPATCH.
