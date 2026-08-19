@@ -295,3 +295,28 @@ the work after that point never happened.
   it), then updated with the stranding note and GAM-421. This is the artifact
   that makes a stranded run cheap: a human opens the PR from it with one paste,
   and nothing has to be reconstructed from this log.
+- `22:43Z` — **CLAIM RELEASED: GAM-403 moved `In Progress → In Review`**
+  (item 28e — never `Done`; the merge closes it, not the author). Read-back
+  confirms `state.name = "In Review"`. A handover comment is on the issue
+  carrying the branch, the HEAD SHA, a compare link, the PR-body artifact path,
+  the measured reason the run could not open its own PR, and the instruction
+  that the workflow patch is a second, separate application without which
+  merging the branch changes no runtime behaviour.
+
+## Outcome
+
+**Complete, except for the one step this run's credentials do not permit.**
+
+| Deliverable | State |
+| -- | -- |
+| `scripts/dispatch-preflight.mjs` + 41 tests | on the branch, gates green |
+| Workflow step, both token pins, prompt paragraph | `docs/swarm/active/GAM-403-dispatch-preflight.patch`, `git apply --check` exit 0 — **needs the owner** |
+| Pull request | **not opened** — token expired at minute 74; body ready at `docs/swarm/active/GAM-403-pr-body.md` |
+| GAM-403 | `In Review` |
+| Follow-ups | GAM-420, GAM-421, both `Backlog` + `tier/unreviewed` |
+
+Two rounds of premise gate, one worker attempt, one checker round, no dispute,
+no escalation. The gate paid for itself twice over: it caught a preflight that
+passed on a garbage token, and a redaction rule that leaked the credential it
+existed to hide — both of them this task's own failure class, reproduced inside
+its own fix.
