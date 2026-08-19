@@ -93,3 +93,27 @@ subagent's verdict; gates run; PR opened.
     already the exact fallback shape R5/R6/R7 describe, already passed.
   * Confirmed no passed work is reversed (`KpiStrip` sits above `{children}`)
     and no green test breaks.
+- **Item 20 row filed: GAM-422** (`Backlog`, `Bug`/`tier/unreviewed`/
+  `provenance/premise-gate`, priority Medium) — "A throw in the app chrome …
+  still blanks the screen". Filed via the `linear-task-writing` skill per item
+  30, with every line number re-verified against the tree first. Filed to
+  `Backlog`, **not** `Todo`: promoting work is the owner's authorization (item
+  28a), not the filer's. Its id is now in the packet, so revision #5's "file the
+  row, don't promise it" is satisfied.
+- **Packet revised**, all 11 findings addressed: reset key mandated as
+  `pathname + search` and moved inside `RouteErrorBoundary.tsx` so AC2's
+  mutation targets the unit under test; AC2 split into AC2a/AC2b with the
+  same-path-different-search case; AC5's false "covered by the existing suite"
+  replaced with a real assertion to write; §1 restated to "routed page content"
+  with the gap and GAM-422 named; R4 predicate extended with
+  `unable to preload` and the three browser strings sourced from
+  `dep-BK3b2jBa.js`, plus the `vite:preloadError` event; AC3 now driven by a
+  real `lazy()` rejection instead of a hand-thrown error; the jsdom
+  `vi.stubGlobal('location', …)` recipe supplied; the item 6 miscitation
+  corrected; AC4b added for DES-14/16; the phantom loop hazard deleted; and the
+  worker pointed at `AccessDeniedPage.tsx:84-104` as the existing fallback shape.
+  §8 rewritten with four genuinely open doubts rather than the four now closed.
+- **DISPATCHED `checker-premise` round 2** (opus, `run_in_background: false`) —
+  the last round item 19a allows; a third REVISE escalates to the owner instead
+  of looping. *If this line is the last one in this file, the run died holding
+  this subagent.*
