@@ -115,3 +115,30 @@ not a run that merely ran out of things to say.
   **If this line is the last one in this file, the run died holding this
   subagent.** Not "awaiting the gate", not "verification in progress". Dead,
   holding it.
+- **VERDICT round 2: DISPATCH** (no BLOCKER, no MAJOR; two MINOR + NITs to fold
+  in). Subagent returned; run did not die holding it. The gate again *ran* the
+  work — implemented §4a–§4e in its own worktree, wrote AC3 as specified, and
+  **measured the AC7 mutation RED at exit 1** on the prescribed order, which is
+  the result that decides whether these tests guard anything. Full suite with
+  the prescription applied: **2505/2505 across 98 files**, `tsc --noEmit` exit
+  0, eslint 0 errors. Both round-1 BLOCKERs confirmed genuinely resolved rather
+  than merely described: `11:59/11:59` measured `disabled: true` (the break is
+  real) and `11:58/11:59` measured `enabled`, no error copy (the ruling works).
+  All five of revision 2's new doubts came back **SOUND** — including §9 entry
+  5, now measured rather than assumed: `timeParser.ts:311` is `if (min && …)`,
+  so an `undefined` `min` is falsy and means "no minimum".
+  - **M-2, and it is a correction to my own §3-bis:** "the **only** order that
+    reaches the guard is End-then-later-Start" is **false**. Astryx's
+    `isTimeInRange` is **inclusive**, so Start-then-**equal**-End also reaches
+    the guard — which is precisely why the shipped e2e spec breaks, so my §3-bis
+    and my §5-bis contradicted each other. Same fix to §2's table.
+  - **M-1:** the §5-bis edit falsifies two *comments* elsewhere in the persona
+    spec (`:334-335`, `:389-391`) that call the session "zero-duration". The
+    gate checked the assertions and they all survive — `v_student_hours` is
+    `coalesce(hours_override, …)`, Priya carries an explicit `2.5` override and
+    Jordan is `absent` and excluded — so this is comment accuracy, not a test
+    break. My §6 was too tight to let a worker fix it.
+  - Two NITs: §7's `TimeInput.tsx:474` should be `:431-432` for the *render*
+    claim, and §4a's "exactly two `HH:MM` parsing sites" is really one.
+  - Gate also verified the shared tree was clean at `ffe8719` after removing its
+    worktree (item 23).
