@@ -80,6 +80,7 @@
 
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const API = 'https://api.github.com';
 const EXTRAHEADER_CLEAR = 'http.https://github.com/.extraheader=';
@@ -539,7 +540,33 @@ async function main() {
 
 // Only run when invoked directly, so this module is import-safe for its test
 // file (which imports the pure functions and runPreflight, never main()).
-if (import.meta.url === `file://${process.argv[1]}`) {
+//
+// NOT the repo's usual `import.meta.url === \`file://${process.argv[1]}\``
+// idiom, and the difference matters more here than in the five sibling
+// scripts that use it. That comparison is between a percent-encoded, symlink-
+// resolved URL and a raw path, so it silently fails to match when the checkout
+// path contains a space or any component is a symlink — and then `main()`
+// never runs and the process exits **0, with no output at all**. In
+// `linear-assert-released.mjs` that is a silent no-op; here it is a credential
+// preflight reporting success on a dead credential, which is an authorization
+// to spend a whole run. Measured by the acceptance checker on this script's
+// first implementation: with the garbage-token negative control, a path
+// containing a space and a symlinked path both produced no output and exit 0.
+//
+// Compare real paths instead, falling back to a string compare only if a
+// path cannot be resolved.
+const invokedDirectly = (() => {
+  const argv1 = process.argv[1];
+  if (!argv1) return false;
+  const here = fileURLToPath(import.meta.url);
+  try {
+    return fs.realpathSync(here) === fs.realpathSync(argv1);
+  } catch {
+    return here === argv1;
+  }
+})();
+
+if (invokedDirectly) {
   main().catch((err) => {
     console.error(redact(`dispatch-preflight crashed: ${err && err.stack ? err.stack : err}`));
     process.exit(1);

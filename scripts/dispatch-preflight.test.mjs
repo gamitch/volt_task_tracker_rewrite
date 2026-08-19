@@ -4,6 +4,11 @@
 // Every test that exercises `runPreflight` injects `fetchImpl` and/or
 // `gitImpl` as fakes; the pure classifiers are driven directly with
 // hand-built { status, body } fixtures.
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import {
   classifyCiTrigger,
@@ -499,5 +504,61 @@ describe('runPreflight -- unknown stage', () => {
   it('an unrecognised --stage value fails rather than silently passing', async () => {
     const result = await runPreflight({ stage: 'bogus', env: {}, fetchImpl: vi.fn(), gitImpl: vi.fn() });
     expect(result.exitCode).toBe(1);
+  });
+});
+
+// The entrypoint guard, spawned for real -- the one thing above that a fake
+// cannot reach, and the only place in this file that starts a process.
+//
+// Still no network: every spawn below runs with a deliberately empty
+// PREFLIGHT_PUSH_TOKEN, so check 1 fails and the network-dependent checks
+// report SKIP without making a call (packet §2.1 [R2-2]).
+//
+// WHAT THIS GUARDS. The repo-wide idiom
+// `import.meta.url === `file://${process.argv[1]}`` compares a percent-encoded,
+// symlink-resolved URL against a raw path. Under a checkout path containing a
+// space, or any symlinked component, it does not match, `main()` never runs,
+// and the script exits **0 with no output** -- a credential preflight silently
+// authorizing a run it never checked. Found by the acceptance checker on the
+// first implementation of this script; these tests are why it cannot come back.
+describe('entrypoint guard (spawned)', () => {
+  const script = fileURLToPath(new URL('./dispatch-preflight.mjs', import.meta.url));
+  const spawnPreflight = (scriptPath) =>
+    spawnSync(process.execPath, [scriptPath, '--stage=push'], {
+      encoding: 'utf8',
+      env: { ...process.env, PREFLIGHT_PUSH_TOKEN: '', GITHUB_REPOSITORY: 'gamitch/volt_task_tracker_rewrite' },
+    });
+
+  it('runs and fails loudly when invoked by its ordinary path', () => {
+    const run = spawnPreflight(script);
+    expect(run.stdout + run.stderr).not.toBe('');
+    expect(run.status).toBe(1);
+  });
+
+  it('runs and fails loudly when invoked through a path containing a space', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'preflight guard '));
+    try {
+      const copy = path.join(dir, 'dispatch-preflight.mjs');
+      fs.copyFileSync(script, copy);
+      const run = spawnPreflight(copy);
+      // The bug this pins produced empty output and status 0.
+      expect(run.stdout + run.stderr).not.toBe('');
+      expect(run.status).toBe(1);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('runs and fails loudly when invoked through a symlink', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'preflight-symlink-'));
+    try {
+      const link = path.join(dir, 'linked-preflight.mjs');
+      fs.symlinkSync(script, link);
+      const run = spawnPreflight(link);
+      expect(run.stdout + run.stderr).not.toBe('');
+      expect(run.status).toBe(1);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
