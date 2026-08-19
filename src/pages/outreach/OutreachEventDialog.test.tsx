@@ -45,6 +45,7 @@ import {
   buildOutreachSessionsPayload,
   chicagoWallTimeToUtcIso,
   computeConfirmLabel,
+  computeEndTimeError,
   computeOutreachScheduleSessionDates,
   generateCustomSessionDates,
   generateMultiDaySessionDates,
@@ -2065,6 +2066,255 @@ describe('saveOutreachEvent (T118 RSVP fan-out phase)', () => {
     ]);
     // Nothing to upsert (nothing checked).
     expect(rsvpsUpsertSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GAM-377 -- computeEndTimeError (packet §4a, AC1), ported from
+// `ScheduleMeetingsDialog.tsx:534`. Mirrors that file's own
+// `ScheduleMeetingsDialog.test.tsx:426-455`.
+// ---------------------------------------------------------------------------
+
+describe('computeEndTimeError (GAM-377 packet §4a, AC1)', () => {
+  it('returns undefined when either time is unset -- two undefined values are not an error', () => {
+    expect(computeEndTimeError(undefined, undefined)).toBeUndefined();
+    expect(computeEndTimeError('09:00', undefined)).toBeUndefined();
+    expect(computeEndTimeError(undefined, '12:00')).toBeUndefined();
+  });
+
+  it('returns undefined for a valid pair (end strictly after start)', () => {
+    expect(computeEndTimeError('09:00', '12:00')).toBeUndefined();
+  });
+
+  it('errors on an equal pair (the sibling uses <=, not <; isTimeInRange is inclusive per packet §3-bis)', () => {
+    expect(computeEndTimeError('09:00', '09:00')).toBe('End time must be after the start time.');
+  });
+
+  it('errors on an inverted pair', () => {
+    expect(computeEndTimeError('12:00', '09:00')).toBe('End time must be after the start time.');
+  });
+
+  it('compares wall-clock minutes-since-midnight, NOT UTC (packet §3 DST regression case): a valid 07:00-08:00 Chicago pair on the 2026-03-08 spring-forward date is NOT an error, even though chicagoWallTimeToUtcIso collapses both wall times onto the same UTC instant on that date', () => {
+    // packet §3 -- a UTC-instant compare would false-block this valid pair on
+    // this date; the wall-clock guard is unaffected by the collapse.
+    expect(chicagoWallTimeToUtcIso('2026-03-08', '07:00')).toBe(
+      chicagoWallTimeToUtcIso('2026-03-08', '08:00'),
+    );
+    expect(computeEndTimeError('07:00', '08:00')).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GAM-377 -- start/end ordering guard on the per-session TimeInputs (packet
+// §4b-4e, AC2-AC5/AC7).
+//
+// Interaction order is PRESCRIBED, not incidental (packet §3-bis/AC1's own
+// note): every test below sets that day's End FIRST, then that day's Start
+// LATER. Per §3-bis, this is one of exactly two orders that reach the new
+// guard at all -- the other reachable order (Start first, then an EQUAL End)
+// is exercised by the `outreach-lifecycle.spec.ts` persona edit (§5-bis), not
+// here. A "type an out-of-range End after Start" order never commits (`min`
+// silently rejects it before `onChange` fires), and editing only one of the
+// two fields leaves the other wiped to `undefined` by the dialog's own
+// pre-existing default-wipe (§3-bis) -- both would produce a green test that
+// guards nothing.
+// ---------------------------------------------------------------------------
+
+const END_TIME_ERROR_COPY = 'End time must be after the start time.';
+
+describe('<OutreachEventDialog /> GAM-377 start/end ordering guard (packet §4b-4e, AC2-AC5/AC7)', () => {
+  it('AC2: renders the copy string on the offending day after the End-then-later-Start order', () => {
+    act(() => {
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
+    });
+    const titleInput = getFieldControl('Title') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(titleInput, 'Community Food Bank Sort');
+    });
+    const dateInput = getFieldControl('Date') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(dateInput, '2026-07-22');
+    });
+
+    // Prescribed order (packet §3-bis/AC1): End first...
+    const endTimeInput = getFieldControl('End time (Wed, Jul 22)') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(endTimeInput, '10:00 AM');
+    });
+    // ...then a strictly LATER Start, moved past the already-settled End.
+    const startTimeInput = getFieldControl('Start time (Wed, Jul 22)') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(startTimeInput, '2:00 PM');
+    });
+
+    expect(document.body.textContent).toContain(END_TIME_ERROR_COPY);
+  });
+
+  it('AC3: blocks the save (onSaveEvent not called, button disabled) via the NEW guard -- and the button reads "1 session", not "0 sessions" (anti-criterion)', async () => {
+    const onSaveEvent = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          onSaveEvent={onSaveEvent}
+          teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
+    });
+    const titleInput = getFieldControl('Title') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(titleInput, 'Community Food Bank Sort');
+    });
+    const dateInput = getFieldControl('Date') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(dateInput, '2026-07-22');
+    });
+    const endTimeInput = getFieldControl('End time (Wed, Jul 22)') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(endTimeInput, '10:00 AM');
+    });
+    const startTimeInput = getFieldControl('Start time (Wed, Jul 22)') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(startTimeInput, '2:00 PM');
+    });
+
+    // Anti-criterion (packet AC3): both times are now DEFINED (just
+    // inverted), so `sessionsPayload.length` is 1, not 0 -- a "0 sessions"
+    // disabled button here would be the pre-existing presence check, not
+    // this task's new guard.
+    const confirmButton = findButtonByText('Create event — 1 session');
+    expect(confirmButton).toBeDefined();
+    expect(confirmButton?.disabled).toBe(true);
+
+    clickButton(confirmButton as HTMLButtonElement);
+    await flushMicrotasks();
+    expect(onSaveEvent).not.toHaveBeenCalled();
+  });
+
+  it('AC4: multi-session attribution -- the copy string appears exactly once, only the offending day\'s End control carries aria-invalid/aria-describedby, and the button reads "2 sessions"', async () => {
+    const onSaveEvent = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          onSaveEvent={onSaveEvent}
+          teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
+    });
+    const titleInput = getFieldControl('Title') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(titleInput, 'Riverside Park Cleanup');
+    });
+    clickButton(findButtonByText('Custom dates') as HTMLButtonElement);
+
+    const addDateInput = getFieldControl('Add a date') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(addDateInput, '2026-07-22');
+    });
+    clickButton(findButtonByText('Add date') as HTMLButtonElement);
+    act(() => {
+      setNativeInputValue(addDateInput, '2026-07-29');
+    });
+    clickButton(findButtonByText('Add date') as HTMLButtonElement);
+
+    // 2026-07-22 is left at its BEH-07 defaults (09:00-12:00, already
+    // validly ordered) -- the "valid day untouched" half of AC4. Only
+    // 2026-07-29 gets the End-then-later-Start order that inverts it.
+    const endTimeInput29 = getFieldControl('End time (Wed, Jul 29)') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(endTimeInput29, '10:00 AM');
+    });
+    const startTimeInput29 = getFieldControl('Start time (Wed, Jul 29)') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(startTimeInput29, '2:00 PM');
+    });
+
+    // Copy string appears exactly once (only the offending day).
+    const matches = document.body.textContent?.split(END_TIME_ERROR_COPY).length ?? 1;
+    expect(matches - 1).toBe(1);
+
+    const endTimeInput22 = getFieldControl('End time (Wed, Jul 22)') as HTMLInputElement;
+    expect(endTimeInput29.getAttribute('aria-invalid')).toBe('true');
+    const describedById = endTimeInput29.getAttribute('aria-describedby');
+    expect(describedById).toBeTruthy();
+    expect(document.getElementById(describedById as string)?.textContent).toContain(
+      END_TIME_ERROR_COPY,
+    );
+    expect(endTimeInput22.getAttribute('aria-invalid')).toBeNull();
+    expect(endTimeInput22.getAttribute('aria-describedby')).toBeNull();
+
+    const confirmButton = findButtonByText('Create event — 2 sessions');
+    expect(confirmButton).toBeDefined();
+    expect(confirmButton?.disabled).toBe(true);
+  });
+
+  it('AC5: an ordinary valid multi-session form still saves, with the payload unchanged from before this task', async () => {
+    const onSaveEvent = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          onSaveEvent={onSaveEvent}
+          teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
+    });
+    const titleInput = getFieldControl('Title') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(titleInput, 'Riverside Park Cleanup');
+    });
+    clickButton(findButtonByText('Custom dates') as HTMLButtonElement);
+
+    const addDateInput = getFieldControl('Add a date') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(addDateInput, '2026-07-22');
+    });
+    clickButton(findButtonByText('Add date') as HTMLButtonElement);
+    act(() => {
+      setNativeInputValue(addDateInput, '2026-07-29');
+    });
+    clickButton(findButtonByText('Add date') as HTMLButtonElement);
+
+    // Both days left at BEH-07 defaults (09:00-12:00) -- no false block.
+    expect(document.body.textContent).not.toContain(END_TIME_ERROR_COPY);
+    const confirmButton = findButtonByText('Create event — 2 sessions');
+    expect(confirmButton).toBeDefined();
+    expect(confirmButton?.disabled).toBe(false);
+
+    clickButton(confirmButton as HTMLButtonElement);
+    await flushMicrotasks();
+    expect(onSaveEvent).toHaveBeenCalledTimes(1);
+    const payload = onSaveEvent.mock.calls[0][0] as SaveOutreachEventPayload;
+    expect(payload.sessions).toEqual([
+      {
+        sessionDate: '2026-07-22',
+        startsAt: chicagoWallTimeToUtcIso('2026-07-22', '09:00'),
+        endsAt: chicagoWallTimeToUtcIso('2026-07-22', '12:00'),
+        notes: '',
+        peopleReached: null,
+      },
+      {
+        sessionDate: '2026-07-29',
+        startsAt: chicagoWallTimeToUtcIso('2026-07-29', '09:00'),
+        endsAt: chicagoWallTimeToUtcIso('2026-07-29', '12:00'),
+        notes: '',
+        peopleReached: null,
+      },
+    ]);
   });
 });
 
