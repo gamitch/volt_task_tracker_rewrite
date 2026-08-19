@@ -40,3 +40,23 @@ that signature unmistakable.
 - Branch `claude/gam-404-terminal-failure-notify` created off `main`.
 - **Run log created — first file write of this run.** Committing and pushing
   immediately.
+- **Citations re-verified against current `main` (item 19c)** before writing
+  the packet: `linear-escalation-notify.mjs:60`'s marker regex, the
+  `claude-linear-dispatch.yml:576-582` notify step, `linear-assert-released.mjs`'s
+  `classifyState` (confirmed it does **not** itself distinguish the three
+  benign shapes — only its header comment narrates them), and the plan's own
+  Phase 1 line (`docs/swarm/2026-08-15-durable-multi-agent-execution-plan.md:577`,
+  "notify on every terminal failure"). No corrections to the issue's own
+  citations found. Confirmed `npx vitest run scripts/linear-escalation-notify.test.mjs`
+  is a working scoped-test invocation (13 passed) — this packet's own
+  criterion 9 depends on that pattern existing.
+- **Packet written**: `docs/swarm/active/GAM-404-packet.md`. Design: a new
+  file `scripts/linear-terminal-failure-notify.mjs` that imports
+  `detectEscalation`/`fetchIssueForEscalation` unchanged from the sibling
+  script (so the escalation path is provably untouched, not just described
+  as untouched), plus one new workflow step in the same job gated on the same
+  `if: failure()`, positioned so it no-ops for the `ESCALATED` shape the
+  sibling step already reports. Full reasoning, rejected alternative
+  (extending `classifyState` — rejected because it cannot see comments), and
+  a 5-entry least-confident-decisions list are in the packet. Not yet gated —
+  no worker may see it until `checker-premise` returns DISPATCH (item 19).
