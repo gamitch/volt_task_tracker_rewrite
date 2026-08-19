@@ -69,7 +69,8 @@ round-1 gate measured that framing false here.
 
 | Order the coach types in | What guards it | What does NOT |
 | -- | -- | -- |
-| Start first, then an **earlier** End | **`min`** — the out-of-range End is rejected before it commits | the comparison never sees two defined values |
+| Start first, then a **strictly earlier** End | **`min`** — the out-of-range End is rejected before it commits | the comparison never sees two defined values |
+| Start first, then an **equal** End | **the comparison** — `min` accepts it | `min`, because `isTimeInRange` is **inclusive** |
 | End first, then a **later** Start | **the comparison** gating `isValid` | `min` is bound to the *current* `startTime` and is never re-consulted when Start moves |
 
 Measured consequences the worker must not trip over:
@@ -124,10 +125,20 @@ drops out of `sessionsPayload`, and the button reads
 - A `0 sessions` disabled button is the **pre-existing** `sessionsPayload.length
   > 0` block, **not** your new guard. A test that asserts only "disabled" passes
   identically before and after your change and proves nothing.
-- The **only** order that reaches the guard is **End first, then a later Start**
-  (§2's second row). Setting End *after* Start is rejected by `min` and never
-  commits; setting either field alone leaves the other `undefined`, and §4a's
-  both-defined rule then correctly returns `undefined`.
+- **Two orders reach the guard, and this corrects revision 2's own text**, which
+  said "only" and thereby contradicted §5-bis. Astryx's `isTimeInRange` is
+  **inclusive** (`node_modules/@astryxdesign/core/src/utils/timeParser.ts:311`),
+  so `min` accepts an **equal** End. Therefore:
+  - **End first, then a strictly later Start** — the order AC2–AC4 and AC7
+    prescribe. Use this one.
+  - **Start first, then an equal End** — also reaches the guard, and also kills
+    AC7's mutation. This is exactly *why* the shipped persona spec breaks
+    (§5-bis), so it must not be described as unreachable.
+
+  What does **not** reach it: a strictly earlier End typed after Start (`min`
+  rejects it before it commits), and either field edited alone (the wipe leaves
+  the other `undefined`, and §4a's both-defined rule correctly returns
+  `undefined`).
 - The round-1 gate ran AC7's mutation on the intuitive Start-then-End order and
   measured it a **survivor** — byte-identical before and after. Getting this
   order wrong does not produce a failing test; it produces a green one that
@@ -150,8 +161,7 @@ import of a value *function* exists in this codebase** (component and `import
 type` cross-page imports do exist — `SettingsPage.tsx:448`,
 `StudentHome.tsx:454` — so the narrower claim is the true one). The gate
 confirmed no shared time utility exists anywhere under `src/lib/`: repo-wide
-`HH:MM` parsing lives at exactly two sites, both inside
-`ScheduleMeetingsDialog.tsx`. `OutreachEventDialog.tsx:802-803` states the
+`HH:MM` parsing lives at exactly one site, `ScheduleMeetingsDialog.tsx:513`. `OutreachEventDialog.tsx:802-803` states the
 in-file convention outright — "reimplemented (not imported) for the same reason
 as the date helpers above". **Define a local copy of both in
 `OutreachEventDialog.tsx`**,
@@ -277,8 +287,22 @@ only that the *start* is late.
 
 - `src/pages/outreach/OutreachEventDialog.tsx`
 - `src/pages/outreach/OutreachEventDialog.test.tsx`
-- `tests/e2e-personas/outreach-lifecycle.spec.ts` — **only** the two-line change
-  ruled in §5-bis plus its explanatory comment. Nothing else in that file.
+- `tests/e2e-personas/outreach-lifecycle.spec.ts` — the two-line change ruled in
+  §5-bis plus its explanatory comment, **and** the comment correction below.
+  Nothing else in that file; no assertion in it changes.
+
+  **Comment correction (round-2 gate, M-1).** The §5-bis edit falsifies two
+  comments that describe the session as zero-duration:
+  `:334-335` ("*a checked, zero-duration session already writes
+  `hours_override: null`*") and `:389-391` ("*the zero-duration 11:59 PM session
+  makes the unoverridden default `hours_override: null` …*"). After the edit it
+  is a one-minute session. **Correct the wording; change nothing else.** The
+  gate verified every assertion in that file survives unchanged —
+  `v_student_hours` is `coalesce(hours_override, …)`
+  (`20260804000000_volunteer_hours_outreach_only.sql:48-56`), Priya carries an
+  explicit `2.5` override and Jordan is `absent` and excluded by
+  `where a.status in ('present','late')` — so duration never enters an
+  assertion. This is comment accuracy, not a behavioural change.
 
 **Nothing else.** In particular: no `supabase/migrations/**`, no
 `src/lib/supabase/loaders/**`, no `.github/workflows/**` (a dispatched run
@@ -356,9 +380,9 @@ All measured by the round-1 gate against this branch:
   encodes this trap and the order-matters trap in its comments.
 - **`input.value` is not a proxy for committed state.** A value rejected by
   `min` is retained as `pendingInput` and still renders
-  (`TimeInput.tsx:474`), so the control can read `"10:00 AM"` while the
-  committed value is `undefined`. Assert against `onSaveEvent`/the button label,
-  never against `.value`.
+  (rejected at `TimeInput.tsx:474`, rendered at `:431-432`), so the control can
+  read `"10:00 AM"` while the committed value is `undefined`. Assert against
+  `onSaveEvent`/the button label, never against `.value`.
 - `isRequired` and `status` on the same `TimeInput` do not conflict: `status`
   drives border/icon/`aria-describedby`, `isRequired` drives `aria-required` and
   the label suffix. Independent, measured on a rendered field.
