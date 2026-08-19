@@ -60,3 +60,7 @@ that signature unmistakable.
   (extending `classifyState` — rejected because it cannot see comments), and
   a 5-entry least-confident-decisions list are in the packet. Not yet gated —
   no worker may see it until `checker-premise` returns DISPATCH (item 19).
+- **DISPATCHING `checker-premise` (round 1 of 2, item 19a cap), scoped
+  light-to-medium per 19b, `run_in_background: false`, orchestrator is
+  blocking on it now.** *If this line is the last one in this file, the run
+  died holding this subagent.*
