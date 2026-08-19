@@ -1,6 +1,6 @@
-From d971525a74edcc760648ec77026882941ee21f31 Mon Sep 17 00:00:00 2001
+From 96dc26741efb57bd69ec3a34a6e03561360611c3 Mon Sep 17 00:00:00 2001
 From: "claude[bot]" <41898282+claude[bot]@users.noreply.github.com>
-Date: Wed, 19 Aug 2026 22:20:42 +0000
+Date: Wed, 19 Aug 2026 22:33:49 +0000
 Subject: [PATCH] GAM-403: preflight the dispatch credentials, and pin the
  token expressions
 MIME-Version: 1.0
@@ -20,14 +20,14 @@ PAT that line assigned is the one credential measured at 403 on PR creation.
 
 Linear-Issue: GAM-403
 ---
- .github/workflows/claude-linear-dispatch.yml | 89 +++++++++++++++++++-
- 1 file changed, 87 insertions(+), 2 deletions(-)
+ .github/workflows/claude-linear-dispatch.yml | 98 +++++++++++++++++++-
+ 1 file changed, 96 insertions(+), 2 deletions(-)
 
 diff --git a/.github/workflows/claude-linear-dispatch.yml b/.github/workflows/claude-linear-dispatch.yml
-index 9da116f..c181328 100644
+index 9da116f..24387d7 100644
 --- a/.github/workflows/claude-linear-dispatch.yml
 +++ b/.github/workflows/claude-linear-dispatch.yml
-@@ -123,7 +123,53 @@ jobs:
+@@ -123,7 +123,62 @@ jobs:
            # provenance, and `git log` is how this project records item 24
            # trailers.
            fetch-depth: 0
@@ -43,10 +43,19 @@ index 9da116f..c181328 100644
 +
 +      # GAM-403. Verify the credential BEFORE the expensive agent starts.
 +      #
-+      # THE DEFECT THIS CATCHES. Eight of thirteen measured dispatched runs
-+      # stranded at PR time (GAM-333), each after the full implementation had
-+      # already been paid for. Nothing preflighted push or PR capability, so a
-+      # dead credential was discovered at minute 90 rather than minute 1.
++      # THE DEFECT THIS STEP CATCHES: a dead PUSH credential, which destroys
++      # the run-log durability contract before anything can report it. The
++      # prompt below makes the pushed run log "the only thing that survives if
++      # you are killed" — so if pushing is what is broken, the run produces no
++      # log, no branch and no artifact, and nothing else in the system says so.
++      # That is the shape run 31358757094 left behind: an hour of real work and
++      # no record of any of it.
++      #
++      # NOT the 8-of-13 stranding figure, which belongs to `--stage=pr` in the
++      # prompt below. Those thirteen runs are 8-of-13 stranded at PR time and
++      # 0-of-13 at push time; a premise gate rejected that figure as this
++      # step's justification, and it is named here only so nobody re-derives it
++      # as one.
 +      #
 +      # AND THE CHECKOUT DOES NOT CATCH IT. This repository is public, so a
 +      # garbage token — or an empty one — still clones it: measured on
@@ -82,7 +91,7 @@ index 9da116f..c181328 100644
  
        - name: Work the issue
          id: claude
-@@ -134,7 +180,22 @@ jobs:
+@@ -134,7 +189,22 @@ jobs:
            # key `linear-export.yml` uses — hence a separate secret name rather
            # than quietly widening that one's scope.
            LINEAR_API_KEY: ${{ secrets.LINEAR_DISPATCH_API_KEY }}
@@ -106,7 +115,7 @@ index 9da116f..c181328 100644
          with:
            # Subscription auth rather than an API key, by the owner's choice:
            # runs draw on the Claude subscription instead of API billing.
-@@ -174,6 +235,30 @@ jobs:
+@@ -174,6 +244,30 @@ jobs:
              from Linear; a copy pasted into this workflow would be a second,
              staler version of the description for you to disagree with.
  

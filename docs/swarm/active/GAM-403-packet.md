@@ -401,7 +401,12 @@ A criterion is satisfied only by evidence, not by reading the code.
 6. `npx vitest run scripts/dispatch-preflight.test.mjs` is green, and a
    **mutation replay** proves the suite guards the central claim: invert the
    `422`/`403` classification in the script and **§2.2's test 1** must turn red
-   (test 2 will also turn red; that is expected and worth stating). The red
+   (**correction, measured after the fact by the acceptance checker: test 2
+   does *not* turn red** — under the inversion a `403` body falls into the
+   branch that stringifies the body, whose text still contains
+   `personal access token`, so its assertion still holds. Three other tests turn
+   red instead. A 3-red replay is the correct result here, not a shortfall).
+   The red
    output and exit code are quoted. **[R1-13]** (Item 26: a gate that only
    reads is worth much less than one that runs. Item 26's fast-tier working
    rule applies to the replay: **commit before mutating**, then revert and
