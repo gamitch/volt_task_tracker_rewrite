@@ -351,6 +351,9 @@ import { loadParticipationData } from '../../lib/supabase/loaders/reports';
  * columns (student_id, team_id, season_id, expected_ct, present_ct,
  * late_ct, excused_ct, participation_pct). Nothing here is computed --
  * every field is a 1:1 copy of a column the view itself already produced.
+ * `participationPct` is `null` when every counted mark for this row was
+ * `excused` (MET-01, `types.ts`'s `VStudentParticipationRow` doc) -- never a
+ * fabricated 0%.
  */
 export interface ParticipationMetricRow {
   studentId: string;
@@ -360,7 +363,7 @@ export interface ParticipationMetricRow {
   presentCt: number;
   lateCt: number;
   excusedCt: number;
-  participationPct: number;
+  participationPct: number | null;
 }
 
 /**

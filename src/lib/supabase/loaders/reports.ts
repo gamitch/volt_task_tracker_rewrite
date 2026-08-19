@@ -218,7 +218,7 @@ interface VStudentParticipationDbRow {
   present_ct: number;
   late_ct: number;
   excused_ct: number;
-  participation_pct: number;
+  participation_pct: number | null;
 }
 
 /** Module doc #5: only the currently-active roster, matching

@@ -712,6 +712,59 @@ describe('<ConsistencyStrip /> DES-05 mapping', () => {
     expect(container.textContent).not.toMatch(/\d+%/);
   });
 
+  // ---------------------------------------------------------------------
+  // GAM-356: `participationPct: null` on a REAL row (every counted mark was
+  // `excused`, MET-01's own `null`, not the outer `participation === null`
+  // "no row at all" case above) must never reach `ProgressBar` -- rendering
+  // one at any value fabricates a 0%. A1/A2.
+  // ---------------------------------------------------------------------
+  it('GAM-356 A1/A2: participationPct null (a real row, no marks after excusals) renders no ProgressBar and the em dash instead', () => {
+    render(
+      <ConsistencyStrip
+        entries={[]}
+        participation={{
+          studentId: 'stu-1',
+          teamId: 't1',
+          seasonId: 's1',
+          expectedCt: 3,
+          presentCt: 0,
+          lateCt: 0,
+          excusedCt: 3,
+          participationPct: null,
+        }}
+      />,
+    );
+    expect(container.querySelectorAll('[role="progressbar"]')).toHaveLength(0);
+    expect(container.textContent).toContain('—');
+    expect(container.textContent).toContain('(no participation rate yet)');
+  });
+
+  // GAM-356 A3: the anti-overcorrection guard -- a genuine 0 must still
+  // render a real ProgressBar, not be folded into the no-rate branch above.
+  it('GAM-356 A3: participationPct 0 (a genuine zero) still renders exactly one ProgressBar', () => {
+    render(
+      <ConsistencyStrip
+        entries={[]}
+        participation={{
+          studentId: 'stu-1',
+          teamId: 't1',
+          seasonId: 's1',
+          expectedCt: 4,
+          presentCt: 0,
+          lateCt: 0,
+          excusedCt: 0,
+          participationPct: 0,
+        }}
+      />,
+    );
+    const bars = container.querySelectorAll('[role="progressbar"]');
+    expect(bars).toHaveLength(1);
+    expect(bars[0]?.getAttribute('aria-valuetext')).toBe('0%');
+    const labelId = bars[0]?.getAttribute('aria-labelledby');
+    const labelEl = labelId ? document.getElementById(labelId) : null;
+    expect(labelEl?.textContent).toBe('Participation: 0%');
+  });
+
   it('empty entries render inline text, not a crash, not padded dots', () => {
     render(<ConsistencyStrip entries={[]} participation={null} />);
     expect(statusDotVariants()).toHaveLength(0);
