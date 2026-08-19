@@ -58,3 +58,38 @@ subagent's verdict; gates run; PR opened.
   *If this line is the last one in this file, the run died holding this
   subagent* — that is the failure signature `AGENTS.md` describes, and it means
   the premise gate's verdict was never seen.
+- **VERDICT round 1: REVISE** (4 MAJOR, 4 MINOR, 1 NIT, no BLOCKER). The gate
+  ran, it did not merely read — four instrumented probes in its own worktree
+  (item 23), then removed it and left the shared tree clean. What it measured:
+  * **Mechanism confirmed.** Boundary state *is* sticky (`PROBE-B`: after
+    navigation the chrome updated but the fallback stayed and the new route
+    never rendered). A component whose element is created once and does not
+    call `useLocation()` renders 1→1 across a navigation; one that does calls
+    renders 1→2 and its derived key changes. `AppShell`'s own `useLocation()`
+    does **not** rescue `AppRoutes`. So §3's central claim holds.
+  * **My §8.1 loop hazard is not real** — a location-derived key changes once
+    per navigation and cannot self-drive (`PROBE-C2`: one catch, 2 ms, stable).
+    Leaving it in would have sent the worker chasing a phantom.
+  * **`pathname` alone is measurably wrong.** `PROBE-4` run 3: with
+    `key={location.pathname}`, AC2 passes while `/checkin?s=1&t=A → ?t=B` stays
+    stuck forever — and `CheckinResult.tsx:359-361,607` reads `s`/`t`/`code`
+    entirely from search params on one pathname. That is GAM-352's own page: a
+    student whose first scan crashes is stranded on every rescan.
+  * **AC2's mutation was a no-op as written.** R2 let the reset key live in
+    `router.tsx` while the test builds its own tree — deleting it would leave
+    the test green, destroying the AC1/AC2 pairing that was the whole point.
+  * **AC5's "covered by the existing suite" was false.** `"Loading page…"`
+    (`router.tsx:152`) has zero test references and no test resolves the routes.
+  * **R4's predicate has a source-provable hole**: Vite authors its own
+    `Unable to preload CSS for …` error (`dep-BK3b2jBa.js:64844`) which neither
+    the string predicate nor `ChunkLoadError` matches. It also found the
+    first-party `vite:preloadError` window event at `:64849-64857`.
+  * **Retry really is futile**, measured: `react.development.js:477-484` sets
+    `payload._status = 2` and never resets, so a remount does not re-invoke the
+    import (`PROBE2-RETRY`: `importFnCalls: 1`). Reload is the only recovery.
+  * **One citation of mine was wrong**: item 6 is about logs/URLs/analytics/
+    commits/fixtures, not user surfaces.
+  * **Cheaper path found**: `src/pages/no-access/AccessDeniedPage.tsx:84-104` is
+    already the exact fallback shape R5/R6/R7 describe, already passed.
+  * Confirmed no passed work is reversed (`KpiStrip` sits above `{children}`)
+    and no green test breaks.
