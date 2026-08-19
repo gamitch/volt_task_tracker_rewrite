@@ -125,3 +125,7 @@ that signature unmistakable.
   the "never two pings" claim corrected to name the one case where a
   duplicate is preferred to silence, and the `READ_FAILED` Slack body now
   says so; `title` is consumed in the Slack message; two citations fixed.
+- **DISPATCHING `checker-premise` round 2 (last round before item 19a
+  escalates to the owner rather than looping to round 3),
+  `run_in_background: false`, orchestrator is blocking on it now.** *If this
+  line is the last one in this file, the run died holding this subagent.*
