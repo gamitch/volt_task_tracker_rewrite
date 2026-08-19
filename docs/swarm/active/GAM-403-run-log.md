@@ -51,3 +51,33 @@ the work after that point never happened.
   Least confident decisions in packet §5. **If this line is the last one in this
   file, the run died holding this subagent** and the gate verdict below was never
   recorded.
+- `21:51Z` — **VERDICT round 1: `REVISE`.** 1 BLOCKER, 4 MAJOR, 6 MINOR, 2 NIT.
+  The gate ran the prescription rather than reading it (item 26) and the BLOCKER
+  is one I could not have found by inspection:
+  - **BLOCKER — the ref-write probe cannot test the credential it claims to
+    test.** In an `actions/checkout` workspace, `http.…extraheader` outranks the
+    URL userinfo, so `git push https://x-access-token:$TOKEN@…` authenticates
+    with the *checkout's* credential. Measured: a garbage token
+    (`ghp_FAKE…`) pushed successfully in this workspace, and failed with
+    `Authentication failed` in a control repo with no extraheader. Stage A would
+    have returned PASS for a dead token — the exact false positive the packet's
+    own tier defence calls disqualifying. Verified fix:
+    `git -c "http.https://github.com/.extraheader=" push …`, which the gate
+    confirmed fails on the fake token and passes on both real ones.
+  - MAJOR — the CI-trigger check compares against `GITHUB_TOKEN`, which is unset
+    in Stage A (vacuous PASS) and is *not* the built-in token inside the agent
+    (false FAIL). Must take an explicit `PREFLIGHT_BUILTIN_TOKEN` and SKIP when
+    absent.
+  - MAJOR — §6 item 2 pinned `GH_TOKEN` to the PAT, the one credential measured
+    at 403 on PR-create, against plan §5.3's "pin the proven GitHub App path".
+    Delete line 137 instead; the action sets `GH_TOKEN` itself.
+  - MAJOR — "all six gates" is unsatisfiable: gate 6 scopes off `src/` changes
+    and this task touches only `scripts/`, so the honest figure is 5 of 6.
+  - MAJOR — criterion 3 was not performable: a worker has no `secrets.` context.
+  - 6 MINOR / 2 NIT, incl. require the `No commits between` message rather than a
+    bare 422 (the gate built the counter-case: a typo'd base yields a green
+    422), stdlib-only imports (no `node_modules` in a dispatch checkout), and
+    my "a dead push token strands 100% of runs" being unmeasured — GAM-333 is
+    0 of 13 at push time, 8 of 13 at PR time.
+  Gate isolated its mutations in `/tmp/gate-403` (item 23) and confirmed cleanup;
+  remote left with no `refs/preflight/*`.
