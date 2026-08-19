@@ -111,3 +111,17 @@ that signature unmistakable.
     exit-1 script is the wrong shape regardless of dependency direction.
   Revising the packet now — round 2 of the item 19a cap, the last round
   before an owner escalation rather than a round 3.
+- **Packet revision 2 written**, folding in all 8 round-1 findings: dropped
+  the impossible test-fixture reuse in favor of an inline fixture;
+  `classifyTerminalFailure` now takes a `workResult` parameter and adds
+  `WORK_JOB_FAILURE`/`WORK_JOB_CANCELLED`/`NO_FAILURE` shapes, closing the
+  coverage gap; imports `classifyState` from the sibling gate script instead
+  of a hand-rolled state check (closes the normalization mismatch and the
+  "unreachable" claim in one move); the workflow deliverable is now an
+  explicit `git format-patch` artifact in Allowed Files
+  (`docs/swarm/active/GAM-404-workflow-terminal-failure-notify.patch`)
+  with `.github/workflows/claude-linear-dispatch.yml` itself removed from
+  Allowed Files and criterion 10 rewritten to grade the patch mechanically;
+  the "never two pings" claim corrected to name the one case where a
+  duplicate is preferred to silence, and the `READ_FAILED` Slack body now
+  says so; `title` is consumed in the Slack message; two citations fixed.
