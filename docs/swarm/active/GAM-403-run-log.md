@@ -81,3 +81,20 @@ the work after that point never happened.
     0 of 13 at push time, 8 of 13 at PR time.
   Gate isolated its mutations in `/tmp/gate-403` (item 23) and confirmed cleanup;
   remote left with no `refs/preflight/*`.
+- `21:55Z` — baseline measured before any worker touches the tree:
+  `npx vitest run` → **98 files, 2505 tests, 0 failures** (`npm ci` was needed
+  first — a dispatch checkout has no `node_modules`, which is itself R1-9's
+  evidence). This is the figure gates 5/6 are graded against.
+- `21:58Z` — **PACKET REVISED (revision 2).** All 13 round-1 findings answered
+  in `GAM-403-packet.md`, each marked `[R1-n]`: the extraheader BLOCKER is now
+  §1.4b with the verified `-c` fix and both a unit assertion and a live negative
+  control; check 5 requires the `No commits between` body; check 6 takes an
+  explicit `PREFLIGHT_BUILTIN_TOKEN` and SKIPs when absent; §6 now **deletes**
+  line 137 instead of pinning the PAT into it; gates restated as 5 of 6 with a
+  named baseline; the PAT-recovery recipe is spelled out. §5 rewritten: four of
+  five original doubts resolved, one reversed, one new doubt added as the
+  BLOCKER's residue.
+- `21:59Z` — **DISPATCHED `checker-premise` (round 2 of 2, opus pin, `run_in_background: false`).**
+  This is the last round item 19a allows; a third REVISE escalates to the owner
+  rather than looping. **If this line is the last one in this file, the run died
+  holding this subagent.**
