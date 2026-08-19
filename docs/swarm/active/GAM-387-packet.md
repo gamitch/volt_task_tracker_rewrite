@@ -140,7 +140,7 @@ reverts the fix too).
 | AC3 | A simulated dynamic-import rejection renders the reload action; a generic error does not. | Invert the chunk-error predicate → the generic case starts offering reload and the chunk case stops, both red. |
 | AC4 | The fallback text makes no claim about saved or lost data. | Assert the rendered fallback text does not match `/saved\|lost\|your changes/i`; adding such a claim to the copy turns it red. |
 | AC5 | `src/app/router.tsx`'s existing behaviour is unchanged — all 14 routes still resolve and the `Suspense` loading fallback still appears. | Covered by the existing suite; see AC6. |
-| AC6 | **The full suite is green and no existing test was edited or deleted.** | `npm run test` — baseline recorded in the run log; the new file count and test count must go **up**, and no pre-existing test may change. Constitution non-negotiable: "Existing tests must pass unless the boss explicitly approves a test update." |
+| AC6 | **The full suite is green and no existing test was edited or deleted.** | `npm run test` — **measured baseline on this branch: 98 files / 2505 tests, all passing** (`npm ci` first; `node_modules` starts empty on a fresh container). Both counts must go **up**, never down, and no pre-existing test may change. Constitution non-negotiable: "Existing tests must pass unless the boss explicitly approves a test update." |
 
 **Test harness:** raw `createRoot` + `act` + `MemoryRouter`, with
 `// @vitest-environment jsdom` as line 1. Follow

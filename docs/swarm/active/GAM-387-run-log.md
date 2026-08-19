@@ -51,3 +51,10 @@ subagent's verdict; gates run; PR opened.
 - **`node_modules` was empty on this container**; `npm ci` started so gates can
   actually run. One packet evidence line that leaned on a `node_modules` check
   was corrected to cite the manifest instead.
+- **Baseline suite measured** after `npm ci`: `npm run test` → **98 files /
+  2505 tests, all passing**, exit 0. Written into the packet as AC6's gate.
+- **DISPATCHED `checker-premise`** (opus, `run_in_background: false`) against
+  `docs/swarm/active/GAM-387-packet.md`, round 1 of the two allowed by item 19a.
+  *If this line is the last one in this file, the run died holding this
+  subagent* — that is the failure signature `AGENTS.md` describes, and it means
+  the premise gate's verdict was never seen.
