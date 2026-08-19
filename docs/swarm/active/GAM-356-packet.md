@@ -231,6 +231,73 @@ metric-view SQL. The tie-break in item 26 applies to *arguable* tiers, and FAST
 vs STANDARD was the live tie — resolved to STANDARD. Recorded here so a wrong
 call is visible and correctable.
 
+## Dispatch notes — round 2 findings the worker MUST carry
+
+`checker-premise` returned **DISPATCH** on revision 2 (3 MINOR, 3 NIT). Item 19
+is satisfied. These corrections are binding and override the text above wherever
+they disagree; note 1 is a required substitution, not a judgement call.
+
+1. **MINOR — step 6's leg-3 locator cannot match. Measured.** On `/meetings` the
+   label and the value are **two sibling `<Text>` nodes**
+   (`StudentMeetingView.tsx:750` and `:752-754`), so the rendered text is
+   `Participation— (no participation rate yet)` and
+   `textContent.includes('Participation: —')` is **false**. The single string
+   `Participation: —` exists only on StudentHome (`StudentHome.tsx:1649`), which
+   is why leg 2's precedent does not transfer. Use instead:
+
+   ```ts
+   await expect(page.getByText('(no participation rate yet)')).toBeVisible({ timeout: 20_000 });
+   await expect(page.getByRole('progressbar', { name: /Participation/ })).toHaveCount(0);
+   ```
+
+   This matters more than its severity suggests: leg 3 is unrun by all six gates
+   (MINOR-1), so a wrong locator ships silently and surfaces later as a spurious
+   failure.
+
+2. **MINOR — line citations drifted; use these.** The three defect-pinning
+   assertions are `:546`, `:549`, `:550` (`:545` is the locator declaration).
+   The "WHEN THIS IS FIXED" comment block is `:536-543`. Leg 2's precedent is
+   `:500`. Fix the same drift where the spec cites `StudentMeetingView.tsx:1068`
+   — the real default is at **`:1072`** — while editing leg 3; it is free.
+
+3. **MINOR — `types.ts:524` is the fourth of *five*.**
+   `VTeamParticipationRow.participationPct: number` at **`types.ts:600`** is the
+   same defect class: its view also returns `NULL` (`met01:137-143`) and its doc
+   at `:592-596` gives a now-false reason. It is consumed only by the barrel
+   (`index.ts:67`), so widening it has **zero** ripple. **Widen it and correct
+   its doc too** — leaving a known-false type one line away in a file this task
+   is already editing is precisely the "a comment is not triage" failure item 20
+   exists for. Both doc blocks (`:482-499` and `:572-582`) quote the superseded
+   pre-MET-01 SQL; repoint both at
+   `supabase/migrations/20260806000000_met01_explicit_marks.sql`.
+
+4. **NIT** — the false sentence in the first doc block is `types.ts:509-514`,
+   not `:507-514`.
+
+5. **NIT** — A5 cites `StudentMeetingView.tsx:1068`; the default is at `:1072`.
+   Criterion unchanged, line corrected.
+
+6. **NIT** — step 5's rationale names the wrong `ProgressBar` branch. With
+   `hasValueLabel` set (`StudentMeetingView.tsx:760`), the ternary at
+   `ProgressBar.js:191` is true, so the label renders as a visually-hidden-styled
+   `<span id={labelId}>` and the `VisuallyHidden` branch at `:205` is never
+   taken. **The instruction is unchanged and still correct** — assert
+   `aria-valuetext`, not an accessible name.
+
+7. **Informational.** `students.ts:823-825`'s doc claims this widening reaches
+   `ParentHome`. Measured: it does not — do not chase it. Separately,
+   `ParentHome` **inherits the fix without being edited**, because it reuses the
+   same `ConsistencyStrip` (`ParentHome.tsx:396`, importing the metric type at
+   `:401`). `src/pages/home/**` stays Forbidden as a *file*; the behaviour change
+   there is expected and desirable, and the reviewer should not read it as scope
+   creep. This also closes the issue's "the parent-facing `variant="linked"`
+   strip was not exercised" caveat.
+
+8. **For the GAM-300 comment, not this worker.** The correct summed arithmetic
+   already exists in SQL: `v_team_participation` at `met01:137-143` uses
+   `when sum(expected_ct) - sum(excused_ct) = 0 then null`. Whoever fixes
+   `checkin.ts:367-386` copies that verbatim (item 3) rather than inventing one.
+
 ## Least confident decisions
 
 Not required at STANDARD (item 19d binds HEAVY); kept because round 1's most
