@@ -233,11 +233,34 @@ CI-trigger check):
 | 3 | identity | both | records the identity **without** failing on `403`: `GET /user` `200` → `login`; `403` → `"installation token (no user identity)"`. Never `FAIL` on the `403` — §1.2 shows the working PR credential returns it |
 | 4 | ref-write | push | **[R1-1]** `git -c "http.https://github.com/.extraheader=" push <url-with-token> HEAD:refs/preflight/preflight-<run-id>` succeeds **and** the follow-up `--delete` (same `-c` flag) succeeds. **The `-c` argument is load-bearing, not hygiene** — without it the probe tests the checkout's credential and PASSes on a garbage token (§1.4b). A failed delete is `FAIL`, not a warning: it means the probe littered. The report line must say this proves **ref-write, not branch-create** — `refs/preflight/*` is outside any `refs/heads/**` protection or ruleset **[R1-11]** (measured today: `gh api repos/$REPO/rulesets` → `[]`, `…/rules/branches/main` → `[]`, so nothing distinguishes the namespaces yet — but that is a fact about today, not a property of the probe) |
 | 5 | PR-create | pr | **[R1-6]** `POST /repos/{repo}/pulls` with `head == base == PREFLIGHT_BASE` returns **`422` AND** an `errors[].message` matching `/No commits between/`. A `422` with any other body → `FAIL`, quoting the body's message: the gate built the counter-case, and a typo'd or unset `PREFLIGHT_BASE` yields `422` with `field: base, code: invalid` — a green preflight that never exercised the configured base. `403` → `FAIL`. Any `2xx` → `FAIL` **and** the report says a PR may have been created (this must never happen; treat it as an alarm, not a pass). Any other status → `FAIL`, never a silent pass |
-| 6 | CI-trigger expectation | push | **[R1-2]** the push credential is **not** byte-identical to `PREFLIGHT_BUILTIN_TOKEN`. Identical → `FAIL` ("pushes made with the built-in token do not trigger workflow runs"). `PREFLIGHT_BUILTIN_TOKEN` absent → **`SKIP`**, never `PASS` — the first draft compared against `process.env.GITHUB_TOKEN`, which is **unset** in a `run:` step unless mapped (so the check could never fail as deployed) and, inside the agent, is **not** the built-in token but the `claude[bot]` App token (so it produced a false FAIL). This check is `DERIVED`, and the report must label it so — §5.5 |
+| 6 | CI-trigger expectation | push | **[R1-2]** the push credential is **not** byte-identical to `PREFLIGHT_BUILTIN_TOKEN`. Identical → `FAIL` ("pushes made with the built-in token do not trigger workflow runs"). `PREFLIGHT_BUILTIN_TOKEN` absent → **`SKIP`**, never `PASS` — the first draft compared against `process.env.GITHUB_TOKEN`, which is **unset** in a `run:` step unless mapped (so the check could never fail as deployed) and, inside the agent, is **not** the built-in token but the `claude[bot]` App token. **[R2-8]** (Round 1's write-up said this "produced a false FAIL"; that is backwards — with the push token set to the PAT the old check would have wrongly *passed*. The prescription is unaffected: compare against an explicitly-passed value, and `SKIP` when it is absent.) This check is `DERIVED`, and the report must label it so — §5.5 |
 
 **Exit code:** `0` when no check is `FAIL`; `1` otherwise. Every check's line is
 printed in both cases — a preflight that only speaks when it fails teaches
 nobody what "healthy" looks like.
+
+**[R2-2] No short-circuiting. Every check in the stage runs, always.** A garbage
+token fails check 2 (repo access) before it ever reaches check 4 (ref-write), so
+an implementation that stops at the first `FAIL` cannot satisfy acceptance
+criterion 4, which requires the *ref-write* line to be named. Run them all,
+report them all, then decide the exit code from the collected verdicts.
+
+**[R2-3] The probe must never target `origin`.** In a dispatch workspace the
+`origin` URL embeds a credential in its userinfo, so `git -c …extraheader= push
+origin …` still authenticates as something other than the credential under
+test. Build the URL explicitly from `GITHUB_REPOSITORY` and the token being
+tested. The explicit-URL form is load-bearing for the same reason the `-c` flag
+is, and the two together are what make the probe mean anything.
+
+**[R2-4] A REST alternative exists and is deliberately not chosen.** Round 2
+measured `POST /repos/{repo}/git/refs` → `401` on a garbage token, `201` on the
+App token, `DELETE` → `204`. That path needs no `gitImpl`, no `-c` flag, no
+test 12 and no live negative control — the `Authorization` header is explicit
+and no git config participates. **It is rejected on fidelity:** the run
+publishes its branch over git-over-HTTPS, and that transport — with its ambient
+config — is exactly where the BLOCKER lived. A probe that cannot see the class
+of defect this task was filed for is the wrong probe, even though it is
+simpler. Recorded so the choice is visible rather than assumed.
 
 **[R1-9] Stdlib only.** `dispatch-preflight.mjs` imports **nothing** outside
 Node's standard library. There is no `npm ci` before the Claude step and
@@ -259,10 +282,26 @@ re-deriving one. **[R1-cheaper-path-2]**
 returned the `422`. Check 3 already computes it; printing it is what makes
 §5.1's fallback auditable rather than merely defensible.
 
-**Never print a token, or any substring of one.** Redact `ghs_[A-Za-z0-9_]+`,
-`github_pat_[A-Za-z0-9_]+` and `ghp_[A-Za-z0-9_]+` from every line the script
-emits, including captured `git` stderr — the remote URL carries the credential
-and `git`'s own error messages quote it back.
+**Never print a token, or any substring of one.** Redact from every line the
+script emits, including captured `git` stderr — the remote URL carries the
+credential and `git`'s own error messages quote it back. **[R2-1]** Use:
+
+```js
+/(?:ghs|ghp|gho|ghu|ghr)_[A-Za-z0-9_.-]+|github_pat_[A-Za-z0-9_.-]+/g
+```
+
+**The dot and dash in that character class are the whole point, and the
+obvious `[A-Za-z0-9_]` is a measured leak.** The `claude[bot]` installation
+token is JWT-shaped — `ghs_<id>_<b64header>.<b64payload>.<signature>` — so a
+charset without `.` stops at the first dot and redacts only the
+*reconstructible* prefix (the header decodes to `{"alg":"ES256","typ":"JWT"}`)
+while printing the payload and signature verbatim. Round 2 measured **342 of
+390 characters of a live write-capable token surviving** the naive regex, and
+both the acceptance criterion and the natural unit test went green on it,
+because a hand-written fake token has no dots in it. This is the packet's own
+false-green failure class occurring inside the rule meant to prevent leaks; the
+PAT is unaffected (no dots), so the exposure is specifically the Stage B
+credential and the one embedded in `origin`.
 
 **Structure it for testability.** Pure, exported, no I/O:
 
@@ -287,6 +326,8 @@ comment that states the defect being caught, what the script deliberately does
 Vitest, alongside the script (`scripts/*.test.mjs` is the existing convention
 and the default `include` picks it up). Must cover, at minimum:
 
+0. **[R2-5]** Check 1 (credential present): empty/missing token → `FAIL`, and
+   the stage does not attempt a network call with an empty credential.
 1. `422` with a `No commits between main and main` error → PR-create PASS (the
    authorized case — **the whole point**).
 2. `403` → PR-create FAIL, reason names the credential.
@@ -302,8 +343,13 @@ and the default `include` picks it up). Must cover, at minimum:
 8. CI-trigger: push token identical to `PREFLIGHT_BUILTIN_TOKEN` → FAIL;
    different → PASS labelled `DERIVED`; **`PREFLIGHT_BUILTIN_TOKEN` absent →
    SKIP** **[R1-2]**.
-9. `redact()` removes `ghs_`, `github_pat_` and `ghp_` values, including when
-   embedded in a URL inside a longer `git` error string.
+9. **[R2-1]** `redact()` removes `ghs_`, `github_pat_` and `ghp_` values,
+   including when embedded in a URL inside a longer `git` error string. **The
+   `ghs_` fixture must contain dots**, e.g.
+   `ghs_1234567_eyJhbGciOiJFUzI1NiJ9.eyJhdWQiOiJ4In0.SIGNATURE`, and the
+   assertion is that **no 20-character substring of the fixture survives** —
+   not merely that the whole value is gone. A dot-free fake passes the naive
+   regex and proves nothing.
 10. `evaluate` → exit `1` if any check FAILs, `0` when the only non-PASS
     verdicts are `SKIP`.
 11. `runPreflight({stage:'push'})` with a fake `gitImpl` whose delete fails →
@@ -365,8 +411,11 @@ A criterion is satisfied only by evidence, not by reading the code.
    `98 test files, 2505 tests, 0 failures`.** The worker's run must equal that
    plus its own new tests, and any other movement is a regression to report.
 8. No file outside §4's Allowed Files is modified.
-9. No token value appears in any output the script produces or in any file the
-   run commits.
+9. **[R2-1]** No token value **and no 20-character substring of one** appears in
+   any output the script produces or in any file the run commits. The
+   substring form is the criterion, not the whole-value form: round 2 measured
+   the whole-value form going green while 342 of 390 characters of a live
+   credential were printed.
 
 ---
 
@@ -421,11 +470,15 @@ the gate's second round re-audits the answer rather than the question.**
    wrong.]** Stage A survives, on the run-log durability argument in §2.1, not
    on the Phase-1 sentence I originally cited (Stage B satisfies that) and not
    on the 100%-stranding figure I made up (GAM-333 is 0-of-13 at push time).
-   **What would still make me wrong:** if the durability argument is also
-   thought thin, Stage A is ceremony and should be dropped — and findings R1-1
-   and R1-2 are the price of admission for keeping it. **This remains the one
-   decision I would most like the owner or the gate to overrule**, because
-   dropping it removes the BLOCKER's entire surface.
+   **[R2-7] Round 2 settled this, and Stage A is load-bearing rather than
+   ceremony — for a third reason neither draft had.** This repository is
+   **public** (`"private": false`), and round 2 measured that both a garbage
+   token *and an empty token* `ls-remote` it successfully, exit `0`, real SHA
+   returned. **So a dead `CLAUDE_PR_TOKEN` does not fail the checkout.** The run
+   proceeds, burns the whole implementation, and discovers the credential is
+   dead at push time — the exact fail-late shape GAM-403 was filed about, with
+   nothing upstream to catch it. Keep Stage A; the doubt is resolved, not
+   merely deferred.
 
 4. **[R1-3 — REVERSED by the gate. My prescription was the dangerous one.]**
    I proposed pinning `GH_TOKEN` to `secrets.CLAUDE_PR_TOKEN`, arguing it was
@@ -470,7 +523,9 @@ Not the worker's. Per GAM-328 and the #159→#160 pattern, the orchestrator
 writes the workflow change, verifies it, and preserves it as
 `docs/swarm/active/GAM-403-dispatch-preflight.patch` (`git format-patch`), with
 the PR body **leading** with the undeliverable half rather than burying it. The
-change is exactly three things:
+change is exactly **four** things **[R2-6]** — the count matters, because this
+section is applied by hand by the owner and a miscount risks applying three of
+four:
 
 1. Line 126 → `token: ${{ secrets.CLAUDE_PR_TOKEN }}` (no fallback). Confirmed
    sound by round 1.

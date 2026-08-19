@@ -98,3 +98,33 @@ the work after that point never happened.
   This is the last round item 19a allows; a third REVISE escalates to the owner
   rather than looping. **If this line is the last one in this file, the run died
   holding this subagent.**
+- `22:09Z` — **VERDICT round 2: `REVISE`, one blocking item — and the gate
+  explicitly ruled it does not warrant owner escalation** ("a single
+  character-class correction plus one test fixture, with no design uncertainty
+  and nothing left to measure. Fix those two lines and dispatch; do not
+  re-gate.").
+  - **MAJOR, new — my own redaction rule leaked the credential it was written
+    to hide.** `ghs_[A-Za-z0-9_]+` stops at the first `.`, and the `claude[bot]`
+    installation token is JWT-shaped (`ghs_<id>_<hdr>.<payload>.<sig>`).
+    Measured: **342 of 390 characters of a live write-capable token survive**
+    the regex, and both acceptance criterion 9 and the natural unit test go
+    green, because a hand-written fake token has no dots. That is this packet's
+    own false-green failure class, inside the anti-leak rule. Fixed:
+    `(?:ghs|ghp|gho|ghu|ghr)_[A-Za-z0-9_.-]+|github_pat_[A-Za-z0-9_.-]+`, a
+    dot-bearing test fixture, and the criterion restated as "no 20-character
+    substring survives".
+  - Round 2 re-measured the BLOCKER fix live, four ways: fake token without
+    `-c` → PASS (bug reproduced), fake token with `-c` → `Authentication
+    failed` (correct FAIL), PAT and App token with `-c` → PASS + clean delete,
+    no workflow runs created. It also proved `-c …extraheader=` replaces a
+    *multi-valued* header list, narrowing least-confident decision 6.
+  - It resolved decision 3 outright, against my own hedging: this repo is
+    **public**, and a garbage *or empty* token still `ls-remote`s it exit 0 —
+    so a dead `CLAUDE_PR_TOKEN` **does not fail the checkout**. The run burns
+    the full implementation and finds out at push time. Stage A stays.
+  - Four known risks folded into the packet: no short-circuiting (or criterion
+    4 is unmeetable), the probe must never target `origin`, check 1 needs a
+    test, and §6 said "three things" while listing four.
+- `22:11Z` — **DISPATCHED confirmation request to the round-2 gate
+  (`SendMessage`, same agent, same round — not a third round under 19a).**
+  **If this line is the last one in this file, the run died holding it.**
