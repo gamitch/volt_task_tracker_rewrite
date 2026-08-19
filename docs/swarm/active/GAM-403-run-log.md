@@ -24,3 +24,25 @@ the work after that point never happened.
 - `21:30Z` — branch `claude/gam-403-dispatch-credential-preflight` created off
   `main` at `e37605f`. Run log written as the first file write (per the dispatch
   contract) and pushed before any other work.
+- `21:35Z` — **PREMISE MEASURED (item 19c), before writing the packet.** All
+  three of the issue's citations confirmed at the exact lines
+  (`claude-linear-dispatch.yml:126,137` fallback expression; `:40-43` PAT
+  comment; plan §5.3 at
+  `docs/swarm/2026-08-15-durable-multi-agent-execution-plan.md:332-344`). Three
+  facts the issue does **not** contain were measured live in this run and change
+  the prescription:
+  - the PAT (`CLAUDE_PR_TOKEN`) is **`403` on PR creation** and the agent's
+    `ghs_` App token is **`422`** (authorized) — so the credentials are near
+    complementary, and "pin `GH_TOKEN` to the push token" would break the only
+    PR path that works;
+  - `GET /repos/{repo}.permissions` reports `push:false` for the App token that
+    then pushes successfully — a **false negative**, so capability must be
+    probed, never read off a permissions field;
+  - a `refs/preflight/*` probe push **creates no workflow run** (measured with
+    both credentials, both refs deleted afterwards), so ref-write can be proven
+    without spending CI or leaving evidence behind.
+- `21:38Z` — **PACKET WRITTEN.** `docs/swarm/active/GAM-403-packet.md`. HEAVY
+  defended on item 26's write-path and export triggers. Allowed Files for the
+  worker are the preflight script and its tests only; the workflow half is
+  orchestrator-owned and ships as a patch (GAM-328 wall). Five **Least confident
+  decisions** declared per item 19d.
