@@ -153,6 +153,15 @@ rather than a mock.
 
 ## Follow-ups filed
 
+- **GAM-421** (`Backlog`, `tier/unreviewed`) — **the case this preflight cannot
+  catch, found by this run living it.** The `claude[bot]` installation token
+  that opens pull requests expires about an hour after it is minted, and a
+  HEAVY run takes two. Measured on this very run: `POST /pulls` was authorized
+  (`422`) at minute 6 and returned `401 Bad credentials` at minute 74. A
+  preflight is a snapshot; this is a clock, so no amount of checking at minute 1
+  prevents it. **That is why this PR was opened by hand** — see the note at the
+  end. It also offers a candidate answer to GAM-333's unresolved question about
+  which runs strand: run *duration*, not wall-clock window.
 - **GAM-420** (`Backlog`, `tier/unreviewed`) — the same entrypoint-guard defect
   in the five sibling `scripts/*.mjs`, including `linear-assert-released.mjs`,
   where a silent exit 0 makes the `assert-released` job go green without
@@ -186,5 +195,14 @@ rather than a mock.
    by scanning every tracked file — and the token is job-scoped and dies with
    the run, so there is nothing to rotate. Recorded because a disclosed exposure
    is the only kind anyone can act on.
+
+---
+
+**This PR was opened by hand, because the run that wrote it could not open it.**
+At minute 74 the run's `GH_TOKEN` returned `401 Bad credentials` and
+`gh pr create` failed; the PAT is still alive and still pushes, but is measured
+at `403` on PR creation. Everything above was written by the run before it
+attempted the API call, and is published verbatim. GAM-421 is that failure,
+filed with its measurements.
 
 Linear-Issue: GAM-403

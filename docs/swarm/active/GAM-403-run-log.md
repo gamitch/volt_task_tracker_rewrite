@@ -266,3 +266,32 @@ the work after that point never happened.
   checked `origin/main` in a scratch worktree and it reports 379 too, and
   linting my two files alone reports nothing at all — **this branch adds zero
   warnings**; the skill's figure is simply stale.
+- `22:41Z` — **STRANDED AT PR TIME, and the cause is a finding about this very
+  deliverable.** `gh pr create` returned `HTTP 401: Bad credentials`. Measured
+  immediately:
+  - the agent's `GH_TOKEN` (`ghs_`, the `claude[bot]` App installation token)
+    now returns **401** on `GET /repos/…` — it was authorized (`422` on the
+    PR-create probe) at 21:33Z, minute 6. It is dead at minute 74;
+  - the PAT is **alive** — `gh api user` → `gamitch`, and pushes still work —
+    but is still **403** on PR creation, exactly as at 21:33Z.
+  So the credential that can open a PR expires roughly an hour in, and a HEAVY
+  run takes two. **This is the one case GAM-403's own preflight cannot catch:**
+  it verifies capability at minute 1, and the credential is alive then. A
+  preflight is a snapshot; this is a clock. Filed as **GAM-421** with both
+  timestamped measurements, and offered there as a candidate answer to GAM-333's
+  unresolved "which runs strand" question — run *duration*, not wall-clock
+  window. (Also noted, so nobody reads it as a defect: the `exit=0` printed
+  after that failing `--stage=pr` run is `tail`'s exit code through a pipe, not
+  the script's. The script printed `RESULT: FAIL`, and its own unpiped exit code
+  is 1 — this is the exact pipe hazard the gate-run skill exists to remove.)
+- `22:45Z` — **FOLLOW-UPS FILED (item 20), both to `Backlog` with
+  `tier/unreviewed` so the owner's promotion remains the dispatch signal:**
+  **GAM-420** (the entrypoint guard in the five sibling scripts, including
+  `linear-assert-released.mjs`, where a silent exit 0 makes the `assert-released`
+  job green without checking) and **GAM-421** (the token-expiry finding above).
+  Both written through the `linear-task-writing` skill per item 30.
+- `22:47Z` — **PR body written and validated before the API call was attempted**
+  (`docs/swarm/active/GAM-403-pr-body.md`; the declaration checker exits 0 on
+  it), then updated with the stranding note and GAM-421. This is the artifact
+  that makes a stranded run cheap: a human opens the PR from it with one paste,
+  and nothing has to be reconstructed from this log.
