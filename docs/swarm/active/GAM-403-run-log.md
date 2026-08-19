@@ -177,3 +177,34 @@ the work after that point never happened.
      Defensible, not dictated by the packet — handed to the checker to weigh.
   Verification by the orchestrator (item 21 — existence is verified, not
   assumed) follows before any of this is treated as done.
+- `22:36Z` — **ORCHESTRATOR VERIFICATION of the worker (item 21 — existence is
+  verified, not assumed).** `git show --stat cee61bd` = exactly the two Allowed
+  Files, 1050 insertions, nothing else; both blobs read back from the commit at
+  their claimed lengths, so the work survives worktree removal. Imports are
+  `node:child_process` and `node:fs` only (stdlib rule holds). `EXTRAHEADER_CLEAR`
+  and the corrected redaction pattern are both in the committed blob. A repo-wide
+  grep for token-shaped strings in tracked files finds nothing but the deliberate
+  fakes.
+  **I re-ran the three live criteria myself rather than accepting the report:**
+  - real PAT, `--stage=push` → every line PASS, `exit=0`;
+  - garbage token, `--stage=push` → `repo-access`, `identity` and **`ref-write`**
+    all FAIL (`exit 128: Invalid username or token`), `exit=1`. **This is the
+    BLOCKER closed under measurement** — and note `ref-write` is reported even
+    though check 2 already failed, so the no-short-circuit rule holds in the
+    built artifact, which is what makes this criterion meaningful;
+  - ambient `GH_TOKEN`, `--stage=pr` → `422 "No commits between"`, credential
+    reported as `installation token`, `exit=0`.
+  `git ls-remote origin 'refs/preflight/*'` empty afterwards: the probes left
+  nothing behind.
+- `22:40Z` — **WORKFLOW HALF WRITTEN AND PRESERVED AS A PATCH.** Cannot be
+  pushed (GAM-328 wall), so it ships as
+  `docs/swarm/active/GAM-403-dispatch-preflight.patch` — the #159→#160 pattern.
+  Four changes, matching packet §6: checkout token pinned; `GH_TOKEN` **deleted**
+  from the agent step rather than pinned; a `Credential preflight` step between
+  checkout and the agent, mapping both tokens explicitly; and the prompt
+  paragraph for `--stage=pr`, sequenced after claiming and the run log.
+  Verified rather than eyeballed: the YAML parses, the new step is index 1 of 5
+  (immediately after `Checkout`, before `Work the issue`), `GH_TOKEN` is absent
+  from the agent step's `env`, the prompt carries the paragraph, and
+  `git apply --check` on the branch exits 0 (87 insertions, 2 deletions). The
+  workflow file itself is left untouched on the branch.
