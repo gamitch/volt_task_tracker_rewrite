@@ -129,3 +129,88 @@ that signature unmistakable.
   escalates to the owner rather than looping to round 3),
   `run_in_background: false`, orchestrator is blocking on it now.** *If this
   line is the last one in this file, the run died holding this subagent.*
+- **VERDICT RECEIVED: `checker-premise` round 2 → REVISE** (1 MAJOR, 7 MINOR,
+  3 NIT, no BLOCKER). Subagent returned; nothing left in flight. It executed
+  a 16-case input matrix against the revised `classifyTerminalFailure` in its
+  own detached worktree (removed after), reproduced the full patch-delivery
+  round trip (`git format-patch` → `git apply --check` → `js-yaml` structural
+  parse, all green), and reconfirmed the baseline (`npx vitest run scripts/`:
+  13 files / 299 tests). Round 1's BLOCKER is genuinely closed — no fixture
+  import from the sibling test file remains.
+
+  **The one MAJOR (M1): `NO_FAILURE` is reachable and produces silence on a
+  red job — the packet's own "unreachable" claim is false, twice.** The new
+  step's `if:` fires whenever the Assert step itself failed, for *any*
+  reason — not only `In Progress`. `linear-assert-released.mjs` also fails
+  the Assert step on `UNDETERMINED` (a transient read error surviving three
+  retries, or Linear returning a null state) and on `NOT FOUND`. If, on the
+  *new* script's own (second) read, the issue now reads a released state
+  (e.g. the transient error had already cleared, or a null state resolves to
+  `''`) and `workResult` is `'success'`, `classifyTerminalFailure` falls
+  through to `{ shape: 'NO_FAILURE', notify: false }` — a **red
+  `assert-released` job with nobody told**, which is the exact defect this
+  issue exists to close, now reachable through the *new* code path rather
+  than the old one. Measured by the gate: `{state:{name:'In Review'}}` +
+  `workResult:'success'` → `NO_FAILURE`; `{state:null}` + `'success'` →
+  same. Fix (all four parts, and this is the one required change before
+  dispatch): give the Assert step `id: assert`, thread
+  `${{ steps.assert.outcome }}` into the new script as `assertOutcome`,
+  return a notifying shape when `assertOutcome === 'failure'` and nothing
+  else matched, and correct both places the packet falsely claims
+  `NO_FAILURE` is unreachable.
+
+  Seven MINOR (all cheap, one-line-each): the delivery mechanism's own step
+  3 ("revert the working-tree change") would leave a workflow-touching
+  commit in history if written as stated — must export to an **untracked**
+  path then `git reset --hard HEAD~1`, not revert-then-commit;
+  `isIssueNotFoundError` (already exported by the very file this packet
+  imports `classifyState` from) should catch a real not-found so criterion 4
+  tests a reachable case instead of routing every real not-found into
+  `READ_FAILED`; criterion 7 must require the Slack body to contain the
+  issue *title*, not just the identifier, or round 1's "`title` threaded but
+  unused" finding survives untested; a citation renumbering slip introduced
+  this revision (step 1 pointed at "criterion 8", now criterion 10); a
+  citation slip in §6 (`client.mjs:17` is `RATE_FLOOR`, the 2500/hour figure
+  is at `:40`); criterion 10 should say `js-yaml` is present only
+  transitively (via `@eslint/eslintrc`), not a declared dependency; `title`
+  precedence between the payload param and `issue.title` is unspecified and
+  the payload value is attacker-controllable, so prefer `issue.title` when
+  the read succeeded. Three NIT (logged only): a narrower residual
+  normalization mismatch between `detectEscalation`'s exact match and
+  `classifyState`'s trim/lowercase (errs toward notifying, harmless);
+  `readFailed` short-circuits ahead of `workResult` so a cancelled-and-
+  unreadable case doesn't mention the cancellation; no line anywhere
+  disclaims that a run that never reaches the `assert-released` job at all
+  (e.g. whole-run infrastructure loss) still notifies nobody.
+
+  **Per constitution item 19a: the gate is capped at two rounds, and this is
+  round 2's REVISE — it escalates to the human owner rather than looping to
+  a round 3.** Matching the GAM-301 precedent exactly (same cap, same
+  outcome shape): I am not applying round 2's fix myself and re-submitting a
+  third time, even though the one MAJOR is narrow and the gate itself said
+  an owner could reasonably authorize it as an amendment — doing so would
+  make me my own gate on a design an independent check has now reviewed
+  twice. Stopping here.
+- **Escalation comment posted to GAM-404 in Linear**, opening with the
+  `**Escalating` marker per the convention `linear-escalation-notify.mjs:60`
+  keys off, recording both rounds' findings and the concrete, narrow next
+  step (round 2's four-part `NO_FAILURE` fix plus the seven MINOR/NIT items,
+  all mechanical) so the human owner or `boss-architect` can accept the fix
+  directly without a third gate round, per item 19a. Issue left `In
+  Progress` deliberately — one of `linear-assert-released.mjs`'s three named
+  benign shapes; a red `assert-released` check here is the intended signal,
+  not a defect in this run.
+- **No PR opened. No source file was changed** — only planning artifacts
+  under `docs/swarm/active/` (`GAM-404-packet.md`, this run log), already
+  pushed to `claude/gam-404-terminal-failure-notify`. Nothing to merge yet.
+- **Run complete (escalated, not delivered).** Both premise-gate rounds were
+  dispatched with `run_in_background: false` and waited on; every dispatch
+  line above has a matching verdict line; nothing was ever left in flight.
+  Delivered: a live-reverified defect, a twice-independently-checked design
+  with round 2's remaining gap narrow and named, and a concrete unblock path.
+  Not delivered: working code — item 19a's cap stops this run one packet
+  revision short of dispatchable. Next session: fold round 2's required
+  revision (§ above) into packet revision 3, and per item 19a's own
+  reading (matching GAM-301's next-session note) this does not need a third
+  premise-gate round if the human owner or `boss-architect` accepts the
+  verified fix directly — only `worker-implementer` need be dispatched next.
