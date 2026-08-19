@@ -213,3 +213,31 @@ the work after that point never happened.
   orchestrator's own patch `GAM-403-dispatch-preflight.patch`, which nothing has
   independently reviewed yet. **If this line is the last one in this file, the
   run died holding this subagent.**
+- `22:52Z` — **CHECKER VERDICT: `PASS`**, highest severity MINOR (no BLOCKER, no
+  MAJOR). All nine §3 criteria verified **by execution**, and the checker
+  independently reproduced the BLOCKER in the shared workspace shape before
+  confirming the fix closes it: garbage token without `-c` → `* [new reference]`
+  (false pass), with `-c` → `Authentication failed`. It verified `redact()`
+  against the **live** 390-char `ghs_` token (0 surviving 20-character
+  substrings, no over-redaction), re-ran the mutation replay itself, confirmed
+  no test touches the network or pushes for real, and applied the workflow patch
+  inside its own worktree to check the YAML parses and `GH_TOKEN` is genuinely
+  deleted rather than pinned. Gates: eslint 0, tsc 0, prettier clean,
+  99 files / 2543 tests (baseline + exactly 38).
+  Two MINOR findings, and I am fixing both now rather than deferring them:
+  - **MINOR-1 — the ESM entrypoint guard can make the whole preflight a silent
+    `exit 0`.** `import.meta.url === \`file://${process.argv[1]}\`` fails to match
+    when the path contains a space or a symlink, and `main()` then never runs:
+    measured, `(no output) EXIT=0` with the criterion-4 garbage token. **A
+    preflight that exits 0 silently is an authorization to proceed on a dead
+    credential** — §0's disqualifying class. Held to MINOR because it is
+    unreachable on both deployed surfaces (measured) and is the repo-wide house
+    idiom the packet itself told the worker to copy; the checker explicitly
+    invited a boss to grade it MAJOR instead.
+  - **MINOR-2 — my own patch comment leads with the retracted justification.**
+    It opens with GAM-333's 8-of-13 figure, which `[R1-8]` established is
+    0-of-13 *at push time*, and omits the run-log durability argument that
+    actually justifies the step. In an artifact a human applies by hand, the
+    comment is the product.
+  Four NITs recorded, none actioned; the checker judged the worker's check-6
+  SKIP call correct.
