@@ -200,6 +200,10 @@ that signature unmistakable.
   Progress` deliberately — one of `linear-assert-released.mjs`'s three named
   benign shapes; a red `assert-released` check here is the intended signal,
   not a defect in this run.
+- **Escalation comment read back and confirmed**: comment id
+  `b1886716-8be9-4068-a423-349b1f4ef2ea`, issue state re-read immediately
+  after and confirmed still `In Progress` — the correct benign shape, not a
+  claim-loss.
 - **No PR opened. No source file was changed** — only planning artifacts
   under `docs/swarm/active/` (`GAM-404-packet.md`, this run log), already
   pushed to `claude/gam-404-terminal-failure-notify`. Nothing to merge yet.
