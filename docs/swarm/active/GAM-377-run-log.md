@@ -45,3 +45,12 @@ not a run that merely ran out of things to say.
   offending day, because silently skipping the bad day is the accept-show-discard
   shape this codebase has a standing ruling against. Not yet dispatched to a
   worker — item 19 forbids that until `checker-premise` returns DISPATCH.
+  Commit `94462dc`, pushed.
+- **DISPATCHED: `checker-premise` round 1** on `docs/swarm/active/GAM-377-packet.md`,
+  with `run_in_background: false`. Model pin `opus` applies itself from
+  `.claude/agents/checker-premise.md`. Gate is capped at two rounds (item 19a);
+  a third REVISE escalates to the human owner instead of looping.
+  **If this line is the last one in this file, the run died holding this
+  subagent** — not "the gate is still running", not "results pending". Dead,
+  holding it, exactly the way runs 31354278407 / 31385764526 / 31514339272 /
+  31523233268 / 31527801235 died.
