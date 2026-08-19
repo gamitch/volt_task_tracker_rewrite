@@ -128,3 +128,21 @@ the work after that point never happened.
 - `22:11Z` — **DISPATCHED confirmation request to the round-2 gate
   (`SendMessage`, same agent, same round — not a third round under 19a).**
   **If this line is the last one in this file, the run died holding it.**
+- `22:14Z` — **CONFIRMATION RETURNED: `CONFIRMED`.** The gate re-ran the fix
+  rather than reading it — `eval`'d the regex **verbatim from the packet line**
+  against the live 390-char `ghs_` token, the live PAT and the mandated fixture:
+  nothing survives, not even a 20-character substring, and ordinary report text
+  passes through byte-identical (no over-redaction). It also verified the
+  fixture *pins* the fix: under the old naive regex the same fixture leaves 7
+  surviving 20-character substrings, so the test turns red if a worker ever
+  narrows the character class back. One non-blocking wording conflict it found
+  between `[R2-2]` (never short-circuit) and `[R2-5]` (don't call the network
+  with an empty credential) is resolved by the clause it supplied, now appended.
+- `22:15Z` — **PREMISE GATE CLOSED (item 19).** Two rounds used, which is the
+  cap (19a). Round 1 `REVISE` (1 BLOCKER, 4 MAJOR, 6 MINOR, 2 NIT) → round 2
+  `REVISE` (1 MAJOR, explicitly ruled not owner-escalation) → `CONFIRMED` on the
+  required revision by the same round-2 checker. **Recorded honestly: the gate's
+  formal round-2 verdict was REVISE, not DISPATCH.** What clears the packet for
+  a worker is that checker's own written instruction — "fix those two lines and
+  dispatch; do not re-gate" — plus its measured confirmation that the fix landed.
+  A third round was available in neither letter nor spirit.

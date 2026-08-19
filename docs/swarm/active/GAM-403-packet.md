@@ -243,7 +243,11 @@ nobody what "healthy" looks like.
 token fails check 2 (repo access) before it ever reaches check 4 (ref-write), so
 an implementation that stops at the first `FAIL` cannot satisfy acceptance
 criterion 4, which requires the *ref-write* line to be named. Run them all,
-report them all, then decide the exit code from the collected verdicts.
+report them all, then decide the exit code from the collected verdicts. **The
+sole exception is a missing or empty credential (check 1 `FAIL`), where the
+network-dependent checks report `SKIP` without making a call rather than being
+omitted — they still appear in the report.** That exception is not licence to
+short-circuit generally; it is the one case where there is nothing to send.
 
 **[R2-3] The probe must never target `origin`.** In a dispatch workspace the
 `origin` URL embeds a credential in its userinfo, so `git -c …extraheader= push
