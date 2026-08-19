@@ -141,4 +141,23 @@ not a run that merely ran out of things to say.
   - Two NITs: §7's `TimeInput.tsx:474` should be `:431-432` for the *render*
     claim, and §4a's "exactly two `HH:MM` parsing sites" is really one.
   - Gate also verified the shared tree was clean at `ffe8719` after removing its
-    worktree (item 23).
+    worktree (item 23). I re-checked `git diff HEAD` myself and confirmed the
+    only working-tree change was my own log edit — no unauthorized mutation.
+  - **Three fold-ins applied**, commit `11a04d6`, pushed. The M-2 correction is
+    a correction to *my* text, and worth naming as such: I wrote "the only order
+    that reaches the guard", and the gate showed `isTimeInRange` is inclusive so
+    a Start-then-equal-End also reaches it — which is why the persona spec broke
+    at all. My §3-bis and my §5-bis had been contradicting each other.
+- **Worker model tier: sonnet (the pinned default), no `model: "opus"` override.**
+  Item 18's four triggers are each false here — no file under
+  `supabase/migrations/`, no RLS policy or `security definer` helper, no SQL
+  view containing metric math, and no auth/session/role-resolution/permission
+  logic. The change is a pure comparison helper plus two props in one dialog
+  component. Item 25's second obligation is explicitly on point and I am
+  honouring it rather than rounding up: **do not bump a worker to opus because
+  the topic sounds sensitive.** "Volunteer hours" and "metric SQL" appear in
+  this row's *rationale*; the row's *work* reads no SQL and writes no policy.
+- **DISPATCHED: `worker-implementer`** on packet revision 2 (as amended by
+  `11a04d6`), with `run_in_background: false`.
+  **If this line is the last one in this file, the run died holding this
+  subagent.** Not "the worker is implementing". Dead, holding it.
