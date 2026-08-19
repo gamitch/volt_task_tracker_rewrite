@@ -241,3 +241,28 @@ the work after that point never happened.
     comment is the product.
   Four NITs recorded, none actioned; the checker judged the worker's check-6
   SKIP call correct.
+- `22:47Z` — **Both MINOR findings fixed rather than deferred, and each fix
+  measured.**
+  - MINOR-1: entrypoint guard now compares real paths
+    (`fs.realpathSync` on both sides, `fileURLToPath` for this module) instead
+    of the string idiom, plus three spawned tests — ordinary path, path with a
+    space, symlinked path — which are the first coverage `main()` has ever had.
+    **Mutation replay in `/tmp/gam403-guard-mutation` (item 23, committed
+    first): restoring the old guard turns exactly the space and symlink tests
+    red with `expected '' not to be ''`** — empty output, which is the
+    silent-exit-0 signature itself. Reverted, green again, worktree removed.
+  - MINOR-2: the patch's lead comment now leads with the run-log durability
+    argument and explicitly says the 8-of-13 figure belongs to `--stage=pr`,
+    so nobody re-derives a justification the gate rejected. Patch regenerated;
+    `git apply --check` exits 0 and the post-apply YAML still parses with
+    `GH_TOKEN` absent.
+- `22:50Z` — **GATES (`/gate-run`, `--require-clean`, on `1448b5d`, tree clean):
+  `PASS — 5 of 6`.** tsc 0, vite build 0, format:check 0, eslint 0 errors,
+  vitest 99 files / **2546 tests** against baseline 2505 (+41). Gate 6 SKIPPED —
+  no `src/` change, so no defensible scope — which packet §3 criterion 7
+  predicted and required be reported as five, not six.
+  One number worth stating rather than glossing: eslint reports **379**
+  warnings where the gate-run skill's prose says the standing count is 377. I
+  checked `origin/main` in a scratch worktree and it reports 379 too, and
+  linting my two files alone reports nothing at all — **this branch adds zero
+  warnings**; the skill's figure is simply stale.
