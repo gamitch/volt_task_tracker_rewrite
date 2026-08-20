@@ -413,8 +413,18 @@ describe('AC4b: DES-14/DES-16 voice -- no apology, no bare "Submit"/"OK", names 
     // followed by "Sorry, ..." with no space), so a leading `\b` before
     // "sorry" can silently fail to match at that seam -- measured directly,
     // not assumed.
+    //
+    // The SAME reasoning applies to the `Submit`/`OK` assertion below, and the
+    // first version of this file got that one wrong: it kept
+    // `/\bSubmit\b|\bOK\b/` while dropping the boundaries above. GAM-387's
+    // checker measured the consequence -- with `"OK, head back to your
+    // dashboard..."` planted in the shipped copy, `textContent` reads
+    // "...ran into a problemOK, head back..." with no word boundary between
+    // "m" and "O", so the assertion did not fire and this test stayed GREEN on
+    // copy it exists to reject. Both assertions are boundary-free for one
+    // reason, so neither can drift back.
     expect(container.textContent).not.toMatch(/sorry|oops/i);
-    expect(container.textContent).not.toMatch(/\bSubmit\b|\bOK\b/);
+    expect(container.textContent).not.toMatch(/Submit|OK/);
     // Names a real, keyboard-reachable action: a link back to the dashboard.
     expect(container.querySelector('a[href="/"]')?.textContent).toContain('Go to your dashboard');
   });
