@@ -10,25 +10,49 @@ Companion to `2026-08-18-owner-session-record.md`, which covers Phase 0.
 
 ## 1. State right now
 
-**Three product rows are in flight**, promoted by the owner and dispatched:
+**All three product rows are merged and `Done`.** They were promoted by the
+owner, dispatched together, and closed within ninety minutes:
 
-| Row         | What                                                     | Tier                          | Parallelism instruction posted                   |
-| ----------- | -------------------------------------------------------- | ----------------------------- | ------------------------------------------------ |
-| **GAM-387** | app has no error boundary — any deploy blanks the screen | `unreviewed`, judged STANDARD | yes — told it may work serially; least separable |
-| **GAM-377** | outreach dialog saves inverted sessions → negative hours | HEAVY                         | yes — parallel investigation, serial edit        |
-| **GAM-356** | `participation_pct` mistyped, renders `null%`            | `unreviewed`                  | yes — cleanest split of the three                |
+| Row         | What                                                     | Tier judged | PR   | Outcome                        |
+| ----------- | -------------------------------------------------------- | ----------- | ---- | ------------------------------ |
+| **GAM-387** | app has no error boundary — any deploy blanks the screen | **HEAVY**   | #206 | merged 00:37 — stranded first |
+| **GAM-377** | outreach dialog saves inverted sessions → negative hours | HEAVY       | #207 | merged 00:37 — stranded first |
+| **GAM-356** | `participation_pct` mistyped, renders `null%`            | STANDARD    | #205 | merged 00:10 — self-published |
 
 Their file surfaces were verified disjoint before promotion (the manual version
-of plan §5.9 admission control). **GAM-378 is deliberately queued behind
-GAM-377** — both edit `OutreachEventDialog.tsx`, and GAM-378 also collides with
-GAM-363/364 on `OutreachDetail.tsx`.
+of plan §5.9 admission control), and that held: three branches, no conflicts,
+three clean merges. **GAM-378 remains deliberately queued** — it edits
+`OutreachEventDialog.tsx`, which GAM-377 has now changed, and it also collides
+with GAM-363/364 on `OutreachDetail.tsx`.
 
-**PR #203 (GAM-403) is open and awaiting merge.** Merging it alone changes no
-runtime behaviour — half the work is behind the workflow credential wall and
-sits as an applyable patch at `docs/swarm/active/GAM-403-dispatch-preflight.patch`
-(`git apply --check` exits 0). An owner-scoped session must apply it.
+**GAM-387 was judged HEAVY, not STANDARD** as the pre-dispatch note in this
+section originally recorded. Its packet took HEAVY under item 26's "if two tiers
+are arguable, take the heavier one", on item 19b's novel-pattern trigger. The
+gate then earned it — see §2.
 
-**GAM-404 is In Progress** (claimed 22:30) — terminal-failure notification.
+**GAM-387 and GAM-377 both stranded at PR creation and were published by hand**
+from their preserved `docs/swarm/active/GAM-<n>-pr-body.md` artifacts, verbatim.
+The preservation convention worked exactly as designed: no work was
+reconstructed, no gate was re-run, and the only edit to either body was the
+attribution footer. **This is the second time the artifact has been the thing
+that saved a run** (#159→#160, then GAM-403). Treat it as load-bearing.
+
+**PR #203 (GAM-403) is merged** (00:17, by the owner). The preflight patch is
+**still unapplied** — `docs/swarm/active/GAM-403-dispatch-preflight.patch`,
+`git apply --check` exits 0. Until an owner-scoped session applies it, the
+script on `main` is not wired to anything and the dispatch loop still has no
+credential preflight. **Merging #203 changed no runtime behaviour; this is the
+half that does.**
+
+**GAM-404 did not strand — it escalated and stopped deliberately** at 23:00,
+after ~30 minutes, when `checker-premise` returned REVISE for the second time
+and item 19a's two-round cap fired. Its branch
+(`claude/gam-404-terminal-failure-notify`) carries a packet and run log, no
+product code, and its own next-session instruction: fold round 2's required
+revision into packet revision 3, then dispatch `worker-implementer` directly —
+no third premise round needed if the owner or `boss-architect` accepts the fix.
+**Its Linear row still reads `In Progress`**, which is precisely the failure
+shape GAM-404 exists to fix, occurring on GAM-404 itself.
 
 ---
 
@@ -45,16 +69,39 @@ POST /pulls  ->  401 Bad credentials   at minute 74
 
 Across every run on 2026-08-18/19:
 
-| Run               | Duration | Opened its own PR? |
-| ----------------- | -------- | ------------------ |
-| GAM-412           | ~4 min   | yes                |
-| GAM-410 / GAM-411 | ~10 min  | yes                |
-| GAM-403           | 74 min   | **no**             |
-| GAM-407           | 92 min   | **no**             |
+| Run               | Duration   | Opened its own PR? |
+| ----------------- | ---------- | ------------------ |
+| GAM-412           | ~4 min     | yes                |
+| GAM-410 / GAM-411 | ~10 min    | yes                |
+| GAM-404           | ~30 min    | n/a — escalated    |
+| **GAM-356**       | **~51 min** | **yes**            |
+| **GAM-387**       | **~70 min** | **no**             |
+| **GAM-377**       | **~71 min** | **no**             |
+| GAM-403           | 74 min     | **no**             |
+| GAM-407           | 92 min     | **no**             |
 
 Everything under an hour succeeded; everything over stranded. **GAM-333's
 "8 of 13 stranded" is very likely this, not a permissions defect.** Treat it as
 the leading hypothesis when GAM-333 is next worked. Filed as **GAM-421**.
+
+**The 2026-08-19 batch confirmed this prospectively, which is stronger than the
+retrospective fit.** §7 of this record predicted before the fact that GAM-377
+(HEAVY) would strand if it exceeded an hour. All three rows were dispatched
+within 37 seconds of each other, ran the same loop against the same repo, and
+split exactly on duration:
+
+```
+GAM-356  In Progress 23:10:24  ->  PR opened  00:01:46   (~51 min)  PASS
+GAM-387  In Progress 23:10:02  ->  401        00:20:29   (~70 min)  STRAND
+GAM-377  In Progress 23:09:47  ->  401        00:20:38   (~71 min)  STRAND
+```
+
+Same credential path, same day, same minute of dispatch. The only variable that
+moved was elapsed time, and the boundary fell where GAM-403 measured it. **Tier
+predicts stranding only because tier predicts duration** — both HEAVY runs
+crossed the hour, the STANDARD run did not. Plan for this: either a HEAVY run
+publishes early and amends, or the credential is re-minted before the PR call.
+GAM-421 owns it.
 
 Two related corrections from the same run, worth not re-deriving:
 
@@ -72,7 +119,8 @@ Two related corrections from the same run, worth not re-deriving:
 | Row                       | Decision                                                                                                                                                                                                                                                                                                                                                           |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **GAM-419**               | Where the control plane lives. Recommendation: **A2 — dedicated Supabase project, on free, with a tripwire.** Measured effort: one project, one redeploy, six secrets, one webhook field, one config convention. **The ops schema does not move because it is not deployed anywhere** (zero migrations reference it). Today a redeploy; after Phase 2 a migration. |
-| **PR #203**               | merge, then apply the preflight patch from an owner session                                                                                                                                                                                                                                                                                                        |
+| **GAM-403 patch**         | #203 is merged. **The preflight patch is still unapplied** — `docs/swarm/active/GAM-403-dispatch-preflight.patch`, `git apply --check` exits 0. Needs an owner-scoped session; a dispatched run cannot write `.github/workflows/` (GAM-328)                                                                                                                          |
+| **GAM-404**               | escalated at item 19a's two-round cap, not stranded. Accept the round-2 revision and dispatch `worker-implementer` directly, or send it back for a third premise round. Its row still reads `In Progress` and should be corrected either way                                                                                                                        |
 | **GAM-415**               | CI runs SQL suites on `postgres:16` while `config.toml` says 17. Bumping moves nine green suites onto a new major — owner's call                                                                                                                                                                                                                                   |
 | **GAM-384 / GAM-394**     | **duplicates of each other** (both: `gate-run` documents 377 warnings, real is 379). Mark one Duplicate                                                                                                                                                                                                                                                            |
 | **GAM-62 / 74 / 75 / 80** | migration-era `gate/human` rows from 2026-08-09, untouched since. Done, obsolete, or real?                                                                                                                                                                                                                                                                         |
@@ -100,12 +148,21 @@ GAM-352 reported the blank screen as a check-in defect when it is app-wide.
 
 ## 5. Two open questions nobody has answered
 
-1. **Do dispatched runs read Linear comments, or only the issue body?** Still
-   unmeasured after a full day of relying on it. Mid-flight corrections were
-   posted to GAM-407, GAM-411 and all three in-flight rows. If a run acts on a
-   comment posted after its claim, that answers it. **If GAM-387/377/356 come
-   back having worked serially with no mention of the split, that is the
-   answer** — and it would mean every mid-flight correction has landed in a void.
+1. **Do dispatched runs read Linear comments, or only the issue body?**
+   **Evidence now points at "no", by this question's own stated test.** All
+   three rows carried a posted parallelism instruction. None of the three run
+   logs mentions it — no occurrence of "parallel", "concurrent" or
+   "simultaneous" in any of them — and GAM-356's log records its subagent
+   dispatches as `run_in_background: false`, i.e. serial by choice. That is the
+   outcome this entry named in advance as the answer.
+
+   **Not yet proof, and worth closing properly.** Absence from a run log is not
+   the same as absence from the run's context; a run may read a comment and
+   simply not act on it or log it. What would settle it is one cheap
+   experiment: post a comment containing an instruction whose execution is
+   *visible in the diff* — rename a variable, add a specific file — and see
+   whether it lands. **Until that runs, treat every mid-flight Linear comment as
+   likely unread**, which is the expensive half of this either way.
 2. **Does intra-run parallelism pay?** `Task,Agent` is granted at
    `claude-linear-dispatch.yml:426`, but the prompt never says "parallel",
    "concurrent" or "simultaneous" — zero matches. Capability without
@@ -114,6 +171,14 @@ GAM-352 reported the blank screen as a check-in defect when it is app-wide.
    subagents share one filesystem in a dispatched container — no worktree
    isolation, unlike the Codex path — so fan-out must be conditioned on disjoint
    files, not merely independent-sounding subtasks.
+
+   **Still unanswered, and the 2026-08-19 batch did not test it.** All three
+   runs dispatched their subagents serially, so there is no intra-run
+   parallelism to price. What the batch *does* price is **inter-run**
+   parallelism, and that paid: three rows dispatched at once, disjoint file
+   surfaces, three clean merges inside ninety minutes with no conflict and no
+   admission-control failure. If parallelism is worth buying, the measured win
+   so far is at the row level, not inside a run.
 
 ---
 
@@ -134,25 +199,53 @@ GAM-352 reported the blank screen as a check-in defect when it is app-wide.
 - **Raised the control-plane hosting question four or five times in conversation
   without ever filing it.** The owner asked "is there a ticket for me to read?"
   and there was not. Now GAM-419. Chat is not the record.
+- **Recorded GAM-387's tier wrong in §1** — written as "`unreviewed`, judged
+  STANDARD" when its packet had taken HEAVY. Small on its face, and it made §7's
+  strand warning wrong in a way that mattered: §7 named only GAM-377 as the
+  strand risk, on the grounds that it was the HEAVY one. Both HEAVY rows
+  stranded. The tier was written from the pre-dispatch conversation rather than
+  read back from the packet the run had already committed. **Read the artifact,
+  not the memory of deciding it.**
 
 ---
 
 ## 7. Suggested next actions
 
-1. **Watch GAM-387 / GAM-377 / GAM-356.** Publish any stranded PR verbatim from
-   its preserved `docs/swarm/active/GAM-<n>-pr-body.md` — check the branch name
-   matches the declared row first (the rule-3 trap that forced #196 → #197).
-   Expect GAM-377 (HEAVY) to strand if it exceeds an hour.
-2. **Merge PR #203 and apply the preflight patch.**
-3. **Answer GAM-419.**
-4. **Do not start new infrastructure work.** Phase 0 is closed, the spike is
+Item 1 of the original list is **done** — all three rows merged, the two that
+stranded published from their preserved bodies. What remains:
+
+1. **Apply the GAM-403 preflight patch.** #203 is merged; this is the half that
+   changes runtime behaviour, and it needs an owner-scoped session.
+2. **Answer GAM-419.**
+3. **Decide GAM-404** — accept the round-2 revision and dispatch a worker, or
+   send it back. Fix its `In Progress` row either way.
+4. **Run GAM-377's e2e spec.** `tests/e2e-personas/outreach-lifecycle.spec.ts`
+   was edited by reasoning, not execution — `11:59 PM` → `11:58 PM` on Start —
+   and merged that way. **The six gates do not run Playwright and no CI job
+   does**, so nothing that has run so far is evidence the spec survives. This
+   is the one merged change with no verification behind it.
+5. **Do not start new infrastructure work.** Phase 0 is closed, the spike is
    answered, the foundation is on `main`. The measured problem is that the
    process outnumbers the product 2:1 on the board. The next sessions should
-   spend the infrastructure rather than extend it.
+   spend the infrastructure rather than extend it. **The 2026-08-19 batch is
+   what spending it looks like** — three product rows promoted, dispatched and
+   merged in one evening, using the admission control, the tier rules, the
+   premise gate and the body-preservation convention exactly as built. Nothing
+   new was needed.
+
+**New rows this batch left behind**, all `Backlog` / `unreviewed`: **GAM-422**
+(a throw in the app chrome still blanks the screen — `KpiStrip` runs a Supabase
+loader on every chrome-bearing route, so it is live), **GAM-423** (editing one
+outreach time field wipes the other and silently drops that day),
+**GAM-421** (the token-expiry clock), **GAM-420** (the entrypoint-guard defect
+in five sibling `scripts/*.mjs`). **GAM-300** now carries GAM-356's measured
+evidence and a green blocking test. **GAM-352 was re-scoped, not closed** — the
+`Ignore GAM-352` line in #206 was deliberate; its unvalidated cast at
+`CheckinResult.tsx:343` is untouched.
 
 ---
 
-## 8. What merged on 2026-08-19
+## 8. What merged on 2026-08-19 / 08-20
 
 | PR   | Row     | What                                                                      |
 | ---- | ------- | ------------------------------------------------------------------------- |
@@ -160,6 +253,13 @@ GAM-352 reported the blank screen as a check-in defect when it is app-wide.
 | #200 | GAM-411 | salvage rows get their own branch name                                    |
 | #199 | GAM-412 | plan §11 entry 6 — control plane scoped to one application                |
 | #202 | GAM-418 | spike report amended with GAM-414's measured role attributes              |
+| #203 | GAM-403 | dispatch credential preflight — script only; **patch still unapplied**    |
+| #205 | GAM-356 | `participation_pct` widened to `number \| null`; renders an em dash        |
+| #206 | GAM-387 | app-wide route error boundary, keyed on `pathname + search`               |
+| #207 | GAM-377 | outreach session end guarded against an earlier/equal start               |
 
 GAM-414 was closed by the owner — correct, since `gate/human` means no machine
 may close it.
+
+**Three product rows in one evening, against 45 process rows on the board.**
+That ratio is what §7.5 is about.
