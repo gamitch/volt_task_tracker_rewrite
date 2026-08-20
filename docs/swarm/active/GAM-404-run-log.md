@@ -316,3 +316,18 @@ that signature unmistakable.
 - **DISPATCHING `worker-implementer` against packet revision 3,
   `run_in_background: false`, orchestrator is blocking on it now.** *If this
   line is the last one in this file, the run died holding this subagent.*
+- **VERDICT RECEIVED: `worker-implementer` returned.** Subagent returned;
+  nothing left in flight. Committed as `cb69f96` — three new files
+  (`scripts/linear-terminal-failure-notify.mjs`,
+  `scripts/linear-terminal-failure-notify.test.mjs`,
+  `docs/swarm/active/GAM-404-workflow-terminal-failure-notify.patch`), no
+  other path touched. Self-reported: delivery mechanism executed per packet
+  §2 (patch exported outside the repo, `git reset --hard HEAD~1`, only the
+  patch file committed); named criterion-5 mutation reddened exactly 2 tests
+  and was restored; full gates green (`typecheck`, `build`, `format:check`,
+  `lint` at the pre-existing 380-warning baseline, full `vitest` 101
+  files/2578 tests, scoped `scripts/` 15 files/352 tests = the 14/340
+  post-merge baseline plus exactly this worker's own 1 file/12 tests); no
+  dispute filed. Self-report only — independently verifying next before
+  accepting (worker cannot self-certify; item 26 STANDARD requires the
+  orchestrator replay the mutation directly).
