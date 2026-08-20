@@ -11,7 +11,7 @@ import {
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it, vi } from 'vitest';
 import { SupabaseNotConfiguredError } from './client.ts';
-import { invokeEdgeFunction } from './functions.ts';
+import { FUNCTION_NOT_DEPLOYED_CODE, invokeEdgeFunction } from './functions.ts';
 import { isSupabaseLoaderError } from './loader.ts';
 
 const ACTIVE_SESSION = { access_token: 'fake-token' };
@@ -32,9 +32,16 @@ function makeFakeClient(overrides: {
   } as unknown as SupabaseClient;
 }
 
-/** Minimal fake `Response`-shaped object satisfying `FunctionsHttpError.context.json()`. */
-function fakeJsonResponse(body: unknown): { json: () => Promise<unknown> } {
-  return { json: () => Promise.resolve(body) };
+/** Minimal fake `Response`-shaped object satisfying `FunctionsHttpError.context.json()`.
+ * `status` is optional -- most existing tests below don't need it (their
+ * fallback branch is reached regardless of status), but the GAM-388 404
+ * tests do, since `FunctionsHttpError.context` is `Response`-shaped at
+ * runtime and carries a real `status`. */
+function fakeJsonResponse(
+  body: unknown,
+  status?: number,
+): { json: () => Promise<unknown>; status?: number } {
+  return { json: () => Promise.resolve(body), status };
 }
 
 describe('invokeEdgeFunction (T086 Edge Function calling seam)', () => {
@@ -95,6 +102,66 @@ describe('invokeEdgeFunction (T086 Edge Function calling seam)', () => {
     const client = makeFakeClient({ invoke });
 
     await expect(invokeEdgeFunction('send-invite', {}, () => client)).rejects.toMatchObject({
+      code: 'UNKNOWN',
+      message: expect.any(String),
+      cause: httpError,
+    });
+  });
+
+  // GAM-388 acceptance criterion 1: a flat, unparsable 404 body -- the shape
+  // the Supabase gateway itself returns for a function that does not exist
+  // on the project -- is distinguished from the generic UNKNOWN fallback.
+  it('rejects with code FUNCTION_NOT_DEPLOYED when a FunctionsHttpError is a 404 with a flat, unparsable gateway body', async () => {
+    const httpError = new FunctionsHttpError(
+      fakeJsonResponse({ code: 'NOT_FOUND', message: 'Requested function was not found' }, 404),
+    );
+    const invoke = vi.fn().mockResolvedValue({ data: null, error: httpError });
+    const client = makeFakeClient({ invoke });
+
+    await expect(invokeEdgeFunction('checkin-token', {}, () => client)).rejects.toMatchObject({
+      code: FUNCTION_NOT_DEPLOYED_CODE,
+      message: expect.any(String),
+      cause: httpError,
+    });
+  });
+
+  // GAM-388 acceptance criterion 2 (the trap): `checkin-token/index.ts:424`
+  // itself returns a 404 for SESSION_NOT_FOUND -- but that body DOES parse
+  // into the deployed functions' `{ error: { code, message } }` shape, so it
+  // must take the `if (parsed)` branch above, never the new 404 narrowing.
+  // A change that passes criterion 1 and fails this one is worse than no
+  // change (packet's own words).
+  it("still rejects with code SESSION_NOT_FOUND (not FUNCTION_NOT_DEPLOYED) for a 404 whose body IS the deployed function's own parseable error shape", async () => {
+    const httpError = new FunctionsHttpError(
+      fakeJsonResponse(
+        {
+          error: {
+            code: 'SESSION_NOT_FOUND',
+            message: "That session couldn't be found. Refresh and try again.",
+          },
+        },
+        404,
+      ),
+    );
+    const invoke = vi.fn().mockResolvedValue({ data: null, error: httpError });
+    const client = makeFakeClient({ invoke });
+
+    await expect(invokeEdgeFunction('checkin-token', {}, () => client)).rejects.toMatchObject({
+      code: 'SESSION_NOT_FOUND',
+      message: "That session couldn't be found. Refresh and try again.",
+      cause: httpError,
+    });
+  });
+
+  // GAM-388 acceptance criterion 3: an unparsable NON-404 status (e.g. 500)
+  // still yields the generic UNKNOWN fallback, untouched by the new 404
+  // narrowing.
+  it('still rejects with code UNKNOWN for an unparsable, non-404 FunctionsHttpError body (e.g. a 500)', async () => {
+    const httpError = new FunctionsHttpError(fakeJsonResponse({ not: 'the expected shape' }, 500));
+    const invoke = vi.fn().mockResolvedValue({ data: null, error: httpError });
+    const client = makeFakeClient({ invoke });
+
+    await expect(invokeEdgeFunction('checkin-token', {}, () => client)).rejects.toMatchObject({
       code: 'UNKNOWN',
       message: expect.any(String),
       cause: httpError,

@@ -54,6 +54,11 @@ import {
   makeLoadLiveConsoleData,
 } from '../../lib/supabase/loaders/kiosk';
 import { routePaths } from '../../app/router';
+// GAM-388: imported (not hard-coded) so a rename of the constant cannot
+// leave both sides of the acceptance-criterion-4 test silently green -- deep
+// import per the packet's own worker notes, since `src/lib/supabase/index.ts`
+// (the barrel) is Forbidden in this packet.
+import { FUNCTION_NOT_DEPLOYED_CODE } from '../../lib/supabase/functions';
 
 // ---------------------------------------------------------------------------
 // Render harness -- mirrors `LiveConsole.test.tsx`'s `MemoryRouter`/`Routes`/
@@ -189,6 +194,38 @@ describe('KioskPage (T103 real wiring, DES-12 states)', () => {
     await flushMicrotasks();
 
     expect(container.textContent).toContain('Live count not available yet');
+  });
+
+  // GAM-388 acceptance criterion 4: a missing dependency (the checkin-token
+  // Edge Function itself never having been deployed) is distinguishable from
+  // a genuinely empty session on the kiosk display.
+  it('renders the dependency-missing Banner when loadDisplayToken rejects with FUNCTION_NOT_DEPLOYED_CODE', async () => {
+    const rejectingLoader: KioskDisplayTokenLoader = vi.fn().mockRejectedValue({
+      code: FUNCTION_NOT_DEPLOYED_CODE,
+      message: "This feature isn't available yet. It needs to be turned on for this site.",
+      cause: null,
+    });
+    renderKiosk({ loadDisplayToken: rejectingLoader });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('Check-in codes are unavailable');
+  });
+
+  // GAM-388 acceptance criterion 5: the genuinely-empty case (a `null`
+  // resolve, not a rejection) is unregressed -- no dependency-missing Banner
+  // appears for it. The pre-existing assertions immediately below (from the
+  // "renders the DES-12 Empty state" test above) must still pass unmodified.
+  it('does not render the dependency-missing Banner for the genuinely-empty (null-resolving) case', async () => {
+    renderKiosk({
+      loadDisplayToken: notWiredLoadKioskDisplayTokenStub,
+      loadTally: notWiredLoadKioskTally,
+      loadSessionTitle: notWiredLoadKioskSessionTitle,
+    });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('QR not available yet.');
+    expect(container.textContent).toContain('------');
+    expect(container.textContent).not.toContain('Check-in codes are unavailable');
   });
 
   it('never renders the two stale "fixture data"/"not wired" disclosure banners (T103 removed them)', async () => {
