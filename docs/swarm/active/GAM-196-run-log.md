@@ -96,3 +96,29 @@ worker → `checker-reviewer`. Two-round gate cap (19a), three-attempt worker ca
     zero test edits.
   - Divergence (4) dissolved: **UPHELD** (all four call sites traced).
   Verdict recorded here per item 19. Gate report to follow as an artifact.
+- `2026-08-20` **NO ROUND 2, and the reason is not the clock.** A second gate
+  round is for a packet whose *wording* is wrong (item 19a). This packet's
+  *premise* is wrong: the slice it proposed is unreachable, and the slice the
+  row proposed as separable is already implemented. A rewrite cannot manufacture
+  work that does not exist.
+- `2026-08-20` **FOLLOW-UP FILED (item 20): GAM-428** — *Planned volunteer hours
+  count competitions that can never become confirmed hours*
+  (`StudentHome.tsx:872`, `HoursTab.tsx:481`, no `type` test; reachable via the
+  admin Switch at `OutreachEventDialog.tsx:1432-1437`). Filed to `Backlog` with
+  `unreviewed` + `provenance/premise-gate`, per GAM-382. Written through the
+  `linear-task-writing` skill (item 30); every line number re-opened first.
+- `2026-08-20` **GAM-196 RELEASED to `Todo` with `gate/human`.** Read back:
+  `state = Todo`, `labels = [tier/heavy, gate/human]`, original description
+  preserved verbatim in a `<details>` block (item 30d, verified by string
+  containment, not by eye). `gate/human` is what stops the `Todo` move from
+  re-dispatching another machine into the same wall — `linear-assert-released.mjs`
+  treats `Todo` as a PASS calling it "a correct refusal to proceed", and its own
+  header (`:46-50`) names the self-re-dispatch incentive this label closes.
+- `2026-08-20` **PR #210 finalized and CLOSED UNMERGED.** Four Markdown files,
+  zero source changes. Merging would have driven GAM-196 to `Done` via the
+  branch-name link and the `PR merge → Done` automation (item 28f: omitting a
+  magic word protects nothing), and GAM-196 is not done. The branch stays pushed
+  so the packet, the gate report and this log survive; both Linear rows link to it.
+- `2026-08-20` **RUN COMPLETE.** No source changed, by decision and not by
+  timeout. No subagent was ever left in flight: one `checker-premise` dispatched
+  with `run_in_background: false`, waited on, and its verdict recorded above.
