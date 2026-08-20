@@ -50,3 +50,11 @@ worker → `checker-reviewer`. Two-round gate cap (19a), three-attempt worker ca
   `labels = [tier/heavy]`. Read-back confirms the claim is held, not hoped for.
 - `2026-08-20` Branch `claude/gam-196-confirmed-hours-divergence` created off
   `main` @ `b9396c9`. Run log is the first file write on it.
+- `2026-08-20 02:59Z` **Credential deadline read, not guessed** (AGENTS.md wall 3):
+  `ghs_` token `iat 2026-08-20T02:57:39Z` / `exp 2026-08-20T03:57:39Z` — 58 min
+  of PR credential at the time of reading.
+- `2026-08-20` **DRAFT PR OPENED EARLY:** [#210](https://github.com/gamitch/volt_task_tracker_rewrite/pull/210),
+  at roughly minute 4, carrying only the run log and the PR-body artifact.
+  Body artifact `docs/swarm/active/GAM-196-pr-body.md` written and validated
+  (`check.mjs` → `OK declaration closes GAM-196`) BEFORE the API call, per the
+  `pr-body` skill.
