@@ -341,3 +341,28 @@ a stale header is what the next run has to disprove.
   label is now gone and the row was re-dispatched. **Who removed it, and does its
   removal answer the (a)/(b) product question the row exists to ask?** Removing a
   gate is not the same act as making a decision. Measuring this is the next step.
+- `2026-08-20T11:23Z` **PREMISE MEASURED — it now HOLDS, and the reason is an
+  owner act, not a label edit.** Linear issue history and comments read live:
+
+  | UTC | Actor | Event |
+  | -- | -- | -- |
+  | `11:16:18.471Z` | **George (human)** | comment: *"We should use option A… 1 set of hours for intent to attend (RSVP) and 2nd is the actual attendance hours `v_student_hours`. is seems that way now, but if it's not that is how it should be."* — with a screenshot attached |
+  | `11:16:33.919Z` | George | `-label human` (i.e. `gate/human` removed) |
+  | `11:17:58.301Z` | **George (human)** | comment: *"When executing, try to dispatch as many agents in parallel to perform the work quickly, but with high quality"* |
+  | `11:18:00.686Z` | (this run, via the owner's API key) | `Todo → In Progress` |
+
+  **Caveat recorded rather than glossed:** every API write in this workspace is
+  attributed to *George Mitchom*, because the scripts hold the owner's personal
+  key — so "actor" alone cannot distinguish a human act from an agent's. The two
+  `11:16`/`11:17` rows are read as human on independent evidence: they are prose
+  comments, one carries an uploaded screenshot, and no agent in this run or the
+  previous two wrote them.
+
+  **So the (a)/(b) question the row exists to ask is answered: (a).** That is the
+  authorization two previous runs correctly refused to invent. `gate/human` being
+  gone is a consequence of the decision, not the decision itself, and this run
+  does not rest on the label alone.
+- `2026-08-20T11:24Z` **DRAFT PR #212 OPENED** at minute ~7 of the run, ~53 min of
+  PR credential remaining (AGENTS.md wall 3: 21 of 21 in-run PRs were opened at or
+  before minute 53, none after minute 60). Run 2's PR body preserved as
+  `GAM-196-pr-body-run2-closed.md`; #210 stays closed and unmerged.
