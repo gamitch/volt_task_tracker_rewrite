@@ -75,3 +75,21 @@ Decoded the live `ghs_` App token at minute 1 rather than guessing:
   (item 19d).
 - 03:25Z — **DISPATCHING `checker-premise` (opus, blocking, item 19).** If this
   line is the last one in this file, the run died holding this subagent.
+- 03:33Z — **`checker-premise` VERDICT: REVISE** (round 1 of 2, item 19a).
+  Returned, waited for, and read in full. 1 MAJOR, 3 MINOR, 2 NIT, no BLOCKER.
+  It ran rather than read: built a PostgreSQL 16.14 scratch cluster by hand
+  (the skill's `start.sh` needs root and dies on this runner with
+  `chown: Operation not permitted`), loaded all 24 applicable migrations twice
+  — with and without simulated Supabase default privileges — wrote and applied
+  my proposed migration, and replayed the repo's own `t205`/`t700` SQL suites.
+  - **Settled least-confident 2 and 3 in my favour:** all five views measure
+    `is_updatable = NO`; only `v_leaderboard_students` is `YES`. A granted
+    DELETE on `v_student_hours` raises `55000`. So omitting a
+    `revoke ... from authenticated` line protects nothing and is correct.
+  - **Settled least-confident 5 in my favour, closing the gap I declared:**
+    `send-reminders/index.ts:512` is the only Edge-Function read of the five
+    and it uses the service-role `adminClient` (`:685`); the anon-key clients
+    in `checkin`/`checkin-token`/`send-invite` call only `auth.getUser()`.
+    Nothing breaks.
+  - **Killed least-confident 1, which was the packet's load-bearing claim.**
+    Detail in the next entry — this is the finding the gate existed for.
