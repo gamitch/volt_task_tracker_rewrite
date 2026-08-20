@@ -209,3 +209,12 @@ statement of where it died, not as a summary.
   `checker-reviewer`, because after the gate there is no production code in
   scope. What remains — the run log, the PR body, `AGENTS.md` — are records the
   orchestrator owns and which the constitution forbids a worker to edit.
+
+- **01:18Z — `AGENTS.md` wall 3 written and pushed.** The gate's highest-value
+  recommendation: a standing order in a file a dispatched run *can* push
+  delivers option 3's benefit today, whether or not the owner ever applies a
+  workflow patch. Section retitled "Three walls"; wall 3 carries the 3600 s
+  measurement, the read-your-own-`exp` instruction, the 21/21-before-minute-53
+  evidence, the open-early-as-draft order, and the two-credential table
+  including the extraheader gotcha that cost me a wrong claim earlier in this
+  run.

@@ -72,10 +72,11 @@ Constitution **item 28** is binding and its order matters:
    (constitution item 28f quotes the full word list). Add the trailer
    `Linear-Issue: GAM-nnn (Tnnn)` for the git-side record.
 
-## Two walls a dispatched run hits, and what to do about each
+## Three walls a dispatched run hits, and what to do about each
 
-Recorded 2026-08-11 from `GAM-328`, both measured rather than assumed. Neither
-is a bug to route around: each is a boundary doing real work.
+Walls 1 and 2 recorded 2026-08-11 from `GAM-328`; wall 3 added 2026-08-20 from
+`GAM-421`. All measured rather than assumed. None is a bug to route around:
+each is a boundary doing real work.
 
 **1. You cannot push `.github/workflows/**`.** Both credentials a dispatched run
 holds are refused by GitHub — the PAT for want of the `workflow` scope, the
@@ -102,6 +103,52 @@ lost. **Five runs have died this way**, none near `--max-turns` or
 passing that parameter. The `assert-released` job now fails any run that leaves
 its issue in `In Progress`, so this failure is loud rather than silent — but the
 job detects it, it does not prevent it. You do.
+
+**3. The credential that opens your PR dies 60 minutes in. Open the PR EARLY —
+as a draft, before the work is finished — and push into it.**
+
+The token `claude-code-action` mints at job start is a JWT that **states its own
+expiry**, and the lifetime is exactly 3600 seconds. Measured on `GAM-421`'s run
+by decoding the live credential: `iat 2026-08-20T00:46:26Z`,
+`exp 2026-08-20T01:46:26Z`. The job is bounded at `timeout-minutes: 180`, so a
+long run spends most of its life holding a dead PR credential — and the one
+thing it needs that credential for happens last.
+
+**Read your own deadline instead of guessing at it.** The credential is
+`ghs_<id>_<header>.<payload>.<sig>`; base64url-decode the payload and read `exp`.
+One command, at minute 1, and you know your budget.
+
+**The deciding variable is when you *call* `gh pr create`, not how long your run
+takes.** Measured across all 50 dispatch runs and every PR in this repository:
+of 21 PRs `claude[bot]` has ever opened inside a dispatch run, **21 were opened
+at or before minute 53 and none after minute 60** — using worst-case attribution
+across concurrent runs, which biases the search toward finding a late one. The
+only PR anywhere opened later (#162, minute 81.9) was opened by a human. Yet run
+#42 lasted 94 minutes and opened two PRs, and run #47 lasted 73 minutes and
+opened PR #205 at minute 53 before running another 20. **A long run is not
+doomed; a run that defers its PR past minute 60 is.** That is the whole reason
+this rule is cheap: you do not have to get faster, only earlier.
+
+So: as soon as the branch carries anything at all — the run log alone is enough
+— write `docs/swarm/active/GAM-nnn-pr-body.md` and open the PR **as a draft**,
+then keep pushing into it and finalize the body before clearing the draft flag.
+`GAM-421`'s own run opened PR #208 at minute 8 with ~56 minutes of credential to
+spare. This costs one extra API call and removes the failure entirely.
+
+**What still works after the hour, and what does not.** These are two different
+credentials and only one of them expires:
+
+| Operation | Credential | Survives minute 60 |
+| -- | -- | -- |
+| `git push` | the long-lived `github_pat_` in `http.https://github.com/.extraheader` | **yes** |
+| `gh pr create`, GitHub API via `GH_TOKEN` | the 60-minute `ghs_` App token | **no** |
+
+The extraheader **outranks** any credential in the `origin` URL's userinfo
+(`scripts/dispatch-preflight.mjs:31-41`), so pushes keep working even though the
+remote URL carries the expiring token. Do not conclude from a working `git push`
+at minute 90 that your PR credential is alive — and note the extraheader is not
+in `.git/config`, so `git config --local` will not show it; use
+`git config --get 'http.https://github.com/.extraheader'`.
 
 Labels carry what custom fields used to: `tier/*` (item 26 process tier),
 `area/w1`…`w10` (workflow surface), `gate/human` (no machine may close it),
