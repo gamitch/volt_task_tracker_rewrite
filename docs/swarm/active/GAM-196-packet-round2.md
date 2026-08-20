@@ -1,8 +1,10 @@
 # GAM-196 — HEAVY task packet (round 2, **revision B**, post-owner-decision)
 
 **Revision B applies the round-1 premise gate's required revisions.** The gate
-returned **REVISE (1 BLOCKER)**; its report is
-`docs/swarm/active/GAM-196-premise-gate-round2.md`. Every one of its ten required
+returned **REVISE (1 BLOCKER)**; its verdict and every finding are recorded in
+`docs/swarm/active/GAM-196-run-log.md` at `2026-08-20T11:44Z` (round 2 of the gate
+caught that revision A cited a report file that was never committed — corrected
+here rather than by inventing the file). Every one of its ten required
 revisions is answered below, at the point it applies, and the two it required to
 be *filed* are filed. Nothing was argued around.
 
@@ -175,14 +177,20 @@ milestone `HStack` at `:2183`.
 PRD `OUT-07` (`:321`) states outreach has **no check-in** in v1 — completion is
 coach-driven — so that clause named a mechanism this page does not have.
 
-**Exact block to insert, already prettier-clean at this indentation (gate revision
-7 measured the original block failing `npm run format:check`):**
+**Exact block to insert. Indentation is SIX spaces for the tag and eight for the
+body** — the new `<Text>` is a sibling of the `</HStack>` at `:2182` and the
+`<HStack>` at `:2183`, both of which sit at six spaces inside `<VStack gap={2}>`.
+Gate round 2 measured this: `.prettierrc` sets `printWidth: 100`, the first
+content line is 98 columns including indent, and `page` would take it to 103, so
+the break is forced exactly where it is written. **Revision A's block was indented
+two levels too deep and broke one word early, and claimed to be measured when it
+was not** — that claim is withdrawn.
 
 ```tsx
-        <Text type="supporting" color="secondary">
-          From outreach sign-ups, not attendance. Confirmed hours from attendance appear on the
-          home page and in reports.
-        </Text>
+      <Text type="supporting" color="secondary">
+        From outreach sign-ups, not attendance. Confirmed hours from attendance appear on the home
+        page and in reports.
+      </Text>
 ```
 
 `Text` is in scope (used at `:2151`). The second sentence was verified accurate

@@ -483,3 +483,31 @@ a stale header is what the next run has to disprove.
   re-audit, because the round-1 gate already executed the change end to end.
   **If this line is the last one in this file, the run died holding this
   subagent** — no verdict, and no worker was ever dispatched.
+- `2026-08-20T11:51Z` **PREMISE GATE ROUND 2 VERDICT: REVISE (1 MAJOR, 1 MINOR) —
+  and the BLOCKER is CLEARED.** Subagent returned; nothing left in flight.
+  On the load-bearing question it says plainly: *"No additional owner act is
+  required to dispatch."* It verified my §1a reading rather than accepting it —
+  the phrase *"protected source text"* appears **nowhere else** in `docs/swarm/`,
+  so it cannot be read as stricter than its own *"unless explicitly approved"*
+  escape; BEH-02's prescribed literal survives verbatim at `StudentHome.tsx:1647`
+  and `CoachHome.tsx:2050`, both untouched; and BEH-01's own toast literal was
+  never the shipped string at `:2007`, so the milestone edit raises no second
+  protected-text question. It also **corrected my citation of item 16** — item 16
+  is migration cutover / production email / domain go-live, not a general human
+  gate for product copy. Taken.
+  It confirmed revisions 2, 3, 4, 5, 6, 8, 9, 10 correct, including reading all 13
+  remaining red assertions and all 20 do-not-touch lines individually.
+  **The two remaining findings are mechanical and it supplied both fixes
+  verbatim:** my §3.2 code block was indented two levels too deep and broke one
+  word early (`.prettierrc` `printWidth: 100`; the sibling nodes at `:2182`/`:2183`
+  sit at six spaces), and my packet cited a round-1 report file that **was never
+  committed** — the run log holds that verdict, the file does not exist.
+- `2026-08-20T11:52Z` **BOTH APPLIED; NO THIRD GATE ROUND.** Item 19a caps the
+  gate at two rounds and says a third REVISE escalates to the owner rather than
+  looping. Round 2 cleared the BLOCKER, cleared eight of the ten revisions
+  outright, and left two corrections it had already written out for me. Applying a
+  correction an agent handed over verbatim is not a third round of gating, and
+  re-submitting to buy a third opinion on an indentation level is exactly the
+  net-negative loop 19a prices. **Recorded here so the call is visible and
+  correctable rather than silent.** The packet is DISPATCH-able; the worker goes
+  next.
