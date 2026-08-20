@@ -47,3 +47,23 @@ Decoded the live `ghs_` App token at minute 1 rather than guessing:
 - 03:07Z — starting my own repo-side verification of the issue's premise
   before writing the HEAVY packet (item 19c: verify your own citations, do not
   make an opus gate discover them).
+- 03:18Z — own verification done, four results, two of which correct the issue:
+  1. **The issue's one self-declared "Not verified" item is now measured, and
+     it goes against the issue's framing.** None of the five views exposes a
+     name. Every one is UUIDs and figures. The single view that *does* carry
+     `display_name` is `v_leaderboard_students` — the one already revoked.
+  2. `v_event_student_hours` is not a per-student view at all despite its
+     name: it is per-**event** (`event_id, season_id, title, starts_on,
+     ends_on, student_count, total_hours`). The issue lists it among views
+     leaking "22 team members'" figures; it leaks no student identity.
+  3. All five are aggregate or multi-table, so none is auto-updatable — the
+     `DELETE`-without-`SELECT` path that forced `revoke all` on the
+     leaderboard (`20260803000001:32-38`, measured `DELETE 2`) does **not**
+     exist here. `revoke all` is still the right form, but for consistency and
+     future-proofing, not because a live write path is open.
+  4. **No unauthenticated surface reads any of them.** `src/app/router.tsx`
+     :72-88 — only `/login` and `/accept-invite` are public, and PRD SEC-04
+     forbids public pages outright. Every reader (`loaders/dashboard.ts:363`,
+     `loaders/leaderboard.ts:147`, reports/home pages, weekly digest) sits
+     behind `RequireAuth`.
+- 03:19Z — next: write the HEAVY packet, then the item-19 premise gate.
