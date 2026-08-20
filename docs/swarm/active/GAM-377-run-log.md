@@ -263,3 +263,19 @@ not a run that merely ran out of things to say.
   from vitest and has no CI job, so nothing above is evidence that
   `outreach-lifecycle.spec.ts` survives the `11:58 PM` edit. Its first real run
   is the confirmation, and the PR body says so rather than implying coverage.
+- **Item 20 deferral FILED: [GAM-423](https://linear.app/gamitch/issue/GAM-423/editing-one-of-an-outreach-sessions-two-time-fields-wipes-the-other)**
+  — the default-wipe, written through the `linear-task-writing` skill per item
+  30, filed to `Todo` with `heavy` / `w2` / `Bug`. A code comment would not have
+  been triage; item 20 exists because exactly that substitution shipped fixture
+  teams and an inert theme toggle.
+  Substantively it is the **more likely** defect of the two: GAM-377 needs a
+  coach to type an inverted pair (a typo), whereas GAM-423 fires on changing a
+  start time — an ordinary edit — and the day then vanishes from the event with
+  no message beyond the button re-reading `Create event — 0 sessions`. Filed
+  with the coupling stated plainly: fixing GAM-423 changes which interaction
+  orders reach GAM-377's guard and will likely require adjusting the tests
+  landing here, so the two must be sequenced rather than done blind.
+  Line numbers in the filing were re-derived against **`main` at `debe8e4`**,
+  not against this branch, and the filing says GAM-377 inserts ~84 lines above
+  `:1203` so a cold reader knows to re-derive after this merges.
+  Packet §3-bis updated to name GAM-423.

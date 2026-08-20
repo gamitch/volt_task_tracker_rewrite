@@ -145,9 +145,9 @@ drops out of `sessionsPayload`, and the button reads
   guards nothing.
 
 **Do not fix the default-wipe.** It is a genuine defect on the same write path —
-a coach who adjusts one time silently loses that day — and it is being filed as
-its own row under item 20. Fixing it here would widen this task and entangle two
-independent changes.
+a coach who adjusts one time silently loses that day — and it is filed as its own
+row under item 20: **GAM-423**. Fixing it here would widen this task and entangle
+two independent changes.
 
 ## 4. What to change
 
