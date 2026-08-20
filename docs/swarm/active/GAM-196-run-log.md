@@ -309,3 +309,35 @@ contradicts a record already committed to this branch.
   with `run_in_background: false`, waited on, returned, verdict recorded above,
   and its BLOCKER independently re-verified by this run before being accepted.
   **Nothing was left in flight at any point** (AGENTS.md wall 2).
+
+---
+
+## Third dispatch run — 2026-08-20T11:18Z
+
+**Header correction (again):** line 5's note above says GAM-196 carries
+`gate/human`. That was true when the second run wrote it at `03:36Z`. It is
+**false now.** Measured at `11:18Z` against the live tracker, GAM-196 carries
+exactly one label — `tier/heavy` (`parent: tier`) — and `gate/human` is absent.
+Corrected here rather than edited away, for the same reason the second run gave:
+a stale header is what the next run has to disprove.
+
+- `2026-08-20T11:18:01Z` **CLAIMED.** `Todo → In Progress`, write returned
+  `success: true`, read back `state = In Progress` (item 28c). Tier was already
+  `tier/heavy`, so item 28d's tiering-before-claim obligation did not apply —
+  the second run's HEAVY judgment above stands unchanged and is not re-litigated.
+  Route check before the move: `Todo` ✓, `tier/*` present ✓, `gate/human`
+  **absent** ✓, no `executor/*` label → item 28b migration-only default, legacy
+  Claude-only ✓.
+- `2026-08-20T11:18Z` **Credential deadline read, not guessed** (AGENTS.md wall 3).
+  `GH_TOKEN` payload decodes to `iat 2026-08-20T11:17:01Z`,
+  `exp 2026-08-20T12:17:01Z`. The PR credential dies at **12:17:01Z**; `git push`
+  uses the long-lived extraheader and is unaffected.
+- `2026-08-20T11:19Z` **Branch reused, not recreated.** Continuing on
+  `claude/gam-196-confirmed-hours-divergence` (10 commits ahead of `main`) so the
+  two previous runs' packet, premise-gate report, refusal record and GAM-429 body
+  survive in one place.
+- `2026-08-20T11:19Z` **Open question this run must settle before anything else:**
+  the second run refused under item 28b because `gate/human` was present; that
+  label is now gone and the row was re-dispatched. **Who removed it, and does its
+  removal answer the (a)/(b) product question the row exists to ask?** Removing a
+  gate is not the same act as making a decision. Measuring this is the next step.
