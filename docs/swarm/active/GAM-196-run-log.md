@@ -122,3 +122,8 @@ worker → `checker-reviewer`. Two-round gate cap (19a), three-attempt worker ca
 - `2026-08-20` **RUN COMPLETE.** No source changed, by decision and not by
   timeout. No subagent was ever left in flight: one `checker-premise` dispatched
   with `run_in_background: false`, waited on, and its verdict recorded above.
+- `2026-08-20` **Refusal recorded on the issue itself**, not only in this file:
+  comment posted to GAM-196 with the measurement, the two refutations, the
+  recommendation (route (a)), and the disclosed limits. Final read-back —
+  GAM-196: `Todo`, `[tier/heavy, gate/human]`, 1 comment.
+  GAM-428: `Backlog`, `[unreviewed, provenance/premise-gate]`.
