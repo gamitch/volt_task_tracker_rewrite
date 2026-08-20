@@ -774,10 +774,11 @@ export interface StudentMeetingHistoryRow {
 
 /**
  * Verbatim camelCase rename of `v_student_participation`'s seven real
- * columns (module doc #3). `null` means the student has no row in the view
- * at all (the real "expected_ct = 0" absence case, per the same migration's
- * implementation note already cited by `ParticipationTab.tsx`), rendered as
- * "-" -- never a fabricated 0%.
+ * columns (module doc #3). A `StudentParticipationMetric | null` value of
+ * outer `null` means the student has no row in the view at all (no explicit
+ * attendance mark this season). A present row's own `participationPct: null`
+ * means every counted mark was `excused` (MET-01, `types.ts`'s
+ * `VStudentParticipationRow` doc) -- never a fabricated 0% either way.
  */
 export interface StudentParticipationMetric {
   studentId: string;
@@ -787,7 +788,7 @@ export interface StudentParticipationMetric {
   presentCt: number;
   lateCt: number;
   excusedCt: number;
-  participationPct: number;
+  participationPct: number | null;
 }
 
 export interface StudentMeetingsData {

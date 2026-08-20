@@ -106,11 +106,41 @@
  * by `/meetings/live/:sessionId`, `/roster`, and `/reports` above, NOT the
  * `/settings` bug-fix precedent (that one applies only because the real
  * `SettingsPage` has no internal role-gating at all).
+ *
+ * GAM-387 (this task): `AppRoutes` below now also wraps everything in
+ * `<RouteErrorBoundary>` (`./RouteErrorBoundary.tsx`, new). Per that file's
+ * own Allowed-Files scope, this file receives an import and a mount ONLY --
+ * no `useLocation()` call, no reset-key computation, no error-detection
+ * logic lives here; all of that lives inside `RouteErrorBoundary.tsx` itself
+ * (see that file's module doc for why, and for the measured mechanism
+ * behind it).
+ *
+ * Placement: `<RouteErrorBoundary>` wraps the existing `<Suspense>` boundary
+ * from the OUTSIDE (`<RouteErrorBoundary><Suspense>...<Routes>...
+ * </Suspense></RouteErrorBoundary>`), not the reverse. Both placements were
+ * measured (during this task's premise gate) to equally catch a `lazy()`
+ * chunk-load rejection surfacing through `Suspense` -- rejecting a lazy
+ * import re-throws synchronously on the next render attempt, and that throw
+ * propagates up to whichever error boundary is nearest, regardless of
+ * whether `Suspense` sits between it and `<Routes>` or not. Given that
+ * either placement is equally correct on that axis, OUTSIDE was chosen for
+ * two reasons: (1) it keeps `Suspense`'s own loading-fallback machinery
+ * (this file's `RouteLoadingFallback`, asserted by GAM-387's own AC5) fully
+ * self-contained beneath the boundary -- the boundary's job is "catch
+ * whatever goes wrong inside the normal render machinery", and `Suspense` is
+ * part of that normal machinery, not a peer of it; (2) it reads as the more
+ * obvious nesting to a future maintainer -- "the whole routed-content
+ * subtree, including its own loading state, is guarded" -- than interleaving
+ * the boundary between `Suspense` and `Routes`. Nothing about `RequireAuth`/
+ * `RequireRole` evaluation changes either way: both guards are still nested
+ * exactly where they were, per-route, unaffected by an error boundary sitting
+ * outside `Suspense` above them.
  */
 import { lazy, Suspense, type ReactNode } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { Spinner, VStack } from '@astryxdesign/core';
 import { RequireAuth, RequireRole } from './guards';
+import { RouteErrorBoundary } from './RouteErrorBoundary';
 
 // ---------------------------------------------------------------------------
 // Lazy page imports (T093) -- see module doc above for the export-shape
@@ -186,126 +216,128 @@ export const routePaths = {
  */
 export function AppRoutes(): ReactNode {
   return (
-    <Suspense fallback={<RouteLoadingFallback />}>
-      <Routes>
-        {/* Public routes -- these are the auth entry points themselves. */}
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/accept-invite" element={<AcceptInvitePage />} />
+    <RouteErrorBoundary>
+      <Suspense fallback={<RouteLoadingFallback />}>
+        <Routes>
+          {/* Public routes -- these are the auth entry points themselves. */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/accept-invite" element={<AcceptInvitePage />} />
 
-        {/* Protected + role-guarded: coach/admin only (PRD Section 7 + SEC-04). */}
-        <Route
-          path="/kiosk/:sessionId"
-          element={
-            <RequireAuth>
-              <RequireRole allowedRoles={['coach', 'admin']}>
-                <KioskPage />
-              </RequireRole>
-            </RequireAuth>
-          }
-        />
+          {/* Protected + role-guarded: coach/admin only (PRD Section 7 + SEC-04). */}
+          <Route
+            path="/kiosk/:sessionId"
+            element={
+              <RequireAuth>
+                <RequireRole allowedRoles={['coach', 'admin']}>
+                  <KioskPage />
+                </RequireRole>
+              </RequireAuth>
+            }
+          />
 
-        {/* Protected routes -- require authentication. */}
-        <Route
-          path="/"
-          element={
-            <RequireAuth>
-              <DashboardPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/meetings"
-          element={
-            <RequireAuth>
-              <MeetingsList />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/meetings/live/:sessionId"
-          element={
-            <RequireAuth>
-              <LiveConsolePage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/checkin"
-          element={
-            <RequireAuth>
-              <CheckinResult />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/outreach"
-          element={
-            <RequireAuth>
-              <OutreachList />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/outreach/:eventId"
-          element={
-            <RequireAuth>
-              <OutreachDetail />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/calendar"
-          element={
-            <RequireAuth>
-              <CalendarPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/roster"
-          element={
-            <RequireAuth>
-              <RosterShell />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/reports"
-          element={
-            <RequireAuth>
-              <ReportsShell />
-            </RequireAuth>
-          }
-        />
+          {/* Protected routes -- require authentication. */}
+          <Route
+            path="/"
+            element={
+              <RequireAuth>
+                <DashboardPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/meetings"
+            element={
+              <RequireAuth>
+                <MeetingsList />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/meetings/live/:sessionId"
+            element={
+              <RequireAuth>
+                <LiveConsolePage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/checkin"
+            element={
+              <RequireAuth>
+                <CheckinResult />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/outreach"
+            element={
+              <RequireAuth>
+                <OutreachList />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/outreach/:eventId"
+            element={
+              <RequireAuth>
+                <OutreachDetail />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/calendar"
+            element={
+              <RequireAuth>
+                <CalendarPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/roster"
+            element={
+              <RequireAuth>
+                <RosterShell />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/reports"
+            element={
+              <RequireAuth>
+                <ReportsShell />
+              </RequireAuth>
+            }
+          />
 
-        {/* Protected -- T074: `RequireRole(['admin'])` removed, see module doc. */}
-        <Route
-          path="/settings"
-          element={
-            <RequireAuth>
-              <SettingsPage />
-            </RequireAuth>
-          }
-        />
+          {/* Protected -- T074: `RequireRole(['admin'])` removed, see module doc. */}
+          <Route
+            path="/settings"
+            element={
+              <RequireAuth>
+                <SettingsPage />
+              </RequireAuth>
+            }
+          />
 
-        {/* Protected -- T108: `RequireAuth` only at this router level, no
-            external `RequireRole`. `SeasonSettings` (SET-04, admin-only)
-            already nests `guards.tsx`'s `RequireRole(['admin'])` internally
-            around every one of its own return branches (own module doc
-            #6), the same "self-gating page component" posture
-            `/meetings/live/:sessionId`, `/roster`, and `/reports` already
-            established above for `LiveConsolePage`/`RosterShell`/
-            `ReportsShell` -- adding a second, external `RequireRole` here
-            would double-gate for no benefit. */}
-        <Route
-          path="/settings/season"
-          element={
-            <RequireAuth>
-              <SeasonSettings />
-            </RequireAuth>
-          }
-        />
-      </Routes>
-    </Suspense>
+          {/* Protected -- T108: `RequireAuth` only at this router level, no
+              external `RequireRole`. `SeasonSettings` (SET-04, admin-only)
+              already nests `guards.tsx`'s `RequireRole(['admin'])` internally
+              around every one of its own return branches (own module doc
+              #6), the same "self-gating page component" posture
+              `/meetings/live/:sessionId`, `/roster`, and `/reports` already
+              established above for `LiveConsolePage`/`RosterShell`/
+              `ReportsShell` -- adding a second, external `RequireRole` here
+              would double-gate for no benefit. */}
+          <Route
+            path="/settings/season"
+            element={
+              <RequireAuth>
+                <SeasonSettings />
+              </RequireAuth>
+            }
+          />
+        </Routes>
+      </Suspense>
+    </RouteErrorBoundary>
   );
 }

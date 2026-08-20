@@ -1,0 +1,151 @@
+From 96dc26741efb57bd69ec3a34a6e03561360611c3 Mon Sep 17 00:00:00 2001
+From: "claude[bot]" <41898282+claude[bot]@users.noreply.github.com>
+Date: Wed, 19 Aug 2026 22:33:49 +0000
+Subject: [PATCH] GAM-403: preflight the dispatch credentials, and pin the
+ token expressions
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Adds a `Credential preflight` step between checkout and the Claude step,
+running `scripts/dispatch-preflight.mjs --stage=push`, and tells the agent
+to run `--stage=pr` itself as its first act — the PR-create credential is
+minted by the action and does not exist before it.
+
+Replaces both `secrets.CLAUDE_PR_TOKEN || github.token` expressions, which
+plan §5.3 forbids for changing behavior with secret availability. Line 126 is
+pinned. Line 137 is DELETED rather than pinned: measured 2026-08-19, the
+action overwrites `GH_TOKEN` with its own `claude[bot]` App token, and the
+PAT that line assigned is the one credential measured at 403 on PR creation.
+
+Linear-Issue: GAM-403
+---
+ .github/workflows/claude-linear-dispatch.yml | 98 +++++++++++++++++++-
+ 1 file changed, 96 insertions(+), 2 deletions(-)
+
+diff --git a/.github/workflows/claude-linear-dispatch.yml b/.github/workflows/claude-linear-dispatch.yml
+index 9da116f..24387d7 100644
+--- a/.github/workflows/claude-linear-dispatch.yml
++++ b/.github/workflows/claude-linear-dispatch.yml
+@@ -123,7 +123,62 @@ jobs:
+           # provenance, and `git log` is how this project records item 24
+           # trailers.
+           fetch-depth: 0
+-          token: ${{ secrets.CLAUDE_PR_TOKEN || github.token }}
++          # GAM-403: pinned, not `secrets.CLAUDE_PR_TOKEN || github.token`.
++          # A fallback whose behavior changes with secret availability is what
++          # the durable-execution plan §5.3 rejects outright: the run silently
++          # degrades to a different credential with a different measured
++          # success record, and nothing says so. Pinning is behavior-preserving
++          # today (the secret is set, so `X || Y` was already `X`) and turns a
++          # missing secret into a visible terminal failure instead.
++          token: ${{ secrets.CLAUDE_PR_TOKEN }}
++
++      # GAM-403. Verify the credential BEFORE the expensive agent starts.
++      #
++      # THE DEFECT THIS STEP CATCHES: a dead PUSH credential, which destroys
++      # the run-log durability contract before anything can report it. The
++      # prompt below makes the pushed run log "the only thing that survives if
++      # you are killed" — so if pushing is what is broken, the run produces no
++      # log, no branch and no artifact, and nothing else in the system says so.
++      # That is the shape run 31358757094 left behind: an hour of real work and
++      # no record of any of it.
++      #
++      # NOT the 8-of-13 stranding figure, which belongs to `--stage=pr` in the
++      # prompt below. Those thirteen runs are 8-of-13 stranded at PR time and
++      # 0-of-13 at push time; a premise gate rejected that figure as this
++      # step's justification, and it is named here only so nobody re-derives it
++      # as one.
++      #
++      # AND THE CHECKOUT DOES NOT CATCH IT. This repository is public, so a
++      # garbage token — or an empty one — still clones it: measured on
++      # 2026-08-19, `ls-remote` exits 0 and returns a real SHA for both. A
++      # broken `CLAUDE_PR_TOKEN` therefore sails through the step above and
++      # fails at the end, after the work, when the run tries to push its
++      # branch and its run log. That is the whole failure this step exists to
++      # move to minute 1.
++      #
++      # WHY BOTH TOKENS ARE MAPPED EXPLICITLY. Neither is present in a `run:`
++      # step otherwise: `secrets.*` requires an explicit mapping, and
++      # `GITHUB_TOKEN` is not a default environment variable — a check that
++      # read `process.env.GITHUB_TOKEN` here would compare against `undefined`
++      # and pass unconditionally.
++      #
++      # WHAT THIS STEP CANNOT DO. It cannot verify PR-create capability,
++      # because the credential that opens pull requests here is the
++      # `claude[bot]` App installation token minted by the action below, and
++      # it does not exist yet at this point in the job. The agent runs
++      # `--stage=pr` itself as its first act; see the prompt. The two
++      # credentials are near complementary — measured, the PAT is 403 on
++      # PR-create and the App token is authorized — so neither stage
++      # substitutes for the other.
++      #
++      # No `npm ci`: the script is stdlib-only for the same reason
++      # `assert-released` below is — an install step between a failure and its
++      # report is a minute and a dependency graph nobody needs.
++      - name: Credential preflight
++        env:
++          PREFLIGHT_PUSH_TOKEN: ${{ secrets.CLAUDE_PR_TOKEN }}
++          PREFLIGHT_BUILTIN_TOKEN: ${{ github.token }}
++        run: node scripts/dispatch-preflight.mjs --stage=push
+ 
+       - name: Work the issue
+         id: claude
+@@ -134,7 +189,22 @@ jobs:
+           # key `linear-export.yml` uses — hence a separate secret name rather
+           # than quietly widening that one's scope.
+           LINEAR_API_KEY: ${{ secrets.LINEAR_DISPATCH_API_KEY }}
+-          GH_TOKEN: ${{ secrets.CLAUDE_PR_TOKEN || github.token }}
++          # GAM-403: `GH_TOKEN` is deliberately NOT set here. It used to be
++          # `secrets.CLAUDE_PR_TOKEN || github.token`, and that line governed
++          # nothing: measured 2026-08-19, the secret IS set (the checkout above
++          # put a `github_pat_…` into the git config) and yet the agent's own
++          # `GH_TOKEN` is a `ghs_…` that opens pull requests as `claude[bot]`.
++          # The action mints and exports its own App installation token, which
++          # overwrites whatever this key says.
++          #
++          # So deleting it is behavior-preserving today — and pinning it to the
++          # PAT instead would have been actively dangerous, because the PAT is
++          # the one credential measured at 403 on PR creation
++          # ("Resource not accessible by personal access token"), while the App
++          # token is authorized. Every PR a dispatched run has ever opened was
++          # authored as `claude[bot]`, never as the PAT. Plan §5.3's
++          # instruction for this path is "pin the proven GitHub App path";
++          # leaving the action's own token unshadowed IS that path.
+         with:
+           # Subscription auth rather than an API key, by the owner's choice:
+           # runs draw on the Claude subscription instead of API billing.
+@@ -174,6 +244,30 @@ jobs:
+             from Linear; a copy pasted into this workflow would be a second,
+             staler version of the description for you to disagree with.
+ 
++            **Immediately after you have claimed the issue and written the run
++            log — and before you read a packet or open any other file — run:**
++
++            ```
++            node scripts/dispatch-preflight.mjs --stage=pr
++            ```
++
++            This is the one credential check the job could not do for you. A
++            step before this one already proved the *push* credential; the
++            credential that opens a pull request is a different one, it only
++            exists inside this agent's environment, and it is the one that
++            strands runs: eight of thirteen measured runs finished their work
++            and then could not open a PR (GAM-403, GAM-333). The check creates
++            no pull request — it probes with `head == base`, which fails
++            validation *after* authorization, so a `422` means "authorized"
++            and a `403` means "not".
++
++            **If it exits non-zero, stop.** Record what it printed on the
++            issue, leave the issue in `Todo`, and do not start the
++            implementation — a run that cannot deliver a PR should spend one
++            minute discovering that, not ninety. That is the same refusal route
++            the paragraph below authorizes, and it is a correct outcome rather
++            than a failure.
++
+             If the tier is `tier/unreviewed`, judging the tier is part of
+             claiming (item 28d) — do it before moving the issue to
+             `In Progress`, and state your reasoning.
+-- 
+2.54.0
+

@@ -188,7 +188,15 @@ test.describe('GAM343 outreach lifecycle', () => {
     // §2e -- start late in the Chicago day so `RsvpControl` (now <
     // starts_at) and "Mark day complete" (date >= session_date) are both
     // true on the same session, for as much of the day as possible.
-    await createDialog.getByLabel(/^Start time/).fill('11:59 PM');
+    // GAM-377 -- Start is one minute earlier than End (11:58 PM, not the
+    // previously-equal 11:59 PM) because the new end-time-ordering guard now
+    // rejects an equal pair (`<=`, not `<` -- ScheduleMeetingsDialog.tsx:539,
+    // EditMeetingSessionDialog.tsx:318 use the same rule). Moving Start back
+    // one minute preserves this comment's own "as late as possible" intent
+    // at a cost of one minute; moving End later is impossible, since there is
+    // no wall time after 23:59 on the same calendar day. Do not "tidy" this
+    // back to an equal pair.
+    await createDialog.getByLabel(/^Start time/).fill('11:58 PM');
     await createDialog.getByLabel(/^End time/).fill('11:59 PM');
 
     // Team scope: all three teams start selected. Both Priya and Jordan are
@@ -331,8 +339,9 @@ test.describe('GAM343 outreach lifecycle', () => {
     // real, non-zero hours value now so step 6's delta(Jordan) == 0 detects
     // the AC 5 "absent" write actually firing, rather than being an
     // arithmetic tautology that would pass whether or not the write
-    // happened (a checked, zero-duration session already writes
-    // `hours_override: null`).
+    // happened (a checked, one-minute session -- GAM-377 made the pair
+    // 11:58 PM-11:59 PM rather than an equal, zero-duration pair -- already
+    // writes `hours_override: null` when unoverridden).
     await page.getByLabel(new RegExp(`^${JORDAN_NAME} hours`)).fill('1.5');
     await page.getByLabel(new RegExp(`^${JORDAN_NAME} hours`)).blur();
     await expect
@@ -386,10 +395,15 @@ test.describe('GAM343 outreach lifecycle', () => {
     await dlg.getByRole('checkbox', { name: JORDAN_NAME }).uncheck();
 
     // CAVEAT 2 -- an explicit per-student hours override, or AC 6 passes
-    // with the entire attendance write path deleted (the zero-duration
-    // 11:59 PM session makes the unoverridden default `hours_override:
-    // null`, and the confirm label + view delta would both read 0 either
-    // way).
+    // with the entire attendance write path deleted (the one-minute
+    // 11:58 PM-11:59 PM session -- GAM-377 no longer allows an equal,
+    // zero-duration pair here -- makes the unoverridden default
+    // `hours_override: null`, and neither the confirm label nor the view
+    // delta would then be distinguishable from a deleted write path at the
+    // precision that matters: `formatHours` rounds 1/60 h to "0", and the
+    // view's own delta is a hair above 0 rather than 0. Before GAM-377 this
+    // read "both read 0 either way", which was exactly true of the
+    // zero-duration pair and is off by 1/60 h for the view half now.)
     await dlg.getByLabel(new RegExp(`^${PERSONAS.student.displayName} hours`)).fill('2.5');
     await dlg.getByLabel(new RegExp(`^${PERSONAS.student.displayName} hours`)).blur();
 
