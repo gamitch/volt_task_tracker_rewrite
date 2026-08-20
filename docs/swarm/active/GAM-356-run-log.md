@@ -36,3 +36,23 @@ subagent and the work it describes did not happen.
 | 22 | PR | **PR body written to `docs/swarm/active/GAM-356-pr-body.md` and committed BEFORE the PR was opened** (GAM-418's lesson — a run killed at the API call still leaves its body behind). Validated with the declaration checker: `OK  declaration closes GAM-356`, exit 0. Re-ran gate 3 on the final tree afterwards, since doc edits can move `format:check`: exit 0. |
 | 23 | PR | **PR #205 opened** — https://github.com/gamitch/volt_task_tracker_rewrite/pull/205 — `Closes GAM-356` on line 1, `Linear-Issue: GAM-356` trailer. Tier stated and defended; both known gaps disclosed; the mutation table and gate block pasted verbatim rather than retyped. |
 | 24 | close-out | **Issue moved `In Progress → In Review`, never `Done`** (item 28e — the merge closes it, not the author). Read back: `In Review`, labels `standard, e2e-personas, w4`, **exactly one attachment** (PR #205), which is what item 28f's "keep the linked set to one PR" requires so the merge cannot move the row backwards. |
+| 25 | CI | **All 9 checks green on #205**, waited for rather than assumed: Typecheck/Lint/Format/Test/Build/Bundle Size (2m32s), SQL suites (RLS denial, metric views, migration guards), Edge Function tests (Deno), Skill script tests, and **Linear declaration**. No check left pending. |
+
+## Outcome
+
+**Done and handed off.** GAM-356 sits in `In Review` with one linked PR (#205),
+all nine CI checks green, and the merge — not this run — will close it.
+
+The one thing worth carrying forward: **the premise gate falsified this packet's
+own central claim by executing it**, not by reading it. Revision 1 asserted
+GAM-300's floor was unreachable on this path; the gate ran the aggregate against
+two same-season all-excused rows, got `participation_pct: 0`, and turned a
+confident sentence into a disclosed Known Risk with a tracked row behind it. That
+is item 26's *"a gate that only reads is worth much less than one that runs"*
+paying for itself on a STANDARD-tier row that did not strictly require a gate at
+all.
+
+**Residual, deliberately not fixed here:** a dual-team all-excused student still
+sees a fabricated `Participation: 0%`. It is unchanged by this PR, it is GAM-300's
+subject, and GAM-300 now carries the measured evidence, the SQL expression to
+copy, and the green test that blocks it.
