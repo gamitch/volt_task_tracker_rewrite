@@ -169,7 +169,7 @@ Everything else is forbidden, including `src/pages/home/**`, all of
 puts the identical wrong number on the **student** home card and on **CoachHome**'s
 goal projection (`CoachHome.tsx:1433/1439/2050`). That is metric-view SQL: item 3
 routes it through PRD 8.4 and the owner, and it is HEAVY, not STANDARD. It is
-filed as its own Linear row before this PR opens (item 20) and is **not**
+filed as **GAM-430** (item 20, `Backlog`, `tier/unreviewed`) and is **not**
 attempted here. This PR therefore fixes the staff-facing Reports surface and
 leaves the student-facing card to that row.
 
