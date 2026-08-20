@@ -119,3 +119,33 @@ Decoded the live `ghs_` App token at minute 1 rather than guessing:
   would re-check a packet I am no longer willing to dispatch. Deliverable
   becomes the measurement plus a structured two-option question to the owner —
   which is precisely how T205 itself was handled.
+- 03:47Z — decision memo written: `docs/swarm/active/GAM-389-decision-memo.md`.
+  Packet marked NOT DISPATCHED with the wrong section left unedited — deleting
+  it would delete the evidence that the gate worked.
+- 03:52Z — **GAM-427 filed** to `Backlog` / `tier/unreviewed` (items 20 + 30,
+  written through the `linear-task-writing` skill, all four cited line ranges
+  re-verified against current `main` first): nothing in CI guards the `anon`
+  grant posture on the five views, and `t700`'s guard cannot cover them because
+  it only fires on auto-updatable views. Whichever posture the owner picks is
+  unenforced without it.
+- 03:56Z — **PR #211 closed unmerged**, with the reasoning in the close comment.
+  Merging it would have closed GAM-389, which now needs the owner. Final body
+  pushed to the artifact first (`check.mjs` exit 0), so nothing is lost.
+- 03:58Z — **GAM-389 returned to `Todo`**, `gate/human` added, `tier/heavy`
+  retained, full finding and the two-option question posted as a comment.
+  Read back and confirmed: `state: Todo`, labels `other`/`Bug`/`heavy`/`human`.
+  Not `In Review` — an agent should not mark this finished when what remains is
+  the owner's decision, and criterion 1 is built on the falsified premise.
+- 03:59Z — `npx prettier --check` warns on these four `.md` files, but the
+  repo's `format:check` script scopes to `src/**/*.{ts,tsx}` and root files
+  only, so `docs/` is deliberately outside it. No action. The other five gates
+  are not reported: **no source file changed**, and reporting a green suite
+  that observes nothing about this change is the vacuous-evidence defect the
+  premise gate flagged in my own acceptance criteria.
+
+## Outcome
+
+**Refusal to proceed, recorded.** One subagent dispatched, blocking, verdict
+received and acted on. No worker, no migration, no source change. The premise
+gate cost one round and prevented a false account of an owner ruling from being
+written into a permanent applied migration.
