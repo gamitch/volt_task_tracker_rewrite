@@ -262,3 +262,57 @@ that signature unmistakable.
   `worker-implementer` against packet revision 3. The row should move to `Todo`
   for that dispatch; it must **not** move to `Done`, which would close a row
   whose deliverable does not exist.
+
+---
+
+## New dispatched run, 2026-08-20 — resuming from packet revision 3
+
+- **Claimed via `issueUpdate`** (Todo → In Progress) on
+  `78e996e4-911f-4b50-96f7-8dca5afb2e3e`, read back and confirmed
+  `state.name == "In Progress"` before opening any other file. Issue's own
+  labels already carry `tier/standard` — no tiering judgment needed at claim
+  time (item 28d n/a).
+- **Found this branch already existed on `origin`** with the full prior
+  escalation history (claim → packet → premise round 1 REVISE → round 2 REVISE
+  → item 19a escalation posted and confirmed → owner-authored packet revision
+  3). Reset local work onto `origin/claude/gam-404-terminal-failure-notify`
+  rather than starting a fresh branch, so that history is not orphaned.
+- **Read packet revision 3 in full.** It is owner-accepted per item 19a (round
+  2 had no BLOCKER; a third gate round is not required), and its own stated
+  next step is: dispatch `worker-implementer` only.
+- **Branch was 68 commits behind `origin/main`.** Diffed the four load-bearing
+  files (`claude-linear-dispatch.yml`, `linear-escalation-notify.mjs`,
+  `linear-assert-released.mjs`, `scripts/linear/client.mjs`) between the
+  branch point (`debe8e4`) and current `main` (`2516042`) — **zero diff**, so
+  every packet citation against those files still holds. Merged `origin/main`
+  into this branch anyway (clean, no conflicts, commit `1ccf04e`) so the
+  worker builds on current `main` and the eventual PR is not needlessly stale.
+- **Re-verified the two citations packet revision 3 could not verify from
+  inside the escalation (owner session had no repo access to re-run):**
+  - `- name: Assert the run released its claim` at
+    `claude-linear-dispatch.yml:540` still carries **no `id:`** — confirmed by
+    direct read. Round 2's MAJOR fix (Edit 1) is still required.
+  - `js-yaml` is still **not** a declared dependency — confirmed via
+    `package-lock.json`: it resolves only via
+    `@eslint/eslintrc@3.3.6 > js-yaml@^4.3.0` (`package-lock.json:1433`).
+    `RATE_FLOOR = 150` is still at `scripts/linear/client.mjs:17`; the
+    2500/hour figure is still at `:40`.
+  - `npm ci` was required (fresh container, no `node_modules`). After install,
+    `js-yaml` resolves (`require.resolve('js-yaml')` succeeds) — criterion
+    11's structural YAML check is runnable.
+- **New scripts/ baseline, post-merge (packet's criterion 12 baseline is
+  branch-point, now stale by 68 commits of main history):**
+  `npx vitest run scripts/` → **14 files / 340 tests**, all green. The worker
+  packet's criterion 12 target updates from "13 files / 299 tests" to this
+  figure; the worker must not treat a rise from 299 as a regression — the
+  baseline moved because `main` moved, not because of anything this packet
+  touches.
+- **Tier decision (item 26): STANDARD, matching the packet's own sizing and
+  the issue's `tier/standard` label.** One worker dispatch, orchestrator
+  replays the mutation directly — no separate `checker-reviewer` round. The
+  premise gate itself is not being re-run a third time, per item 19a and the
+  packet's own "not submitted for round 3" statement; round 2's independent
+  verification plus my two re-checks above stand in for it.
+- **DISPATCHING `worker-implementer` against packet revision 3,
+  `run_in_background: false`, orchestrator is blocking on it now.** *If this
+  line is the last one in this file, the run died holding this subagent.*
