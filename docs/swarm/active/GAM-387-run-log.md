@@ -239,3 +239,10 @@ subagent's verdict; gates run; PR opened.
   `vitest` scoped 1 file / 9 tests. **VERDICT: PASS — all six gates exit 0.**
   These figures match the checker's independent run, so three agents agree on
   the same numbers rather than one asserting them.
+- **PR body written and validated BEFORE opening the PR** —
+  `docs/swarm/active/GAM-387-pr-body.md`, `check.mjs` exit 0
+  (`OK  declaration closes GAM-387`). Committed first, per the GAM-418 lesson
+  that a run killed before writing its artifact leaves nothing to reconstruct
+  from. Carries all three orchestrator obligations: narrowed scope disclosed,
+  GAM-422 linked, HEAVY tier stated and defended with the losing argument named.
+  `Ignore GAM-352` so merging cannot close a row whose actual cause is untouched.
