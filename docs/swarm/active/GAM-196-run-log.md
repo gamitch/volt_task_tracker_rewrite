@@ -274,3 +274,12 @@ contradicts a record already committed to this branch.
   word): the four probes below were re-run by this run against the committed
   `decideDispatch`, and `filter.ts:358-361` / `filter.test.ts:592-598` read
   directly.
+- `2026-08-20T03:36Z` **GAM-429 FILED** —
+  *"A run that releases its issue to `Todo` and then applies `gate/human`
+  re-dispatches itself — the label landed 149 ms too late on GAM-196"*.
+  `Backlog`, `[tier/unreviewed, provenance/premise-gate]`, priority Low. Read
+  back from the create mutation. Written through the `linear-task-writing`
+  skill (item 30); every line number re-opened first, and the checker's
+  BLOCKER correction is carried in its `## Verification note` rather than
+  quietly dropped. Body preserved at
+  `docs/swarm/active/GAM-196-followup-body.md`.
