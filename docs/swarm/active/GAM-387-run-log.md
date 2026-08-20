@@ -261,3 +261,22 @@ subagent's verdict; gates run; PR opened.
   `gh pr create --base main --head claude/gam-387-error-boundary
    --title "GAM-387: app-wide route error boundary"
    --body-file docs/swarm/active/GAM-387-pr-body.md`
+- **GAM-352 re-scoped by comment** (the issue's own acceptance criterion 5), not
+  closed and not rewritten — item 30 binds the writer, and that row is neither
+  claimed nor owned by this run. Recorded there: the boundary handles the blank
+  screen, the unvalidated cast at `CheckinResult.tsx:343` feeding `:773` is
+  untouched (both lines re-verified), so its remaining scope is payload
+  validation and the "or add an error boundary" half of its proposed scope can
+  be dropped. Its original triage caveat — that this was a harness-shaped input
+  — still stands; GAM-387 made the consequence survivable, not impossible.
+- **GAM-387 moved `In Progress → In Review`** (item 28e — never `Done`; the
+  merge closes it, not the author), with a comment carrying the narrowed scope,
+  the GAM-422 link, the gate figures, and the exact `gh pr create` command.
+- **Read back** (item 28c discipline applied to the close, not just the claim):
+  GAM-387 = `In Review`, labels `other`/`Bug`/`heavy`. GAM-422 = `Backlog`,
+  labels `Bug`/`unreviewed`/`premise-gate`.
+- **RUN COMPLETE.** No subagent was ever left in flight: three were dispatched
+  (`checker-premise` ×2, `worker-implementer`, `checker-reviewer` — four in all),
+  each with `run_in_background: false`, each waited for, each verdict written
+  here before the next step. One item remains for a human: **open the PR from
+  the preserved body.**
