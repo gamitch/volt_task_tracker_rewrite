@@ -150,3 +150,62 @@ statement of where it died, not as a summary.
   worker until this returns DISPATCH), `run_in_background: false`, blocking.
   **If this line is the last one in this file, the run died holding this
   subagent.**
+
+- **01:12Z — `checker-premise` VERDICT: REVISE (BLOCKER).** Round 1 of the two
+  the item 19a cap allows. It cost ~94K tokens and was worth every one: it
+  falsified a claim I had already published, and it killed the code change.
+
+  Findings I acted on, in order of consequence:
+
+  1. **It falsified my 01:01Z "correction" — I was wrong and GAM-421 was
+     right.** I claimed the agent's `git push` runs on the 60-minute App token.
+     Re-measured myself at 01:14Z rather than taking the gate's word:
+     `http.https://github.com/.extraheader` **is present**, carrying
+     `x-access-token:github_pat_…`, 93 chars, one dot segment,
+     `sha256 e815b2b5…` — **distinct** from `GH_TOKEN` (`sha256 0b8eb244…`).
+     My earlier probe missed it because it is not in `.git/config` local scope:
+     it lives in `/home/runner/work/_temp/git-credentials-*.config`, so
+     `git config --local --get-regexp` returns nothing while
+     `git config --get` returns it. And per this repo's own
+     `scripts/dispatch-preflight.mjs:31-41`, the extraheader **outranks** any
+     credential in the remote URL's userinfo.
+
+     So `git push` authenticates as the **long-lived PAT**, not the expiring
+     App token. **GAM-421's two-credential model is correct as filed.** The
+     branch *is* a safe harbour. Retracted: "the branch is not a safe harbour",
+     "the agent's push is on the same 60-minute clock", "there is no second
+     credential". The 3600 s measurement and the GAM-333 re-analysis are
+     untouched by this.
+
+     **This restores option 2 to the owner's table**, which my error had
+     written off — and it is the cheapest of the four: the PAT is long-lived
+     and already present, so granting it `pull_requests: write` needs no code,
+     no workflow patch and no preflight.
+
+  2. **Nothing in this repository invokes `scripts/dispatch-preflight.mjs`** —
+     no workflow step, no `AGENTS.md` order, no skill, no hook. GAM-403's
+     wiring is still an unmerged patch behind the credential wall. So the
+     `pr-window` check my packet specified would have shipped **dormant**, and
+     my packet's claim that the preflight "already proves capability at minute
+     1" is false today.
+
+  3. My packet's forbidden-files citation was overbroad: `constitution.md:26-33`
+     names four specific `docs/swarm/` files and three `.claude/` paths. It does
+     **not** forbid `AGENTS.md`, which dispatched runs amend routinely.
+
+  4. Acceptance criterion 1 was not runnable: the test file imports `vitest`, so
+     `node --test` dies with `ERR_MODULE_NOT_FOUND`.
+
+- **01:16Z — code change WITHDRAWN; no worker dispatched. Scope reduced, and
+  the reduction is the finding.** With one gate round left and ~30 minutes of
+  App-token life, the choice was: re-gate a check that lands dormant, or spend
+  the remaining run correcting a false published claim and shipping the
+  doctrine that works today. I took the second. The `pr-window` check is not
+  abandoned — it is refiled, because it is a good idea whose prerequisite
+  (GAM-403's wiring) is not merged.
+
+  **Process deviation, declared rather than relabelled** (item 26): this row is
+  and remains HEAVY, and it got the HEAVY gate. It did not get a worker or a
+  `checker-reviewer`, because after the gate there is no production code in
+  scope. What remains — the run log, the PR body, `AGENTS.md` — are records the
+  orchestrator owns and which the constitution forbids a worker to edit.
