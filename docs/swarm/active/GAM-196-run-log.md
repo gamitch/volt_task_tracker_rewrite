@@ -615,3 +615,11 @@ a stale header is what the next run has to disprove.
   reading the committed blob — at `tsc` 0, `format:check` 0, `eslint` 0 errors,
   full suite **2583/2583**, the exact pre-change baseline. The SQL suites touch
   nothing this PR changes (no migration, no view, no SQL).
+- `2026-08-20T12:15Z` **CORRECTION to the line above — CI is GREEN, all nine
+  checks.** They finished seconds after I wrote that entry: `Typecheck, Lint,
+  Format, Test, Build, Bundle Size` **pass**, `SQL suites` **pass**, `Edge
+  Function tests (Deno)` **pass**, `Skill script tests` **pass**, `Linear
+  declaration` **pass**. The hedge above was correct when written and is now
+  wrong; both stay, because this log is append-only and a reader should be able
+  to see that the claim was hedged before it was confirmed rather than find a
+  confident sentence with no history.
