@@ -56,10 +56,19 @@ shape GAM-404 exists to fix, occurring on GAM-404 itself.
 
 ---
 
-## 2. The finding that matters most: PR strands are a _duration_ effect
+## 2. The finding that matters most: a PR strands on _when you call `gh pr create`_
+
+> **Corrected 2026-08-20, after GAM-421 measured it properly.** This section
+> originally read "PR strands are a _duration_ effect" and concluded that "tier
+> predicts stranding only because tier predicts duration". **That conclusion is
+> wrong**, and the table below was mislabelled: its figures were the minute each
+> run *called* `gh pr create`, not how long the run lasted. The numbers were
+> right; the column header and the causal claim on top of them were not. What
+> the corrected evidence says is at the end of this section — and it is better
+> news, because it means no run has to get faster.
 
 GAM-403's run measured it directly rather than inferring it. The `claude[bot]`
-installation token that opens pull requests **expires about an hour after it is
+installation token that opens pull requests **expires an hour after it is
 minted**:
 
 ```
@@ -67,41 +76,76 @@ POST /pulls  ->  422 (authorized)      at minute 6
 POST /pulls  ->  401 Bad credentials   at minute 74
 ```
 
-Across every run on 2026-08-18/19:
+Across every run on 2026-08-18/19, **by the minute each run called
+`gh pr create`** — not by how long the run lasted:
 
-| Run               | Duration   | Opened its own PR? |
-| ----------------- | ---------- | ------------------ |
-| GAM-412           | ~4 min     | yes                |
-| GAM-410 / GAM-411 | ~10 min    | yes                |
-| GAM-404           | ~30 min    | n/a — escalated    |
-| **GAM-356**       | **~51 min** | **yes**            |
-| **GAM-387**       | **~70 min** | **no**             |
-| **GAM-377**       | **~71 min** | **no**             |
-| GAM-403           | 74 min     | **no**             |
-| GAM-407           | 92 min     | **no**             |
+| Run               | Minute of the PR call | Opened its own PR? |
+| ----------------- | --------------------- | ------------------ |
+| GAM-412           | ~4 min                | yes                |
+| GAM-410 / GAM-411 | ~10 min               | yes                |
+| GAM-404           | n/a — escalated, never called it | n/a     |
+| **GAM-356**       | **~51 min**           | **yes**            |
+| **GAM-387**       | **~70 min**           | **no**             |
+| **GAM-377**       | **~71 min**           | **no**             |
+| GAM-403           | 74 min                | **no**             |
+| GAM-407           | 92 min                | **no**             |
 
-Everything under an hour succeeded; everything over stranded. **GAM-333's
-"8 of 13 stranded" is very likely this, not a permissions defect.** Treat it as
-the leading hypothesis when GAM-333 is next worked. Filed as **GAM-421**.
+Every call before the hour succeeded; every call after it failed. **GAM-333's
+"8 of 13 stranded" is very likely this, not a permissions defect.** Filed as
+**GAM-421**, and now answered by it — see below.
 
-**The 2026-08-19 batch confirmed this prospectively, which is stronger than the
-retrospective fit.** §7 of this record predicted before the fact that GAM-377
-(HEAVY) would strand if it exceeded an hour. All three rows were dispatched
-within 37 seconds of each other, ran the same loop against the same repo, and
-split exactly on duration:
+**The 2026-08-19 batch confirmed the boundary prospectively**, which is stronger
+than the retrospective fit. §7 of this record predicted before the fact that
+GAM-377 (HEAVY) would strand. All three rows were dispatched within 37 seconds
+of each other, ran the same loop against the same repo, and split cleanly:
 
 ```
-GAM-356  In Progress 23:10:24  ->  PR opened  00:01:46   (~51 min)  PASS
-GAM-387  In Progress 23:10:02  ->  401        00:20:29   (~70 min)  STRAND
-GAM-377  In Progress 23:09:47  ->  401        00:20:38   (~71 min)  STRAND
+GAM-356  In Progress 23:10:24  ->  PR opened  00:01:46   (minute ~51)  PASS
+GAM-387  In Progress 23:10:02  ->  401        00:20:29   (minute ~70)  STRAND
+GAM-377  In Progress 23:09:47  ->  401        00:20:38   (minute ~71)  STRAND
 ```
 
-Same credential path, same day, same minute of dispatch. The only variable that
-moved was elapsed time, and the boundary fell where GAM-403 measured it. **Tier
-predicts stranding only because tier predicts duration** — both HEAVY runs
-crossed the hour, the STANDARD run did not. Plan for this: either a HEAVY run
-publishes early and amends, or the credential is re-minted before the PR call.
-GAM-421 owns it.
+These minutes are measured from each row's Linear `In Progress` stamp; GAM-421
+measures the same PR from job start and gets 53.2 for GAM-356, so treat the
+basis as ±2 minutes, not to the second.
+
+### What GAM-421 then established, correcting this section
+
+**The lifetime is exact, not approximate.** The `ghs_` token is a JWT that
+states its own expiry. Decoded live on GAM-421's run: `iat 00:46:26Z`,
+`exp 01:46:26Z` — **3600 seconds to the second.** GAM-421's own filing had
+admitted the one-hour figure was GitHub's documented behaviour rather than a
+measurement; it is a measurement now. A run can read its own deadline at minute
+1 by base64url-decoding the payload.
+
+**The deciding variable is the PR call, not the run's length.** Measured across
+all 50 dispatch runs and every PR in this repository: of the **21** PRs
+`claude[bot]` has ever opened inside a dispatch run, **21 were at or before
+minute 60 and 0 after** — latest 53.2 min (PR #205), under worst-case
+attribution across concurrent runs, which biases the search toward finding a
+late one. The only PR opened later anywhere, #162 at 81.9 min, was opened by a
+human.
+
+**And long runs are not doomed.** Run #42 lasted **94 minutes and opened two
+PRs**. Run #47 lasted 73 minutes, opened PR #205 at minute 53, then ran another
+20. Run #6 lasted 60 minutes and opened none.
+
+So the original conclusion here — that tier predicts stranding because tier
+predicts duration — **was a coincidence of this batch**, in which both HEAVY
+runs happened to defer their PR to the very end. The rule is simply: **open the
+PR early, as a draft, and push into it.** No run has to get faster. GAM-421 made
+that `AGENTS.md`'s third wall and its own run opened PR #208 at minute 8, with
+~56 minutes of credential to spare.
+
+**One correction inside the correction, from GAM-421's own gate:** that run
+published a claim that `git push` is on the same 60-minute clock and that "the
+branch is not a safe harbour". Both false, both retracted. `git push`
+authenticates as the long-lived `github_pat_` in
+`http.https://github.com/.extraheader`, which **outranks** the expiring token in
+the remote URL. **The branch is a safe harbour after the hour; only the PR call
+is not.** This also revives the cheapest of the four fixes — granting the PAT
+`pull_requests: write` — which the retracted claim had written off.
+**GAM-425** holds that choice; all four options remain unchosen.
 
 Two related corrections from the same run, worth not re-deriving:
 
@@ -121,6 +165,8 @@ Two related corrections from the same run, worth not re-deriving:
 | **GAM-419**               | Where the control plane lives. Recommendation: **A2 — dedicated Supabase project, on free, with a tripwire.** Measured effort: one project, one redeploy, six secrets, one webhook field, one config convention. **The ops schema does not move because it is not deployed anywhere** (zero migrations reference it). Today a redeploy; after Phase 2 a migration. |
 | **GAM-403 patch**         | #203 is merged. **The preflight patch is still unapplied** — `docs/swarm/active/GAM-403-dispatch-preflight.patch`, `git apply --check` exits 0. Needs an owner-scoped session; a dispatched run cannot write `.github/workflows/` (GAM-328)                                                                                                                          |
 | **GAM-404**               | escalated at item 19a's two-round cap, not stranded. Accept the round-2 revision and dispatch `worker-implementer` directly, or send it back for a third premise round. Its row still reads `In Progress` and should be corrected either way                                                                                                                        |
+| **GAM-425**               | **which of the four fixes for the expiring PR credential.** GAM-421 measured the defect and made "open the PR early" doctrine, but chose nothing. The cheapest option — grant the PAT `pull_requests: write` — was briefly written off by a claim GAM-421 has since retracted, so it is live again                                                                  |
+| **GAM-424**               | `scripts/dispatch-preflight.mjs` is 574 merged, tested lines that **nothing calls**. GAM-403's wiring is still the unapplied patch, so the defect GAM-403 was filed to fix is still live. Half is unblocked today: `--stage=pr` is an `AGENTS.md` standing order, and a dispatched run can push `AGENTS.md`                                                        |
 | **GAM-415**               | CI runs SQL suites on `postgres:16` while `config.toml` says 17. Bumping moves nine green suites onto a new major — owner's call                                                                                                                                                                                                                                   |
 | **GAM-384 / GAM-394**     | **duplicates of each other** (both: `gate-run` documents 377 warnings, real is 379). Mark one Duplicate                                                                                                                                                                                                                                                            |
 | **GAM-62 / 74 / 75 / 80** | migration-era `gate/human` rows from 2026-08-09, untouched since. Done, obsolete, or real?                                                                                                                                                                                                                                                                         |
@@ -206,6 +252,14 @@ GAM-352 reported the blank screen as a check-in defect when it is app-wide.
   stranded. The tier was written from the pre-dispatch conversation rather than
   read back from the packet the run had already committed. **Read the artifact,
   not the memory of deciding it.**
+- **Called the strand a duration effect, and built §2 on it.** The figures were
+  the minute each run *called* `gh pr create`; I labelled the column "Duration"
+  and then reasoned from the label — concluding that tier predicts stranding
+  because tier predicts duration. GAM-421 measured it a day later across all 50
+  runs and found the opposite: a 94-minute run opened two PRs, and what decides
+  is when the call happens. **The data was fine; the header was the hypothesis,
+  and I read it back as evidence.** Corrected in §2 rather than deleted, because
+  the wrong version had already been acted on.
 
 ---
 
@@ -233,15 +287,16 @@ stranded published from their preserved bodies. What remains:
    premise gate and the body-preservation convention exactly as built. Nothing
    new was needed.
 
-**New rows this batch left behind**, all `Backlog` / `unreviewed`: **GAM-422**
-(a throw in the app chrome still blanks the screen — `KpiStrip` runs a Supabase
-loader on every chrome-bearing route, so it is live), **GAM-423** (editing one
-outreach time field wipes the other and silently drops that day),
-**GAM-421** (the token-expiry clock), **GAM-420** (the entrypoint-guard defect
-in five sibling `scripts/*.mjs`). **GAM-300** now carries GAM-356's measured
-evidence and a green blocking test. **GAM-352 was re-scoped, not closed** — the
-`Ignore GAM-352` line in #206 was deliberate; its unvalidated cast at
-`CheckinResult.tsx:343` is untouched.
+**New rows this batch left behind**, all `Backlog` / `unreviewed` unless noted:
+**GAM-422** (a throw in the app chrome still blanks the screen — `KpiStrip` runs
+a Supabase loader on every chrome-bearing route, so it is live), **GAM-423**
+(editing one outreach time field wipes the other and silently drops that day),
+**GAM-420** (the entrypoint-guard defect in five sibling `scripts/*.mjs`).
+**GAM-421** was filed, dispatched and merged the same night — it is the source
+of §2's correction. It left two behind: **GAM-424** and **GAM-425**, both above.
+**GAM-300** now carries GAM-356's measured evidence and a green blocking test.
+**GAM-352 was re-scoped, not closed** — the `Ignore GAM-352` line in #206 was
+deliberate; its unvalidated cast at `CheckinResult.tsx:343` is untouched.
 
 ---
 
@@ -257,6 +312,7 @@ evidence and a green blocking test. **GAM-352 was re-scoped, not closed** — th
 | #205 | GAM-356 | `participation_pct` widened to `number \| null`; renders an em dash        |
 | #206 | GAM-387 | app-wide route error boundary, keyed on `pathname + search`               |
 | #207 | GAM-377 | outreach session end guarded against an earlier/equal start               |
+| #208 | GAM-421 | `AGENTS.md` wall 3 — the PR credential dies at 60 min; open the PR early  |
 
 GAM-414 was closed by the owner — correct, since `gate/human` means no machine
 may close it.
