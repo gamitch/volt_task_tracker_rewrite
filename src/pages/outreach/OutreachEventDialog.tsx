@@ -839,6 +839,52 @@ export function chicagoWallTimeToUtcIso(dateStr: string, timeStr: string): strin
 }
 
 // ---------------------------------------------------------------------------
+// GAM-377 -- pure, separately testable end-time-ordering guard, ported from
+// `ScheduleMeetingsDialog.tsx:534`'s `computeEndTimeError` (packet §4a). This
+// dialog holds a start/end pair PER DATE (`effectiveSessionDetails`), not one
+// shared pair like the sibling, so this helper is invoked once per selected
+// date below rather than once for the whole dialog (packet §4b).
+// ---------------------------------------------------------------------------
+
+/** `'HH:MM'` -> minutes since midnight. Every value this dialog's `TimeInput`s
+ * produce is already zero-padded `HH:MM` (`hasSeconds` is never set here), so
+ * this is provably equivalent to a lexical compare -- written out explicitly
+ * so a future `hasSeconds` addition cannot silently break the comparison. */
+function timeStringToMinutesSinceMidnight(time: string): number {
+  const [hourStr, minuteStr] = time.split(':');
+  return Number(hourStr) * 60 + Number(minuteStr);
+}
+
+/** Returns the sibling's exact copy string (`ScheduleMeetingsDialog.tsx:534`)
+ * when both times are defined and `endTime` is not strictly after `startTime`
+ * (the sibling's `<=`, not `<` -- an equal pair is also an error), and
+ * `undefined` otherwise. Two undefined values are NOT an error: `isValid`
+ * already handles undefined-ness on its own via `sessionsPayload.length > 0`,
+ * and duplicating that here would change unrelated behaviour.
+ *
+ * Compares wall-clock `HH:MM` minutes-since-midnight, NOT UTC -- deliberately
+ * NOT routed through `chicagoWallTimeToUtcIso` above. That function probes the
+ * America/Chicago offset at the *naive-UTC* instant, which puts the
+ * 2026-03-08 spring-forward discontinuity at wall 07:00-07:59 (`wall 07:00 ->
+ * ...T13:00:00.000Z`, `wall 08:00 -> ...T13:00:00.000Z`, collapsing onto
+ * 07:00) -- a UTC-instant comparison would therefore false-block an ordinary,
+ * valid 07:00-08:00 Chicago session on that date. Wall-clock
+ * minutes-since-midnight has no such exposure. That offset bug is real and
+ * out of scope here (see this function's own DST-comparison note above, and
+ * the GAM-377 packet §3) -- do NOT "simplify" this into
+ * `chicagoWallTimeToUtcIso`. */
+export function computeEndTimeError(
+  startTime: string | undefined,
+  endTime: string | undefined,
+): string | undefined {
+  if (startTime === undefined || endTime === undefined) return undefined;
+  if (timeStringToMinutesSinceMidnight(endTime) <= timeStringToMinutesSinceMidnight(startTime)) {
+    return 'End time must be after the start time.';
+  }
+  return undefined;
+}
+
+// ---------------------------------------------------------------------------
 // Per-session detail state helpers (module doc #6) -- "per-session
 // start/end times" + "expected people reached ... per day", unlike
 // ScheduleMeetingsDialog's single shared start/end applied to every session.
@@ -1197,7 +1243,22 @@ export function OutreachEventDialog({
     [expectedStudentIds, visibleRosterIds],
   );
 
-  const isValid = title.trim() !== '' && sessionsPayload.length > 0;
+  // GAM-377 (packet §4b/§4c) -- per-date ordering error, derived from
+  // `effectiveSessionDetails` (the same source `buildOutreachSessionsPayload`
+  // above reads -- AC6's data path). One bad day disables the save for the
+  // whole dialog (packet §5's ruling: block the whole save, don't silently
+  // drop just the offending day).
+  const sessionTimeErrors = useMemo(() => {
+    const errors: Record<string, string | undefined> = {};
+    for (const date of sessionDates) {
+      const detail = effectiveSessionDetails[date];
+      errors[date] = computeEndTimeError(detail?.startTime, detail?.endTime);
+    }
+    return errors;
+  }, [sessionDates, effectiveSessionDetails]);
+  const hasSessionTimeError = Object.values(sessionTimeErrors).some((error) => error !== undefined);
+
+  const isValid = title.trim() !== '' && sessionsPayload.length > 0 && !hasSessionTimeError;
   const confirmLabel = computeConfirmLabel(isEditMode, sessionsPayload.length);
 
   function updateSessionDetail(date: string, patch: Partial<OutreachSessionDetail>): void {
@@ -1485,6 +1546,10 @@ export function OutreachEventDialog({
                     </Text>
                     {sessionDates.map((date) => {
                       const detail = effectiveSessionDetails[date];
+                      // GAM-377 (packet §4d/§4e) -- this date's ordering
+                      // error, if any (`undefined` whenever either time is
+                      // unset or the pair is validly ordered).
+                      const endTimeError = sessionTimeErrors[date];
                       return (
                         <VStack key={date} gap={2}>
                           <Text type="supporting">{formatFriendlyDate(date)}</Text>
@@ -1500,6 +1565,23 @@ export function OutreachEventDialog({
                               value={detail?.endTime}
                               onChange={(value) => updateSessionDetail(date, { endTime: value })}
                               isRequired
+                              // GAM-377 (packet §2/§4e) -- secondary entry
+                              // guard: rejects an out-of-range TYPED End
+                              // before it commits. Does NOT alone guard this
+                              // dialog's own reproduction (Start moved past an
+                              // already-settled End never re-consults `min`,
+                              // since `min` is bound to the CURRENT
+                              // `startTime`) -- which is why `endTimeError`/
+                              // `status` below is the load-bearing mechanism
+                              // for that order. The two guard DISJOINT
+                              // interaction orders and do not both fire for
+                              // the same interaction (packet §2's table).
+                              min={detail?.startTime}
+                              status={
+                                endTimeError !== undefined
+                                  ? { type: 'error', message: endTimeError }
+                                  : undefined
+                              }
                             />
                             <NumberInput
                               label={`Expected people reached (${formatFriendlyDate(date)})`}
