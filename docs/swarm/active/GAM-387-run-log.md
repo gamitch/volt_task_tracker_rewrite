@@ -223,3 +223,19 @@ subagent's verdict; gates run; PR opened.
     the shipped copy, AC4b stayed **green**. Exactly the class of bug a green
     suite cannot show you, found twice in one file by two different agents
     running mutations.
+- **MINOR fixed by the orchestrator rather than deferred.** A one-line regex
+  with a mutation already named does not need a follow-up row — filing one would
+  be the ceremony item 26 warns against. Committed first (`40d10b7`), then
+  mutated **in a dedicated worktree** (item 23, `/tmp/gam387-orch`, removed
+  after; shared tree never touched). Planting `"OK, head back to your
+  dashboard…"` in the shipped copy now turns AC4b **red, exit 1**, on exactly
+  the seam that defeated the old assertion:
+  `expected 'VOLTThis page ran into a problemOK, head back…' not to match
+  /Submit|OK/`. Reverted, re-ran green. The comment above both assertions now
+  explains why *neither* carries word boundaries, so it cannot drift back.
+- **GATES (all six, clean tree, `40d10b7`)** — run directly, not through a pipe:
+  `tsc` 0 · `vite build` 0 · `format:check` 0 · `eslint` 0 (0 errors, 379
+  warnings) · `vitest` full **99 files / 2514 tests**, baseline 2505 (+9) ·
+  `vitest` scoped 1 file / 9 tests. **VERDICT: PASS — all six gates exit 0.**
+  These figures match the checker's independent run, so three agents agree on
+  the same numbers rather than one asserting them.
