@@ -2,7 +2,12 @@
 
 **Issue:** [GAM-196 — T188 — two different "confirmed hours" numbers exist in the app and can legitimately disagree](https://linear.app/gamitch/issue/GAM-196/t188-two-different-confirmed-hours-numbers-exist-in-the-app-and-can)
 **Branch:** `claude/gam-196-confirmed-hours-divergence`
-**Runtime:** Claude (dispatch run). Route: no `executor/*` label → item 28b migration-only default, legacy Claude-only. No `gate/human`.
+**Runtime:** Claude (dispatch run). Route: no `executor/*` label → item 28b migration-only default, legacy Claude-only.
+**Header note added by the second dispatch run:** the line above originally ended
+*"No `gate/human`."* That was true for the first run and is **false now** — GAM-196
+carries `gate/human` and a machine may not claim it (item 28b). Corrected rather
+than deleted, because a stale header at the top of a log is what the second run
+had to disprove.
 
 Append-only. One line per milestone, pushed immediately. If the last line of this
 file is a subagent dispatch with no matching verdict line, **the run died holding
@@ -283,3 +288,24 @@ contradicts a record already committed to this branch.
   BLOCKER correction is carried in its `## Verification note` rather than
   quietly dropped. Body preserved at
   `docs/swarm/active/GAM-196-followup-body.md`.
+- `2026-08-20T03:34Z` **Refusal recorded on the issue itself**, not only in this
+  file: comment posted to GAM-196 carrying the item-28b reason, the 149 ms
+  measurement, the GAM-429 pointer, and both corrections (this run's own first
+  draft, and the previous run's log line) kept visible rather than buried.
+- `2026-08-20T03:35Z` **Stale header corrected.** Line 5 of this file said
+  *"No `gate/human`"* — true when the first run wrote it, false since
+  `03:18:47.248Z`. Fixed in place with the reason.
+- `2026-08-20T03:36Z` **FINAL READ-BACK.**
+  GAM-196: `state = Todo`, `labels = [tier/heavy, gate/human]`, 2 comments —
+  **unclaimed, exactly as item 28b requires.**
+  GAM-429: `state = Backlog`, `labels = [tier/unreviewed, provenance/premise-gate]`.
+- `2026-08-20T03:36Z` **RUN COMPLETE.** No source file changed and none should
+  have been. No PR opened: a PR on this branch links GAM-196 by branch name and
+  would drive it to `Done` on merge (item 28f — omitting a magic word protects
+  nothing), and GAM-196 is not done. Precedent: the first run opened #210 and
+  closed it unmerged for this exact reason. The branch stays pushed so this log,
+  the packet, the gate report and the GAM-429 body survive.
+- `2026-08-20T03:36Z` **Subagent accounting.** One `checker-premise`, dispatched
+  with `run_in_background: false`, waited on, returned, verdict recorded above,
+  and its BLOCKER independently re-verified by this run before being accepted.
+  **Nothing was left in flight at any point** (AGENTS.md wall 2).
