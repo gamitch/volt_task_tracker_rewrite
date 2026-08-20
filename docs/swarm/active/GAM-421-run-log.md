@@ -74,3 +74,20 @@ statement of where it died, not as a summary.
   loses the branch too, not just the PR. That is the part worth escalating.
 
   Premise holds → continuing. Not stopping.
+
+- **00:50Z — PR body artifact written, then PR opened as a draft: #208.**
+  Order matters and the `pr-body` skill requires it — the artifact is written
+  *before* the API call, so a run that cannot open its PR still loses nothing.
+  `node .claude/skills/pr-body/scripts/check.mjs` → `OK declaration closes
+  GAM-421`, exit 0.
+
+  **This is GAM-421's own option 3, and it needed no workflow patch.** The issue
+  files options 1 and 3 as owner-applied patches because they edit
+  `.github/workflows/**`. That is true of the *automated* form. But the agent
+  chooses when it calls `gh pr create`, so the behavioural form of option 3 —
+  open the PR at minute 8 and push into it — is doctrine, available today, and
+  is what this run did. Deadline measured at 01:46:26Z; PR opened at 00:50:54Z,
+  with ~56 minutes of credential left rather than ~-40.
+
+  Consequence for the rest of this run: the terminal step is already done, so a
+  kill from here costs the remaining *content*, not the PR.
