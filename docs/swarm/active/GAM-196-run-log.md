@@ -127,3 +127,63 @@ worker → `checker-reviewer`. Two-round gate cap (19a), three-attempt worker ca
   recommendation (route (a)), and the disclosed limits. Final read-back —
   GAM-196: `Todo`, `[tier/heavy, gate/human]`, 1 comment.
   GAM-428: `Backlog`, `[unreviewed, provenance/premise-gate]`.
+
+---
+
+## Second dispatch, 2026-08-20 ~03:22Z — REFUSED AT THE CLAIM (item 28b)
+
+This run is a different dispatch from the one above. It fired on the **release
+move that run made** (`In Progress -> Todo`, 03:18:47.099Z), and it is the
+counter-example to that run's last-but-one claim.
+
+- `2026-08-20T03:23Z` **CLAIM REFUSED — `gate/human`, constitution item 28b.**
+  GAM-196 read live before any other file was opened:
+  `state = Todo`, `labels = [tier/heavy, gate/human]` (label parents read
+  explicitly — `heavy`'s parent is `tier`, `human`'s parent is `gate`, so these
+  are `tier/heavy` and `gate/human` and not two bare words). Item 28b: *"On a
+  tiered issue in `Todo`, `gate/human` overrides every executor label and
+  **forbids a machine claim**."* The issue was **not** moved to `In Progress`.
+  No source file was changed. The issue stays in `Todo`.
+- `2026-08-20T03:23Z` **The issue's own body agrees**: *"there is no
+  machine-shippable slice left here. The row is now a product decision and
+  nothing else, which is why it carries `gate/human`."* Refusing is the
+  specified outcome, not a shortfall.
+
+### Measured: `gate/human` did NOT prevent this re-dispatch, and cannot as sequenced
+
+The previous run recorded that `gate/human` *"is what stops the `Todo` move from
+re-dispatching another machine into the same wall."* **That is false, and this
+run is the measurement.** From GAM-196's Linear history:
+
+| Time (UTC) | Event |
+| -- | -- |
+| `03:18:47.099Z` | `In Progress -> Todo` — the release move |
+| `03:18:47.248Z` | `+ human` (`gate/human`) applied — **149 ms later** |
+
+The dispatch webhook fires on the **state move**, so its `client_payload` was
+snapshotted 149 ms before `gate/human` existed. The proof is in this run's own
+dispatch prompt, which printed `Labels:   heavy` — one label, not two. The
+guard label was added to an issue whose dispatch was already in flight.
+
+`.github/workflows/claude-linear-dispatch.yml` contains **no `gate/human`
+test at all** (grepped: the only `human` matches are prose comments at
+`:21,:33,:42,:386,:468,:504,:562`). So nothing on the dispatch side filters it
+either; the label's whole force is the item-28b rule an agent applies to itself
+after it is already running and already billed.
+
+**The fix is an ordering rule, not new machinery:** apply `gate/human` **before**
+the `-> Todo` move, not after. A label present at snapshot time is at least
+visible in the payload; a label applied 149 ms later is invisible to the run it
+was meant to stop. Filed as a follow-up row rather than patched into the
+constitution here — amending the constitution is boss-architect/boss-arbiter
+authority, not the orchestrator's.
+
+### Delegation note
+
+Item 26/HEAVY expects delegation, and this run has no implementation to
+delegate — the row is refused at the claim, so there is no packet and no worker.
+Manufacturing a worker for a refusal is the ceremony item 26 removes. One
+`checker-premise` **is** dispatched, against this run's own two load-bearing
+claims (the refusal premise and the 149 ms re-dispatch finding), because those
+claims are about to be written into a new Linear row and the second one
+contradicts a record already committed to this branch.
