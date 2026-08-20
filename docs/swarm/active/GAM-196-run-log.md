@@ -428,3 +428,34 @@ a stale header is what the next run has to disprove.
   the first run on a *different* packet; this is round 1 for this packet.
   **If this line is the last one in this file, the run died holding this
   subagent** — no verdict came back and no worker was ever dispatched.
+- `2026-08-20T11:44Z` **PREMISE GATE VERDICT: REVISE (1 BLOCKER).** Subagent
+  returned; nothing left in flight. Report preserved as
+  `GAM-196-premise-gate-round2.md`. It ran rather than read: its own worktree,
+  `npm ci`, the change applied verbatim, `tsc` (exit 0), eslint, `format:check`,
+  and the **full 2583-test suite** twice.
+  **BLOCKER — my §6.1 escape was wrong, and I verified the refutation myself
+  rather than taking it on the subagent's word:** `VOLT_Portal_PRD.md:485`
+  (*"STUDENT: goal bar = own hours (MET-04)"*, inside OUT-01's own wireframe),
+  `task-ledger.md:595-597` (T038's **passed** acceptance criteria bind this bar to
+  BEH-02 by name) and `OutreachList.tsx:2085` (the shipped source cites BEH-02).
+  `/outreach`'s student goal bar **is** a BEH-02 bar. Withdrawn.
+  Four other measurements that changed the packet: my §4 test list was wrong in
+  both directions (**14 red, not 25; 34 lines listed, 20 of them green and
+  hazardous to "fix"**); acceptance criterion 2 cited a **blank line** (`:1343`;
+  the real assertion is `:1621`); criterion 5 **forbade what §3.4 mandated**; and
+  my §3.2 code block **fails `npm run format:check`** as pasted.
+- `2026-08-20T11:44Z` **`checker-content` VERDICT: FAIL / MAJOR** (dispatched
+  concurrently with the gate, `run_in_background: false`, both waited on).
+  Independently caught the same copy defect the gate did: the draft line said
+  *"not check-in"*, and **PRD `OUT-07` states outreach has no check-in in v1** —
+  completion is coach-driven. Two agents, different charters, same finding.
+  It **passed** every other proposed string on DES-14/15/16 and on item 17
+  (motivation ethics), and it **dissented from the gate on BEH-02**, arguing the
+  prescribed literal survives at `StudentHome.tsx:1647`. I followed the gate on
+  the BLOCKER and recorded the dissent rather than burying it.
+- `2026-08-20T11:46Z` **PACKET REVISION B WRITTEN.** All ten required revisions
+  applied. Two substantive scope changes: **§3.3 (the coach-row `Logged` rename)
+  is DEFERRED** to a filed row, which also retires the column-width risk; and
+  **§1a states plainly that the BLOCKER is real and that the owner's explicit
+  option-A approval is what carries it** — with the residual risk written into the
+  packet and the PR body rather than argued away.
