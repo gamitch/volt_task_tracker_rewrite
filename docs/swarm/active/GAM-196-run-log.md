@@ -195,3 +195,15 @@ contradicts a record already committed to this branch.
   `run_in_background: false` and waited on.
   **If this line is the last one in this file, the run died holding this
   subagent** — the verdict never came back and nothing below it happened.
+- `2026-08-20T03:30Z` **`checker-premise` VERDICT: REVISE (1 BLOCKER, 1 MINOR).**
+  Subagent returned; nothing was left in flight. CLAIM 1 (the item-28b refusal)
+  **SUPPORTED** — publishable as stated. CLAIM 2 **split**: the 149 ms ordering
+  is supported, but *"nothing on the dispatch side filters it either"* is
+  **REFUTED by shipped, CI-tested code**. The gate exists one layer above the
+  workflow, in `supabase/functions/linear-dispatch/filter.ts:358-361` (rule 8,
+  `HUMAN_GATED`) — I had grepped only `.github/workflows/`, which is why I
+  missed it. Correction applied below rather than argued with.
+  **Independently reproduced before accepting** (not taken on the subagent's
+  word): the four probes below were re-run by this run against the committed
+  `decideDispatch`, and `filter.ts:358-361` / `filter.test.ts:592-598` read
+  directly.
