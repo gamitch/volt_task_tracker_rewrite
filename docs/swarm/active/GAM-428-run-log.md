@@ -70,3 +70,8 @@ than papering over it.**
 executed the prescription, ran 2583 tests, and stood up a real PostgreSQL cluster
 to read the view back. That is the only reason this run did not ship a confident
 two-file fix whose second file changes nothing, and the only reason GAM-430 exists.
+
+**CI settled green**, every check: `Linear declaration`, `Typecheck, Lint, Format,
+Test, Build, Bundle Size`, `SQL suites (RLS denial, metric views, migration
+guards)`, `Edge Function tests (Deno)`, `Skill script tests`. Waited for it rather
+than reporting on the local gates alone.
