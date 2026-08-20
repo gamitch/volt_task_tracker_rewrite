@@ -578,3 +578,29 @@ a stale header is what the next run has to disprove.
   `docs/swarm/active/GAM-196-pr-body.md`. It leads with the one call the owner
   may want to reverse (the word `Signed up` against BEH-02's prescribed
   `confirmed`) and names the exact four lines that revert it.
+- `2026-08-20T12:12Z` **FINAL READ-BACK.**
+  GAM-196: `state = In Review` (never `Done` — item 28e; the merge closes it, not
+  me), `labels = [tier/heavy]`, 5 comments, **2 attachments**: PR #212 (this
+  work) and PR #210 (run 1's, **closed unmerged**). Item 28f's hazard is the
+  *last **open** linked PR*, and #210 is closed, so #212's merge is the one that
+  fires the automation. Recorded because a two-attachment issue is the shape that
+  rule warns about.
+  GAM-431: `Backlog`, priority Medium, `[tier/unreviewed, provenance/premise-gate]`.
+  GAM-432: `Backlog`, priority Low, same labels.
+- `2026-08-20T12:12Z` **Timestamp honesty.** Entries between `11:24Z` and `11:52Z`
+  in this file were written from my own running estimate and run up to ten
+  minutes ahead of the wall clock; the shell timestamps in the tool record are
+  authoritative. Left as written rather than silently rewritten — the ordering is
+  correct and the drift is the kind of thing a later reader should be able to see
+  rather than have to detect.
+- `2026-08-20T12:12Z` **Subagent accounting (AGENTS.md wall 2).** Six subagents
+  this run: 3 recon (parallel), `checker-premise` + `checker-content` (parallel),
+  `checker-premise` round 2, `worker-implementer`, its authorized continuation,
+  and `checker-reviewer` (parallel with the continuation). **Every one dispatched
+  with `run_in_background: false` and waited on; every one has a verdict line in
+  this file; nothing was in flight at any point.** No line in this log is a
+  dispatch without a matching verdict.
+- `2026-08-20T12:12Z` **RUN COMPLETE.** PR #212 open and out of draft, opened at
+  minute 7 with ~53 minutes of PR credential to spare and finalized at minute 53
+  — inside AGENTS.md wall 3's measured envelope. Issue in `In Review`. Two
+  follow-up rows filed. Nothing left running.
