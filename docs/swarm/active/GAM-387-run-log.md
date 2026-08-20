@@ -170,3 +170,31 @@ subagent's verdict; gates run; PR opened.
   applies; recorded per item 18's "record the tier used") with
   `run_in_background: false`. *If this line is the last one in this file, the run
   died holding this subagent.*
+- **WORKER VERDICT: complete, no dispute.** Commits `3d51d3c` (the boundary) and
+  `a86259a` (a fix to its own AC4b regex). **Existence verified rather than
+  assumed (item 21):** HEAD moved, `git diff --name-only 4859b58 HEAD` returns
+  exactly the three Allowed Files, working tree clean, and the boundary is in
+  the committed blob (285 lines) and wired at `router.tsx:219`/`:341`. Nothing
+  outside the allowlist was touched.
+  * Suite **98/2505 → 99/2514**, both counts up, no existing test edited.
+  * Every AC mutation was run with real red output captured: AC1, AC1b, AC2a,
+    AC2b, AC3, AC4, AC4b, AC5. **AC2a and AC2b each went red while the other
+    stayed green**, which is the pairing that was the whole point of the gate's
+    round-1 finding.
+  * **The worker reported a near-miss against itself**, which is the honest
+    outcome: its first AC4b test used `\bsorry\b`, which does not match at a DOM
+    text-node concatenation seam (`…problemSorry,…`, no space), so the mutation
+    came back *green*. It caught this only by actually running the mutation,
+    fixed the test, and committed the fix separately. That is precisely the
+    failure mode "run the mutation" exists to catch, and it would have shipped a
+    mutation-blind assertion otherwise.
+  * Decisions it made where the packet left room: boundary placed **outside**
+    `<Suspense>`; `vite:preloadError` path **not built** (so the string predicate
+    alone, per the packet's condition — the honest choice, since building it
+    untested was the alternative); `pathname+search` over `location.key`.
+  * For AC1b it found a real throw rather than a synthetic one: `AppRoutes`
+    alone never mounts `SeasonProvider`, so the real `CoachHome`'s
+    `useActiveSeason()` throws for a genuine reason.
+- **DISPATCHED `checker-reviewer`** (opus, `run_in_background: false`) — HEAVY
+  requires a separate checker; a worker may not self-certify. *If this line is
+  the last one in this file, the run died holding this subagent.*
