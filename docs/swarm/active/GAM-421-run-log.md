@@ -34,3 +34,43 @@ statement of where it died, not as a summary.
 
 - **00:48Z — run log created and pushed** as the first file write, before any
   measurement, per the dispatch standing order.
+
+- **00:49Z — premise measured: CONFIRMED, and stronger than the issue claims.**
+  Measured in this run, not read from documentation. The dispatch credential is
+  a JWT and carries its own expiry claims, so the lifetime is readable at
+  minute 0 by the run that holds it:
+
+  | Claim | Value |
+  | -- | -- |
+  | `iat` | `2026-08-20T00:46:26Z` (job start) |
+  | `exp` | `2026-08-20T01:46:26Z` |
+  | lifetime | **3600 s, exactly 60 minutes** |
+
+  This closes GAM-421's own stated verification gap. Its Verification note says
+  the one-hour lifetime "is GitHub's documented behaviour … and was **not**
+  independently measured here", bounding it only between minute 6 and minute 74.
+  It is now measured, and it is exact — and it did not need a long run to
+  measure, because the credential asserts it.
+
+  **Correction to the issue's model, and it is more severe than what is filed.**
+  GAM-421 describes two complementary credentials: a `ghs_` App token that can
+  open PRs but expires, and a long-lived PAT that "still pushes fine at minute
+  74". In *this* run there is no second credential. `GH_TOKEN`, `GITHUB_TOKEN`
+  and the token `actions/checkout` bakes into the `origin` remote URL are
+  **byte-identical** (same SHA-256), i.e. `secrets.CLAUDE_PR_TOKEN` is empty and
+  every path falls back to `github.token`:
+
+  | Probe at 00:48Z (minute ~6) | Result |
+  | -- | -- |
+  | `GH_TOKEN` `GET /repos/…` | `200` |
+  | `GH_TOKEN` `POST /pulls` head==base | `422` → authorized to create PRs |
+  | `PAT` env var | **empty (length 0)** |
+  | `PAT` `GET /repos/…` | `401` |
+
+  So GAM-421's consolation — "the work survives on the pushed branch and the
+  body artifact" — is **conditional on `CLAUDE_PR_TOKEN` being set, and it is
+  not set today.** `git push` runs on the same 60-minute clock as
+  `gh pr create`, because it is the same token. A run that passes minute 60
+  loses the branch too, not just the PR. That is the part worth escalating.
+
+  Premise holds → continuing. Not stopping.
