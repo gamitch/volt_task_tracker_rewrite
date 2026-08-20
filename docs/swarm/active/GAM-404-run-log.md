@@ -218,3 +218,47 @@ that signature unmistakable.
   reading (matching GAM-301's next-session note) this does not need a third
   premise-gate round if the human owner or `boss-architect` accepts the
   verified fix directly — only `worker-implementer` need be dispatched next.
+
+---
+
+## Owner session, 2026-08-20 — packet revision 3
+
+- **Packet revision 3 written** at the owner's direction, in an interactive
+  owner-present session rather than a dispatched run. This is the unblock path
+  the escalation named: item 19a caps the premise gate at two rounds, round 2
+  returned no BLOCKER, and the owner accepts round 2's fix directly rather than
+  looping to a round 3.
+- **Round 2's findings were re-verified against the repository before being
+  folded in**, not transcribed from the verdict. All five load-bearing claims
+  hold:
+  - `linear-assert-released.mjs` exits 1 on `NOT FOUND` (`:219-220`),
+    `UNDETERMINED` read error (`:226-227`), `UNDETERMINED` null state
+    (`:232-233`) and unexpected error (`:274`) — so `if: failure()` fires for
+    three causes, only one of which is `In Progress`. **The MAJOR is real.**
+  - `- name: Assert the run released its claim` at `:540` carries **no `id:`**,
+    so `steps.assert.outcome` is undefined today and part 1 of the fix is
+    genuinely required.
+  - `isIssueNotFoundError` is exported at `:174` of the same file the packet
+    already imports `classifyState` from.
+  - `js-yaml@4.3.0` is **not** declared in `dependencies` or `devDependencies`;
+    it resolves only via `eslint@9.39.5 > @eslint/eslintrc@3.3.6`
+    (`npm ls js-yaml`). Revision 2's "already a dependency" was half false.
+  - `scripts/linear/client.mjs:17` is `RATE_FLOOR = 150`; the 2500/hour figure
+    is at `:40`.
+- **All 8 findings folded in** — the MAJOR in all four parts, and all seven
+  MINOR. The three NITs are disclosed in §6 rather than actioned, per the
+  severity rules. §7 of the packet is a finding-by-finding table so the
+  acceptor can check the revision against round 2's verdict without re-reading
+  the packet.
+- **New shape `ASSERT_FAILED`** closes the MAJOR: notify when the Assert step
+  went red for a reason the notify script's own second read can no longer see.
+  Criterion 5 asserts it for both shapes round 2 measured
+  (`{state:{name:'In Review'}}` and `{state:null}`), with a named mutation that
+  turns only that criterion red.
+- **No code written, no worker dispatched, no gate re-run.** This entry changes
+  one planning artifact. The six gates are unaffected — nothing under `src/` or
+  `scripts/` was touched — and the branch still carries zero product code.
+- **Next step unchanged from the escalation, now unblocked:** dispatch
+  `worker-implementer` against packet revision 3. The row should move to `Todo`
+  for that dispatch; it must **not** move to `Done`, which would close a row
+  whose deliverable does not exist.
