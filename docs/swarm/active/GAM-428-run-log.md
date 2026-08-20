@@ -19,3 +19,6 @@ dispatch line is the last line in this file, the run died holding that subagent.
 | 11:19 | Branch created. Run log written as the first file write. |
 | 11:21 | PR body artifact written and validated (`check.mjs` exit 0, `declaration closes GAM-428`). |
 | 11:22 | **Draft PR #213 opened** at ~minute 5, ~56 minutes of credential remaining. `AGENTS.md` wall 3 satisfied. |
+| 11:26 | **Premise measured at source, independently.** Confirmed: `20260804000000_volunteer_hours_outreach_only.sql` joins `... and e.counts_volunteer_hours and e.type = 'outreach'`; `StudentHome.tsx:872` and `HoursTab.tsx:481` are both `if (!event \|\| !event.countsVolunteerHours) continue;` with no `type` test. Every line number in the filing verified. |
+| 11:27 | Also measured, and **not** in the filing: both real loaders already select `type` (`students.ts:863`, `reports.ts:437`), so item 27 is satisfied — the fix runs on real data on the real path, not a fixture. And the Switch's own on-screen description ("Turn this on if this competition should count toward volunteer hours") is itself a false promise post-T322. |
+| 11:28 | Packet written: `docs/swarm/active/GAM-428-packet.md`, with five Least confident decisions (item 19d). |
