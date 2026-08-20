@@ -367,3 +367,27 @@ that signature unmistakable.
   - **Verdict: ACCEPTED.** All 13 acceptance criteria independently checked
     against the actual diff and actual command output, not the worker's
     self-report. Moving to close-out: PR next.
+- **Canonical `gate-run` evidence block, commit `ee81b70`, tree clean
+  (`--require-clean`):**
+  ```
+  GATE RUN — ee81b70 on claude/gam-404-terminal-failure-notify — tree clean
+
+    1 tsc              exit 0  PASS
+    2 vite build       exit 0  PASS
+    3 format:check     exit 0  PASS
+    4 eslint           exit 0  PASS       0 errors, 380 warnings
+    5 vitest (full)    exit 0  PASS       101 files / 2578 tests  baseline 2566 (+12)
+    6 vitest scripts/  exit 0  PASS       15 files / 352 tests  baseline 340 (+12)
+
+  VERDICT: PASS — all six gates exit 0
+  ```
+  Baselines (2566 full / 340 scripted) are this run's own post-merge, pre-worker
+  measurement (14 files/340 tests scoped, minus this worker's 12 new = the
+  full-suite pre-change count derived the same way). An earlier invocation with
+  `--scope` pointed at the single new test file instead of `scripts/`
+  mis-reported gate 6 as FAIL (comparing 12 collected tests against the whole
+  directory's 340 baseline) — a scoping mistake on my part, corrected
+  immediately by re-running with the right scope; not a real regression, and
+  recorded here so the false-FAIL doesn't get mistaken for a suppressed one.
+- **Writing PR body artifact next**, per the `pr-body` skill, before attempting
+  the PR-open API call.
