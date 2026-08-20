@@ -406,7 +406,14 @@ describe('AC4b: DES-14/DES-16 voice -- no apology, no bare "Submit"/"OK", names 
         </MemoryRouter>,
       );
     });
-    expect(container.textContent).not.toMatch(/\bsorry\b|\boops\b/i);
+    // No leading/trailing `\b` here (unlike the `event-reminder-48h.test.tsx`
+    // precedent this otherwise mirrors): `container.textContent` concatenates
+    // adjacent DOM text nodes with no separator (the `EmptyState` title and
+    // description render as separate elements, e.g. "...problem" immediately
+    // followed by "Sorry, ..." with no space), so a leading `\b` before
+    // "sorry" can silently fail to match at that seam -- measured directly,
+    // not assumed.
+    expect(container.textContent).not.toMatch(/sorry|oops/i);
     expect(container.textContent).not.toMatch(/\bSubmit\b|\bOK\b/);
     // Names a real, keyboard-reachable action: a link back to the dashboard.
     expect(container.querySelector('a[href="/"]')?.textContent).toContain('Go to your dashboard');
