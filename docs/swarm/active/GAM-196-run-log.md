@@ -72,3 +72,27 @@ worker → `checker-reviewer`. Two-round gate cap (19a), three-attempt worker ca
   `run_in_background: false`, blocking. **If this line is the last one in this
   file, the run died holding this subagent** — that is AGENTS.md wall 2, not a
   run still thinking.
+- `2026-08-20` **`checker-premise` VERDICT: REVISE** (round 1/2). Returned, not
+  lost — 62 tool calls, ~10 min, 115.6K tokens. It ran rather than read: scratch
+  Postgres with the migrations applied, `pg_get_viewdef`, its own worktree,
+  `tsc --noEmit`, 108 real tests, a behaviour probe. Findings that change the
+  outcome:
+  - **BLOCKER** — my divergence (4′) is **UI-unreachable**.
+    `OutreachEventDialog.tsx` forces `countsVolunteerHours: true` for every
+    outreach event (`OUTREACH_FIXED_FLAGS`); `meetings.ts` hard-codes `false`
+    for meetings; `scripts/migrate/transform.ts` maps outreach → `true`. No DB
+    constraint couples them, but **no writer can produce the combination**. The
+    packet's shipped work would change no reachable number.
+  - **MAJOR** — I cited a **superseded** migration. The live `v_student_hours`
+    is `20260804000000_volunteer_hours_outreach_only.sql:44-60`, joining
+    `counts_volunteer_hours AND type = 'outreach'` — so the predicate delta is
+    `(type AND flag)` vs `(type)`, not "flag vs type" as I wrote.
+  - **MAJOR** — the *reachable* member of this divergence family is elsewhere:
+    a **competition** event with the admin volunteer-hours Switch on yields
+    planned hours on `StudentHome`/`HoursTab` that can never become confirmed
+    hours in the post-T322 view. Outside this packet's Allowed Files.
+  - **MAJOR** — acceptance criterion 3 was unsatisfiable as written (measured
+    `TS2554` at the three frozen call sites); a cheaper seam exists that needs
+    zero test edits.
+  - Divergence (4) dissolved: **UPHELD** (all four call sites traced).
+  Verdict recorded here per item 19. Gate report to follow as an artifact.
