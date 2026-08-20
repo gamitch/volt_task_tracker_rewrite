@@ -139,3 +139,14 @@ statement of where it died, not as a summary.
 
   14 of the 19 long (>60 min) runs opened no bot PR at all — GAM-333's stranded
   population, now explained.
+
+- **01:03Z — packet written** (`docs/swarm/active/GAM-421-packet.md`), HEAVY,
+  with the item 19d least-confident list. Allowed Files are
+  `scripts/dispatch-preflight.mjs` and its test only; `.github/workflows/**`
+  named as forbidden *at packet time* rather than at push time, per the
+  `AGENTS.md` "two walls" section.
+
+- **01:03Z — DISPATCHING `checker-premise`** (item 19: no packet reaches a
+  worker until this returns DISPATCH), `run_in_background: false`, blocking.
+  **If this line is the last one in this file, the run died holding this
+  subagent.**
