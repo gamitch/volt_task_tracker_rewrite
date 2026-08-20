@@ -51,10 +51,15 @@
  * new invention.
  *
  * -----------------------------------------------------------------------
- * 2. Planned hours -- NO SQL view exists for this; computed in TypeScript,
+ * 2. Planned hours -- `v_planned_rsvp_hours`/`v_student_planned_hours` DO
+ *    exist, but this tab deliberately computes its own in TypeScript,
  *    reusing the already-checker-approved definition from `OutreachList.tsx`
  *    (T038), extended the same way `StudentHome.tsx` (T054) already had to
- *    extend it for a non-outreach-only page.
+ *    extend it for a non-outreach-only page. The two are NOT currently
+ *    equivalent: `v_planned_rsvp_hours` also carries a `starts_at >= now()`
+ *    future guard (`20260724000001_planned_hours_future_guard.sql`, T128)
+ *    this TypeScript computation has no equivalent of -- disclosed, not
+ *    fixed, here.
  *
  * `OutreachList.tsx`'s `computeStudentHours`/`sessionHours` (its own module
  * doc #3): planned = sum of `sessionHours(session)` (`ends_at - starts_at`,
@@ -66,13 +71,17 @@
  * outreach-scoped (RPT-03 covers all of a season's hours, and `rsvps` rows
  * exist for meeting/outreach/competition sessions alike per
  * `supabase/migrations/20260717000000_scheduling_attendance.sql`), so
- * `computeStudentPlannedHours` below adds the one extra condition
- * `StudentHome.tsx`'s own `computePlannedHours` (T054, read-only reference)
- * already established for this identical broader-scope situation:
- * `event.countsVolunteerHours` must also be true -- the same flag
- * `v_student_hours`'s own join (`join events e ... and e.counts_volunteer_hours`)
- * uses for confirmed hours, so a session that could never contribute
- * confirmed hours once completed never contributes planned hours either.
+ * `computeStudentPlannedHours` below adds two extra conditions.
+ * `StudentHome.tsx`'s own `computePlannedHours` (T054, read-only reference,
+ * dead on its render path -- left byte-unchanged here) established the
+ * first: `event.countsVolunteerHours` must also be true, so
+ * a session that could never contribute confirmed hours once completed
+ * never contributes planned hours either. The second, added by this task,
+ * is `event.type === 'outreach'`, per the 2026-08-03 owner ruling in
+ * `20260804000000_volunteer_hours_outreach_only.sql`'s header ("Volunteer
+ * hours = `type = 'outreach'` ONLY") -- the same rule that governs
+ * confirmed hours, so a `competition` session can never contribute planned
+ * hours either, regardless of the flag.
  * `computeStudentPlannedHours` is otherwise byte-identical in shape to
  * `OutreachList.tsx`'s `computeStudentHours`'s planned branch. Never summed
  * with `confirmedHours` anywhere in this file (module doc #4).
@@ -462,10 +471,13 @@ export function sessionHours(session: { startsAt: string; endsAt: string }): num
  * Module doc #2: `OutreachList.tsx`'s `going` + still-`scheduled` planned-
  * hours definition, extended with `StudentHome.tsx`'s own
  * `event.countsVolunteerHours` guard (this tab is not outreach-scoped, so
- * that guard is required here the same way it already was there). A
- * `completed` session (module doc #1's confirmed-hours domain) or a session
- * on a `!countsVolunteerHours` event never contributes here, regardless of
- * RSVP status.
+ * that guard is required here the same way it already was there), and with
+ * an `event.type === 'outreach'` test per the 2026-08-03 owner ruling
+ * (`20260804000000_volunteer_hours_outreach_only.sql`'s header, ruling 2):
+ * "Volunteer hours = `type = 'outreach'` ONLY". A
+ * `completed` session (module doc #1's confirmed-hours domain), a session on
+ * a `!countsVolunteerHours` event, or a session on a non-`outreach` event
+ * (e.g. a `competition`) never contributes here, regardless of RSVP status.
  */
 export function computeStudentPlannedHours(
   studentId: string,
@@ -478,7 +490,7 @@ export function computeStudentPlannedHours(
   for (const session of sessions) {
     if (session.status !== 'scheduled') continue;
     const event = eventById.get(session.eventId);
-    if (!event || !event.countsVolunteerHours) continue;
+    if (!event || !event.countsVolunteerHours || event.type !== 'outreach') continue;
     const hasGoingRsvp = rsvps.some(
       (rsvp) =>
         rsvp.sessionId === session.id && rsvp.studentId === studentId && rsvp.status === 'going',

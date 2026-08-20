@@ -135,6 +135,27 @@ describe('crossedMilestones', () => {
 });
 
 describe('computeStudentPlannedHours -- module doc #2 boundary cases', () => {
+  // GAM-428: a `competition` event whose admin-editable "Counts toward
+  // volunteer hours" flag is ON -- `v_student_hours` requires BOTH
+  // `e.counts_volunteer_hours` AND `e.type = 'outreach'`, so this must never
+  // produce planned hours even though the flag alone would let it through.
+  const competitionOnEvent: HoursEventRow = {
+    id: 'event-competition-on',
+    seasonId: 's1',
+    type: 'competition',
+    teamIds: null,
+    countsVolunteerHours: true,
+  };
+  // GAM-428: a `competition` event with the flag OFF -- unchanged behaviour,
+  // asserted so a later refactor cannot quietly drop the flag half of the
+  // predicate while fixing the type half.
+  const competitionOffEvent: HoursEventRow = {
+    id: 'event-competition-off',
+    seasonId: 's1',
+    type: 'competition',
+    teamIds: null,
+    countsVolunteerHours: false,
+  };
   const events: HoursEventRow[] = [
     {
       id: 'event-outreach',
@@ -150,6 +171,8 @@ describe('computeStudentPlannedHours -- module doc #2 boundary cases', () => {
       teamIds: null,
       countsVolunteerHours: false,
     },
+    competitionOnEvent,
+    competitionOffEvent,
   ];
   const sessions: HoursSessionRow[] = [
     {
@@ -173,6 +196,22 @@ describe('computeStudentPlannedHours -- module doc #2 boundary cases', () => {
       eventId: 'event-meeting',
       startsAt: '2026-07-22T23:00:00.000Z',
       endsAt: '2026-07-23T01:00:00.000Z', // 2h
+      status: 'scheduled',
+      peopleReached: null,
+    },
+    {
+      id: 'session-scheduled-competition-on',
+      eventId: 'event-competition-on',
+      startsAt: '2026-08-05T15:00:00.000Z',
+      endsAt: '2026-08-05T19:00:00.000Z', // 4h
+      status: 'scheduled',
+      peopleReached: null,
+    },
+    {
+      id: 'session-scheduled-competition-off',
+      eventId: 'event-competition-off',
+      startsAt: '2026-08-06T15:00:00.000Z',
+      endsAt: '2026-08-06T19:00:00.000Z', // 4h
       status: 'scheduled',
       peopleReached: null,
     },
@@ -235,6 +274,49 @@ describe('computeStudentPlannedHours -- module doc #2 boundary cases', () => {
     const planned = computeStudentPlannedHours('student-a', sessions, events, rsvps);
     expect(planned).toBe(3);
     expect(typeof planned).toBe('number');
+  });
+
+  // ---------------------------------------------------------------------
+  // GAM-428: `v_student_hours`'s confirmed-hours join requires BOTH
+  // `e.counts_volunteer_hours` AND `e.type = 'outreach'`
+  // (`20260804000000_volunteer_hours_outreach_only.sql`). Planned hours must
+  // apply the same two-part predicate, not the flag alone.
+  // ---------------------------------------------------------------------
+
+  it('GAM-428 criterion 1: excludes a going RSVP on a scheduled competition session even when countsVolunteerHours is true', () => {
+    const rsvps: HoursRsvpRow[] = [
+      {
+        id: 'r1',
+        sessionId: 'session-scheduled-competition-on',
+        studentId: 'student-a',
+        status: 'going',
+      },
+    ];
+    expect(computeStudentPlannedHours('student-a', sessions, events, rsvps)).toBe(0);
+  });
+
+  it('GAM-428 criterion 2: still returns the correct non-zero total for an outreach event with the flag on -- not an over-correction that zeroes legitimate planned hours', () => {
+    const rsvps: HoursRsvpRow[] = [
+      {
+        id: 'r1',
+        sessionId: 'session-scheduled-outreach',
+        studentId: 'student-a',
+        status: 'going',
+      },
+    ];
+    expect(computeStudentPlannedHours('student-a', sessions, events, rsvps)).toBe(3);
+  });
+
+  it('GAM-428 criterion 3: still returns 0 for a competition event with the flag off -- unchanged behaviour', () => {
+    const rsvps: HoursRsvpRow[] = [
+      {
+        id: 'r1',
+        sessionId: 'session-scheduled-competition-off',
+        studentId: 'student-a',
+        status: 'going',
+      },
+    ];
+    expect(computeStudentPlannedHours('student-a', sessions, events, rsvps)).toBe(0);
   });
 });
 
@@ -404,6 +486,60 @@ describe('buildStudentRows / buildTeamGroups -- fixture walkthrough', () => {
       expect(group.rows[group.rows.length - 1].kind).toBe('subtotal');
       expect(group.rows.slice(0, -1).every((r) => r.kind === 'student')).toBe(true);
     }
+  });
+
+  // ---------------------------------------------------------------------
+  // GAM-428 criterion 4: assert the competition case through
+  // `buildStudentRows`, not only the pure `computeStudentPlannedHours`
+  // function, so the test follows the value into the row the table
+  // actually renders (the "Planned hrs" column beside "Confirmed hrs").
+  // ---------------------------------------------------------------------
+  it('GAM-428 criterion 4: a competition event with countsVolunteerHours=true and a going RSVP produces plannedHours 0 in the row buildStudentRows renders', () => {
+    const team = data.students[0]!;
+    const competitionEvent: HoursEventRow = {
+      id: 'event-competition-t428',
+      seasonId: data.seasonId,
+      type: 'competition',
+      teamIds: null,
+      countsVolunteerHours: true,
+    };
+    const competitionSession: HoursSessionRow = {
+      id: 'session-competition-t428',
+      eventId: competitionEvent.id,
+      startsAt: '2026-08-21T15:00:00.000Z',
+      endsAt: '2026-08-21T20:00:00.000Z', // 5h
+      status: 'scheduled',
+      peopleReached: null,
+    };
+    const withCompetition: HoursLoadResult = {
+      ...data,
+      students: [
+        ...data.students,
+        {
+          id: 'student-competition-t428',
+          name: 'Fixture Competition T428',
+          teamId: team.teamId,
+          isActive: true,
+          goalHoursOverride: null,
+        },
+      ],
+      events: [...data.events, competitionEvent],
+      sessions: [...data.sessions, competitionSession],
+      rsvps: [
+        ...data.rsvps,
+        {
+          id: 'rsvp-competition-t428',
+          sessionId: competitionSession.id,
+          studentId: 'student-competition-t428',
+          status: 'going',
+        },
+      ],
+    };
+    const rows = buildStudentRows(withCompetition);
+    const row = rows.find((r) => r.rowId === 'student-competition-t428');
+    expect(row).toBeDefined();
+    expect(row?.kind).toBe('student');
+    expect(row?.plannedHours).toBe(0);
   });
 });
 
