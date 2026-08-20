@@ -366,3 +366,14 @@ a stale header is what the next run has to disprove.
   PR credential remaining (AGENTS.md wall 3: 21 of 21 in-run PRs were opened at or
   before minute 53, none after minute 60). Run 2's PR body preserved as
   `GAM-196-pr-body-run2-closed.md`; #210 stays closed and unmerged.
+- `2026-08-20T11:25Z` **DISPATCHED 3 recon subagents CONCURRENTLY**, all with
+  `run_in_background: false` in a single message so they run in parallel and this
+  run blocks on all three (the owner's `11:17:58Z` instruction asks for
+  parallelism; AGENTS.md wall 2 forbids leaving any of them in flight):
+  **R1** — every hours figure rendered on `/outreach` and its exact label copy;
+  **R2** — every other surface that shows hours, and the copy it uses;
+  **R3** — PRD/BEH-02 wording constraints and every test asserting on that copy.
+  All three are read-only; no worktree is needed (item 23 governs mutation, and
+  none of these mutates).
+  **If this line is the last one in this file, the run died holding these three
+  subagents** — no verdict came back and nothing below it happened.
