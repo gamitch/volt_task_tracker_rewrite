@@ -459,3 +459,27 @@ a stale header is what the next run has to disprove.
   **§1a states plainly that the BLOCKER is real and that the owner's explicit
   option-A approval is what carries it** — with the residual risk written into the
   packet and the PR body rather than argued away.
+- `2026-08-20T11:45Z` **TWO FOLLOW-UP ROWS FILED** (item 20; gate required
+  revisions 2 and 10 both said *file it before dispatch*, not *intend to*).
+  Written through `.claude/skills/linear-task-writing` (item 30) — defect first,
+  priority stated and defended, every line number re-opened, `Verification note`
+  carrying what the gate measured rather than what the packet assumed. Ids read
+  back from the create mutations:
+  - **GAM-431** — *"/outreach counts volunteer hours from RSVPs, but the PRD
+    specifies attendance — no-shows accrue hours, walk-ins accrue none"*.
+    `Backlog`, `[tier/unreviewed, provenance/premise-gate]`, priority Medium.
+    This is the substantive half of GAM-196 that route (a) deliberately does not
+    fix.
+  - **GAM-432** — *"Coach past-event row reads 'Logged 0h' beside 'Attended 2
+    students' — the two labels come from different sources"*. `Backlog`, same
+    labels, priority Low. Carries the deferred §3.3 rename, the T131 column-width
+    re-measure, and `StatCell.tsx`'s stale doc.
+  Packet references corrected from the placeholder ids I had written before
+  Linear allocated (`GAM-430`/`GAM-431` → `GAM-431`/`GAM-432`) — Linear allocates
+  atomically and an author cannot choose the number (item 29a).
+- `2026-08-20T11:46Z` **DISPATCHED `checker-premise` ROUND 2** (`model: "opus"`),
+  `run_in_background: false`. Round 2 of 2 under item 19a — a third REVISE
+  escalates to the owner rather than looping. Mandate scoped to the deltas, not a
+  re-audit, because the round-1 gate already executed the change end to end.
+  **If this line is the last one in this file, the run died holding this
+  subagent** — no verdict, and no worker was ever dispatched.

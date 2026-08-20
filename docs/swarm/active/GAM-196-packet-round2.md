@@ -63,7 +63,7 @@ attendance**, `:1901-1908`, consumed `:1934` — a prior CHECKER FIX that rework
 T121 as MAJOR) · `Reached 45`. That contradiction exists **today** under the label
 `Logged`, where it is invisible because the label lies. §3.3 is deferred (below)
 precisely so this packet does not surface it without a disclosure; the row that
-owns it is **GAM-431**.
+owns it is **GAM-432**.
 
 **Gate revision 10 — the deviation is real and is now a filed row, not an
 intention.** PRD `OUT-05` (`VOLT_Portal_PRD.md:319`) specifies that marking a day
@@ -72,7 +72,7 @@ complete writes `attendance` rows and *"hours computed per MET-03"*; `MET-04`
 So `/outreach`'s past-session hours — and, via `PRD:485`, its student goal bar —
 are **specified attendance-backed**, and are not. **Route (a) is a labelling
 change over a live spec deviation, and this packet says so on its face.** The
-deviation is filed as **GAM-430**.
+deviation is filed as **GAM-431**.
 
 **`plannedHours` is not part of the defect and must not be renamed.** `MET-04`
 defines planned hours as *"Σ duration of future `going` sessions"* — exactly what
@@ -120,7 +120,7 @@ the gate established both itself:
 
 **Residual risk, stated rather than hidden:** if the owner reads "option A" as
 approving the *principle* but not the *word*, §3.1 needs a second sign-off. The PR
-body leads with this so the owner can reverse one commit's worth of copy. GAM-430
+body leads with this so the owner can reverse one commit's worth of copy. GAM-431
 carries the underlying spec question either way.
 
 ---
@@ -144,7 +144,7 @@ A worker may edit **only**:
 **Known rot left in place, disclosed so a checker does not file it as new (gate,
 MINOR).** `src/components/StatCell.tsx:13,:44` name `"Logged"`/`"Confirmed"` as
 canonical labels and `:25` cites a stale test line. `StatCell.tsx` is forbidden
-here; the rot is carried by **GAM-431**.
+here; the rot is carried by **GAM-432**.
 
 ---
 
@@ -198,7 +198,7 @@ measured: OUT-01 (`PRD:315`) and its wireframe (`PRD:482`) specify that cell as
 *"hours awarded"*, so `Signed up` moves it further from spec, not closer; the
 owner's quote authorizes changing the word *confirmed*, and that cell says
 *Logged*; and the rename would surface the `Signed up 0h · Attended 2 students`
-contradiction with no disclosure. It is filed as **GAM-431**. This also retires
+contradiction with no disclosure. It is filed as **GAM-432**. This also retires
 the column-width question the gate raised as revision 9 (`:2943`'s measured 84px
 natural-content ceiling under a `pixel(102)` budget set by T131) — no label on
 that column changes, so nothing to re-measure.
@@ -207,7 +207,7 @@ that column changes, so nothing to re-measure.
 
 - `:715-720` — says the RSVP formula *"is tracked separately as T188, not
   reconciled here."* Reconciled now, by naming rather than arithmetic. Name
-  GAM-196, the owner's option-A decision, and **GAM-430** for the spec deviation.
+  GAM-196, the owner's option-A decision, and **GAM-431** for the spec deviation.
 - `:1374-1379` — `computeStudentHours`'s JSDoc. Keep the mechanism description;
   add that the **user-visible** name for that field on `/outreach` is *signed up*,
   and that *confirmed* is reserved app-wide for the attendance-backed
@@ -289,7 +289,7 @@ green. Mutate in your **own worktree** (item 23), never the shared tree.
    accurate string. **Two checkers disagreed and I followed the gate**, because
    OUT-01/`PRD:482` specify that cell's content and that is an owner copy decision.
    **What would make me wrong:** `Logged` is a false label shipping for longer.
-   GAM-431 carries it.
+   GAM-432 carries it.
 3. **That `Signed up` is the right words.** `checker-content` concurred it is the
    least-bad of the named alternatives (*Committed* collides with
    `CoachHome.tsx:2577`; *RSVP'd* fails DES-14; *Expected* is taken by the adjacent
@@ -310,8 +310,8 @@ green. Mutate in your **own worktree** (item 23), never the shared tree.
 
 ## 7. Out of scope, deliberately
 
-- Any hours arithmetic anywhere (option B) — **GAM-430** owns the spec question.
-- The coach event-row `Logged` label and `StatCell.tsx`'s stale doc — **GAM-431**.
+- Any hours arithmetic anywhere (option B) — **GAM-431** owns the spec question.
+- The coach event-row `Logged` label and `StatCell.tsx`'s stale doc — **GAM-432**.
 - Wording on home, leaderboard, reports, roster, or the weekly digest.
 - Collapsing `GoalProgressBar`'s four hand-rolled tiles into `StatCell` — the gate
   suggested it and also said not to fold it in; `StatCell.tsx:20-27` records a
