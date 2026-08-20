@@ -398,8 +398,12 @@ test.describe('GAM343 outreach lifecycle', () => {
     // with the entire attendance write path deleted (the one-minute
     // 11:58 PM-11:59 PM session -- GAM-377 no longer allows an equal,
     // zero-duration pair here -- makes the unoverridden default
-    // `hours_override: null`, and the confirm label + view delta would both
-    // read 0 either way).
+    // `hours_override: null`, and neither the confirm label nor the view
+    // delta would then be distinguishable from a deleted write path at the
+    // precision that matters: `formatHours` rounds 1/60 h to "0", and the
+    // view's own delta is a hair above 0 rather than 0. Before GAM-377 this
+    // read "both read 0 either way", which was exactly true of the
+    // zero-duration pair and is off by 1/60 h for the view half now.)
     await dlg.getByLabel(new RegExp(`^${PERSONAS.student.displayName} hours`)).fill('2.5');
     await dlg.getByLabel(new RegExp(`^${PERSONAS.student.displayName} hours`)).blur();
 
