@@ -521,3 +521,37 @@ a stale header is what the next run has to disprove.
   because a topic sounds sensitive.* Recorded per item 18.
   **If this line is the last one in this file, the run died holding this
   subagent** — the diff never landed and no checker ever saw it.
+- `2026-08-20T11:59Z` **WORKER VERDICT: work landed, and it reported a failure of
+  my own acceptance criterion rather than papering over it.** Commit
+  **`c2c18c7`** — *"GAM-196: rename /outreach's RSVP-derived hours to 'signed
+  up'"*. Subagent returned; nothing left in flight.
+  **Existence verified independently (item 21 — "clean" and "committed" are
+  different claims), against the committed blob and not the working tree:**
+  `git show --stat c2c18c7` lists exactly the two Allowed Files;
+  `git show c2c18c7:…/OutreachList.tsx | grep -c 'hrs signed up'` → **1**;
+  `… grep -c 'hrs confirmed'` → **0** (acceptance criterion 1);
+  `… grep -c "'Logged'"` → **2**, so the deferred §3.3 really is untouched
+  (criterion 4). Pushed.
+  Gates the worker ran: `tsc --noEmit` exit 0; `format:check` exit 0 — so the
+  six-space block gate round 2 supplied is prettier-exact; `eslint .` exit 0;
+  scoped vitest **129/129**; full suite **2583/2583** — both matching the
+  gate-measured baselines exactly.
+- `2026-08-20T12:00Z` **THE NAMED MUTATION DID NOT GO RED, and that is a real
+  finding.** Reverting `Signed up` → `Confirmed` in the worker's own worktree left
+  the scoped suite at exit 0, 129/129. Cause, measured by the worker: every
+  assertion checks the concatenated sibling string `"{n} hrs signed up"`, and the
+  standalone tile label renders adjacent with no separator, so the mutant DOM
+  reads `Confirmed9 hrs signed up` and `.toContain('9 hrs signed up')` still
+  matches. **The tile label is unguarded** — a pre-existing coverage hole this
+  change neither created nor closed. The worker declined to close it because §4
+  authorized exactly one new assertion, which is correct scope discipline and
+  exactly what item 20 exists to catch. **I am closing it now rather than filing
+  it**, because item 26 requires a named mutation that actually turns a test red
+  and without one this task has no mutation proof at all.
+- `2026-08-20T12:01Z` **DISPATCHED 2 subagents CONCURRENTLY**, both with
+  `run_in_background: false`: the **worker** (continued, same context) to close
+  the mutation gap and re-run the mutation; and **`checker-reviewer`** on
+  `c2c18c7` against the packet's acceptance criteria. The added assertion is
+  purely additive, so the checker's review of everything else holds regardless.
+  **If this line is the last one in this file, the run died holding these two
+  subagents.**
