@@ -389,5 +389,15 @@ that signature unmistakable.
   directory's 340 baseline) — a scoping mistake on my part, corrected
   immediately by re-running with the right scope; not a real regression, and
   recorded here so the false-FAIL doesn't get mistaken for a suppressed one.
+- **Item 20 follow-up filed: GAM-426**, before opening the PR. Packet §6 NIT 3
+  disclosed but did not fix: a run whose workflow never schedules any job at
+  all (webhook never arrives, Actions platform incident, or a whole-run
+  cancellation before job dispatch) still notifies nobody, because both
+  `linear-escalation-notify.mjs` and this PR's `linear-terminal-failure-notify.mjs`
+  run as steps *inside* the `assert-released` job — unreachable if that job
+  itself never runs. No existing Linear row covered this specific gap
+  (searched by keyword first). Filed to `Backlog` with `tier/unreviewed`, per
+  item 28a/d — not `Todo`, so it isn't self-dispatched (GAM-382's lesson).
+  https://linear.app/gamitch/issue/GAM-426
 - **Writing PR body artifact next**, per the `pr-body` skill, before attempting
   the PR-open API call.
