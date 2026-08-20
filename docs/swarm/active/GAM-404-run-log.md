@@ -331,3 +331,39 @@ that signature unmistakable.
   dispute filed. Self-report only — independently verifying next before
   accepting (worker cannot self-certify; item 26 STANDARD requires the
   orchestrator replay the mutation directly).
+- **Independent verification (orchestrator, item 26 STANDARD replay).**
+  - `git show cb69f96 --stat`: exactly the three Allowed Files, nothing else.
+    `git diff main -- linear-escalation-notify.mjs linear-assert-released.mjs`
+    empty both — byte-identical, criterion 13 confirmed directly.
+  - Read `scripts/linear-terminal-failure-notify.mjs` in full: matches packet
+    §2's pseudocode — `classifyTerminalFailure`'s branch order, shapes, and
+    the `assertOutcome === 'failure'` → `ASSERT_FAILED` fix are all present;
+    `issue?.title ?? title` gives `issue.title` precedence per the round-2
+    MINOR; imports are read-only from both siblings, no reimplementation.
+  - Read the patch: `id: assert` added at the correct step, new step's `if:`
+    contains `needs.work.result`, `env:` contains `ASSERT_OUTCOME`, `run:`
+    argv order (`identifier title workResult assertOutcome runUrl`) matches
+    `main()`'s destructuring order exactly. `git apply --check
+    docs/swarm/active/GAM-404-workflow-terminal-failure-notify.patch` against
+    this tree (already merged to current `main`) → applies clean.
+    `git log --stat main...HEAD -- .github/workflows/` → empty, confirmed no
+    reachable commit touches workflows.
+  - **Replayed criterion 5's named mutation myself**, independently of the
+    worker's report: backed up the file, deleted the
+    `assertOutcome === 'failure'` branch, ran
+    `npx vitest run scripts/linear-terminal-failure-notify.test.mjs` →
+    **exactly 2 tests red** (the `ASSERT_FAILED` classify case and its
+    Slack-post case), **10 stayed green**. Restored from the pre-mutation
+    backup, `diff` confirmed byte-identical, re-ran → **12/12 green**.
+  - **Ran all six gates myself, not from the worker's report:**
+    `npm run typecheck` exit 0; `npm run build` exit 0 (pre-existing
+    chunk-size advisory only); `npm run format:check` exit 0; `npm run lint`
+    → 380 warnings / 0 errors (matches pre-existing baseline, confirmed by
+    the packet's own criterion 12 clause); `npm run test` (full vitest) →
+    **101 files / 2578 tests**, all green; `npx vitest run scripts/` →
+    **15 files / 352 tests**, all green — the 14/340 post-merge baseline
+    plus exactly this worker's own 12 new tests, zero drift elsewhere.
+  - `git status --short` clean after verification (mutation fully reverted).
+  - **Verdict: ACCEPTED.** All 13 acceptance criteria independently checked
+    against the actual diff and actual command output, not the worker's
+    self-report. Moving to close-out: PR next.
