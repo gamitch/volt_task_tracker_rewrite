@@ -377,3 +377,39 @@ a stale header is what the next run has to disprove.
   none of these mutates).
   **If this line is the last one in this file, the run died holding these three
   subagents** — no verdict came back and nothing below it happened.
+- `2026-08-20T11:32Z` **RECON VERDICTS — all 3 subagents RETURNED. Nothing left in
+  flight.** Findings that change the plan:
+
+  **R1 (the `/outreach` page).** The page draws a planned/confirmed split already,
+  but **both sides of it are RSVP-derived** (`OutreachList.tsx:1380-1399`):
+  `confirmedHours` = a `going` RSVP on a **completed** session; `plannedHours` =
+  a `going` RSVP on a **scheduled** session. Neither touches `attendance`. The
+  page reads `attendance` only for a head count (`:1867-1879`, consumed `:1934`),
+  and its own doc comment `:1863-1866` says so. Live label strings: `Confirmed`
+  (`:2152`), `{n} hrs confirmed` (`:2155`), `Planned` (`:2160`), `{n} hrs planned`
+  (`:2163`), `aria-valuetext` (`:2146`), milestone toast `…(confirmed hours).`
+  (`:2007`), and the coach event-row label `bucket === 'upcoming' ? 'Planned' :
+  'Logged'` (`:2824`, `:2958`) — **`Logged` names the same RSVP number and implies
+  an attendance log that does not exist.**
+
+  **R2 (everywhere else).** `v_student_hours` has exactly four direct readers
+  (`loaders/reports.ts:425`, `loaders/coachHome.ts:350`, `loaders/leaderboard.ts:138`,
+  `functions/send-reminders/index.ts:512`) plus three SQL views over it. Those
+  surfaces say `confirmed` and mean attendance. **Correction to the issue text:**
+  the roster displays no confirmed-hours figure at all — `StudentsTab.tsx:1035` is
+  a *goal override*, not `v_student_hours`. There is **no shared copy module**;
+  every label is an inline literal.
+
+  **R3 (the constraint that reshapes this task).** **PRD `BEH-02`
+  (`VOLT_Portal_PRD.md:246`) prescribes a literal legend** — *"62 h confirmed +
+  14 h planned"* — and constitution item 14 plus the non-negotiable at
+  `constitution.md:14` make prescribed PRD copy owner-approval territory.
+  **And BEH-02 does NOT disclose an RSVP heuristic**: the word RSVP does not
+  appear in it. The "BEH-02 disclosed the heuristic" claim in GAM-196's own body
+  traces only to a *code comment* (`OutreachList.tsx:715-720`). Any packet
+  asserting BEH-02 discloses it is asserting something false.
+  `MET-04` (`:566`) defines planned hours as future `going` sessions — which is
+  what `/outreach` already computes — and confirmed hours as Σ`MET-03`, the
+  attendance-backed formula, **which is not what `/outreach` computes.**
+  25 existing assertions in `OutreachList.test.tsx` pin the current strings, plus
+  `GoalBar.test.tsx:35,81-82` and `StatCell.test.tsx:34-36`.
