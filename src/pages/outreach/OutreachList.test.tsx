@@ -1625,6 +1625,13 @@ describe('<OutreachList /> coach view', () => {
     expect(container.textContent).toContain('7 hrs planned');
     // GAM-196 §3.2: the explanatory line disclosing which figure is which.
     expect(container.textContent).toContain('From outreach sign-ups, not attendance.');
+    // GAM-196 mutation guard: the standalone tile label. `textContent`
+    // concatenates the label and its value with no separator, so this only
+    // passes if the LABEL itself (not just the value string) reads "Signed
+    // up" -- catches a revert of the label alone back to "Confirmed", which
+    // the two assertions above cannot (they match "9 hrs signed up" as a
+    // substring regardless of what precedes it).
+    expect(container.textContent).toContain('Signed up9 hrs signed up');
   });
 
   it('BEH-01: the team goal bar fires milestone toasts once confirmed hours cross them (first render only)', async () => {
