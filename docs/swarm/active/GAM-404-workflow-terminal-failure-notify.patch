@@ -1,0 +1,58 @@
+From 7a87201a6e8a01c7e77e2dfdb9708868b82ebf8e Mon Sep 17 00:00:00 2001
+From: "claude[bot]" <41898282+claude[bot]@users.noreply.github.com>
+Date: Thu, 20 Aug 2026 02:28:21 +0000
+Subject: [PATCH] GAM-404: throwaway commit for workflow edit (will be reset)
+
+---
+ .github/workflows/claude-linear-dispatch.yml | 31 ++++++++++++++++++++
+ 1 file changed, 31 insertions(+)
+
+diff --git a/.github/workflows/claude-linear-dispatch.yml b/.github/workflows/claude-linear-dispatch.yml
+index 9da116f..38d6587 100644
+--- a/.github/workflows/claude-linear-dispatch.yml
++++ b/.github/workflows/claude-linear-dispatch.yml
+@@ -538,6 +538,7 @@ jobs:
+       # this job always runs `main`'s copy of the assertion regardless of what
+       # `work` did to its own checkout.
+       - name: Assert the run released its claim
++        id: assert
+         env:
+           LINEAR_API_KEY: ${{ secrets.LINEAR_DISPATCH_API_KEY }}
+           # The identifier goes through `env:`, never interpolated into
+@@ -580,3 +581,33 @@ jobs:
+           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+           ISSUE_IDENTIFIER: ${{ github.event.client_payload.identifier }}
+         run: node scripts/linear-escalation-notify.mjs "$ISSUE_IDENTIFIER"
++
++      # GAM-404 Phase 1 deliverable ("notify on every terminal failure, not
++      # only comments matching the current escalation marker" --
++      # 2026-08-15-durable-multi-agent-execution-plan.md:577).
++      #
++      # WIDER than the step above on purpose. `if: failure()` alone only
++      # catches a failing Assert step -- and note that step fails for THREE
++      # reasons, not one (In Progress; NOT FOUND; either UNDETERMINED
++      # shape). A `work` job that itself failed or was cancelled, but left
++      # Linear looking released, previously notified nobody at all --
++      # measured, `checker-premise` round 1. `needs.work.result` is readable
++      # here because this job already declares `needs: work` (line 511).
++      #
++      # ASSERT_OUTCOME closes the hole round 2 measured: when the Assert
++      # step went red for a reason the notify script's own second read can
++      # no longer see, the script would otherwise classify NO_FAILURE and
++      # say nothing about a red job. Internally still a no-op for ESCALATED
++      # (the step above already reported it). Same never-a-gate contract:
++      # always exits 0.
++      - name: Tell the owner about any other terminal failure
++        if: failure() || needs.work.result == 'failure' || needs.work.result == 'cancelled'
++        env:
++          LINEAR_API_KEY: ${{ secrets.LINEAR_DISPATCH_API_KEY }}
++          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
++          ISSUE_IDENTIFIER: ${{ github.event.client_payload.identifier }}
++          ISSUE_TITLE: ${{ github.event.client_payload.title }}
++          WORK_RESULT: ${{ needs.work.result }}
++          ASSERT_OUTCOME: ${{ steps.assert.outcome }}
++          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
++        run: node scripts/linear-terminal-failure-notify.mjs "$ISSUE_IDENTIFIER" "$ISSUE_TITLE" "$WORK_RESULT" "$ASSERT_OUTCOME" "$RUN_URL"
+-- 
+2.54.0
+
