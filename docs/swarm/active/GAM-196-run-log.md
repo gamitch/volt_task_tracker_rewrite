@@ -187,3 +187,11 @@ Manufacturing a worker for a refusal is the ceremony item 26 removes. One
 claims (the refusal premise and the 149 ms re-dispatch finding), because those
 claims are about to be written into a new Linear row and the second one
 contradicts a record already committed to this branch.
+- `2026-08-20T03:24Z` **DISPATCHED `checker-premise`** (`model: opus`, item 18 /
+  AGENTS.md HEAVY premise-checker tier) against this run's two claims:
+  (1) item 28b forbids a machine claim on GAM-196 as it stands, and (2) the
+  149 ms label-after-move ordering makes `gate/human` unable to suppress the
+  dispatch its own release move fires. Dispatched with
+  `run_in_background: false` and waited on.
+  **If this line is the last one in this file, the run died holding this
+  subagent** — the verdict never came back and nothing below it happened.
