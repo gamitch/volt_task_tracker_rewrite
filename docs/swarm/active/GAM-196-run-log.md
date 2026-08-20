@@ -144,39 +144,106 @@ counter-example to that run's last-but-one claim.
   tiered issue in `Todo`, `gate/human` overrides every executor label and
   **forbids a machine claim**."* The issue was **not** moved to `In Progress`.
   No source file was changed. The issue stays in `Todo`.
-- `2026-08-20T03:23Z` **The issue's own body agrees**: *"there is no
-  machine-shippable slice left here. The row is now a product decision and
-  nothing else, which is why it carries `gate/human`."* Refusing is the
-  specified outcome, not a shortfall.
+- `2026-08-20T03:23Z` The issue's own body says *"there is no machine-shippable
+  slice left here. The row is now a product decision and nothing else, which is
+  why it carries `gate/human`."* **This is self-authored corroboration, not
+  independent agreement** — that body text and the `gate/human` label were both
+  written by the previous run of this same chain, not by the owner. The refusal
+  stands on item 28b alone, which does not condition on who applied the label.
 
-### Measured: `gate/human` did NOT prevent this re-dispatch, and cannot as sequenced
+### The release move outran its own guard by 149 ms
 
-The previous run recorded that `gate/human` *"is what stops the `Todo` move from
-re-dispatching another machine into the same wall."* **That is false, and this
-run is the measurement.** From GAM-196's Linear history:
+**Corrected after `checker-premise` returned REVISE on the first wording of this
+section.** The first version said no dispatch-side filter existed. It does; I
+had grepped only `.github/workflows/`. What is left is a real defect, but a
+narrower and more interesting one: a **sequencing** defect, not an absent guard.
+
+The previous run's **mechanism** was right — `gate/human` is exactly what stops
+a `Todo` move re-dispatching a machine. Its **application** was wrong: it
+applied the label 149 ms *after* the move, so the guard evaluated a payload that
+predated the label. Both statements are true at once, and this run is the
+measurement of the second.
 
 | Time (UTC) | Event |
 | -- | -- |
 | `03:18:47.099Z` | `In Progress -> Todo` — the release move |
 | `03:18:47.248Z` | `+ human` (`gate/human`) applied — **149 ms later** |
 
-The dispatch webhook fires on the **state move**, so its `client_payload` was
-snapshotted 149 ms before `gate/human` existed. The proof is in this run's own
-dispatch prompt, which printed `Labels:   heavy` — one label, not two. The
-guard label was added to an issue whose dispatch was already in flight.
+**The guard that should have caught it.** `supabase/functions/linear-dispatch/
+filter.ts:358-361` — rule 8 — skips any otherwise-dispatchable delivery carrying
+`gate/human` with reason `HUMAN_GATED`, *before* `repository_dispatch` is ever
+fired, so a gated row normally costs no workflow run and no tokens at all. It is
+tested green in CI (`filter.test.ts:289-294`, `:417-426`, `:562-576`,
+`:592-598`) and has shipped since `697c0df` (2026-08-09). The workflow YAML
+carries no gate test because it does not need one; its own header says so at
+`claude-linear-dispatch.yml:105-108` (*"The edge function already filters"*) —
+its `if:` at `:109` is deliberately only a defence against a hand-fired
+`repository_dispatch` bypassing `filter.ts` entirely.
 
-`.github/workflows/claude-linear-dispatch.yml` contains **no `gate/human`
-test at all** (grepped: the only `human` matches are prose comments at
-`:21,:33,:42,:386,:468,:504,:562`). So nothing on the dispatch side filters it
-either; the label's whole force is the item-28b rule an agent applies to itself
-after it is already running and already billed.
+**Why it did not fire: the label did not exist when the guard looked.**
+`client_payload.labels` is built solely from the state-change webhook body
+(`filter.ts:344`, emitted `:386-394`; `index.ts:137-160` reads that body once
+and never re-reads Linear). Only a state move into `Todo` can dispatch at all
+(`filter.ts:312-341`); a labels-only update returns `STATE_UNCHANGED`. So the
+label-add event 149 ms later could not itself dispatch, and could not amend the
+payload of the delivery already in flight.
+
+**Executed against the committed `decideDispatch`**, re-run by this run rather
+than taken on the subagent's word:
+
+| Probe | Body | Result |
+| -- | -- | -- |
+| A | payload as observed, `labels: [heavy]` | `dispatch: true`, `labels: ["heavy"]` |
+| B | same + bare `human` | `HUMAN_GATED` |
+| C | same + grouped `human`/parent `gate` | `HUMAN_GATED` |
+| D | label-add only (`updatedFrom: {labelIds}`) | `STATE_UNCHANGED` |
+
+Probe A reproduces this run's dispatch-prompt line `Labels:   heavy` exactly.
+B and C prove the payload cannot have contained `human` — or this run would
+never have started.
+
+**Measured / derived / inferred**, kept apart deliberately:
+
+- *Measured*: the two Linear history timestamps (read live via GraphQL by this
+  run — **not reproducible from this repository**); this run's dispatch prompt
+  printing `Labels:   heavy`; the four probe outcomes above.
+- *Derived from repo source*: that the trigger was the state move and not the
+  label add; that `client_payload.labels` is that one webhook body's snapshot
+  and nothing re-reads Linear; that the payload therefore did not contain
+  `human`.
+- *Inferred, not established*: that Linear serialises `data.labels` at event
+  time rather than delivery time — i.e. that the 149 ms is the *cause*. It is
+  the most parsimonious explanation and is consistent with everything measured,
+  but this repository cannot prove Linear's serialisation moment. Also inferred:
+  that the deployed edge function matches the committed source (`HUMAN_GATED`
+  has been present since the function's first commit, so any deployment able to
+  dispatch at all contains it — but deployment is not verifiable from here).
 
 **The fix is an ordering rule, not new machinery:** apply `gate/human` **before**
-the `-> Todo` move, not after. A label present at snapshot time is at least
-visible in the payload; a label applied 149 ms later is invisible to the run it
-was meant to stop. Filed as a follow-up row rather than patched into the
-constitution here — amending the constitution is boss-architect/boss-arbiter
-authority, not the orchestrator's.
+the `-> Todo` move. With rule 8 in view that is not merely "at least visible in
+the payload" — it is **dispositive**: `HUMAN_GATED`, no workflow run, nothing
+billed. Do **not** file a row asking for a dispatch-side guard; it exists.
+
+**Blast radius, stated so the row does not read as an open money tap:** GAM-196
+now sits in `Todo` *carrying* `gate/human`, so any future move into `Todo`
+carries the label into the payload and is skipped (probes B/C). This is a
+one-shot window at the moment of release, not a standing loop.
+
+**Prior art:** GAM-326 (`Done`, `tier/standard`, 2026-08-11) — *"An unfinished
+dispatch run can turn its own job green by moving the issue to `Todo` — which
+re-dispatches it four seconds later"* — is the parent phenomenon, and
+`GAM-404-packet.md:374-382` records it as still unmitigated and unmeasured in
+code. The label-ordering window is an increment on it, not a rediscovery.
+
+**Publishable side-finding:** the prompt printed bare `heavy`, not `tier/heavy`.
+That is live evidence that Linear's webhook `labels` carry **no `parent`**, so
+`filter.ts`'s parentless fallback (`:137-140`, `:247`, `:256`) is the branch
+actually running in production — which makes that file's warning at `:97-128` a
+load-bearing measurement rather than defensive padding.
+
+Filed as a follow-up row rather than patched into the constitution here —
+amending the constitution is boss-architect/boss-arbiter authority, not the
+orchestrator's.
 
 ### Delegation note
 
