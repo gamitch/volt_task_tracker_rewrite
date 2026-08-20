@@ -235,3 +235,31 @@ not a run that merely ran out of things to say.
     assertion depends on it, and the error is conservative in direction: it
     argues *for* a safeguard that is present and correct. Checker's advice: fold
     the one-clause fix in rather than filing a row for a sentence.
+  Verdict recorded in commit `84dd9a3`, pushed.
+- **NIT folded in** at `c1a8123` — CAVEAT 2's counterfactual now says the
+  confirm label reads `"0"` while the view delta is a hair above it, and records
+  what the sentence used to say and why it changed.
+- **GATES RUN by me, independently, on the clean final tree** (`--require-clean`,
+  so the numbers describe a commit and not a hope):
+
+  ```
+  GATE RUN — c1a8123 on claude/gam-377-outreach-end-ordering-guard — tree clean
+
+    1 tsc                         exit 0  PASS
+    2 vite build                  exit 0  PASS
+    3 format:check                exit 0  PASS
+    4 eslint                      exit 0  PASS       0 errors, 380 warnings
+    5 vitest (full)               exit 0  PASS       98 files / 2514 tests  baseline 2505 (+9)
+    6 vitest src/pages/outreach/  exit 0  PASS       10 files / 523 tests  (no baseline given)
+
+  VERDICT: PASS — all six gates exit 0
+  ```
+
+  **This matches the worker's and the checker's blocks exactly** — 2514 across
+  98 files, +9 on the packet's 2505 baseline. Three agents ran it separately and
+  agree, which is the point of the duplication; a single quoted figure would
+  have been one unverified assertion.
+  **These six gates do not run Playwright.** `tests/e2e-personas/**` is excluded
+  from vitest and has no CI job, so nothing above is evidence that
+  `outreach-lifecycle.spec.ts` survives the `11:58 PM` edit. Its first real run
+  is the confirmation, and the PR body says so rather than implying coverage.
