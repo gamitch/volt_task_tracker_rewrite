@@ -604,3 +604,14 @@ a stale header is what the next run has to disprove.
   minute 7 with ~53 minutes of PR credential to spare and finalized at minute 53
   — inside AGENTS.md wall 3's measured envelope. Issue in `In Review`. Two
   follow-up rows filed. Nothing left running.
+- `2026-08-20T12:14Z` **CI at hand-off, stated rather than assumed.**
+  `Linear declaration` **pass** (branch `claude/gam-196-…` matches line 1's
+  `Closes GAM-196` — rule 3 satisfied), `Edge Function tests (Deno)` **pass**,
+  `Skill script tests` **pass**. The `Typecheck, Lint, Format, Test, Build,
+  Bundle Size` and `SQL suites` jobs were still **pending** when the PR
+  credential's hour ran out at `12:17:01Z`. **I did not watch them go green and I
+  am not claiming they did.** What I can say is that the same six gates were run
+  locally to completion twice — by the worker and again by `checker-reviewer`
+  reading the committed blob — at `tsc` 0, `format:check` 0, `eslint` 0 errors,
+  full suite **2583/2583**, the exact pre-change baseline. The SQL suites touch
+  nothing this PR changes (no migration, no view, no SQL).
