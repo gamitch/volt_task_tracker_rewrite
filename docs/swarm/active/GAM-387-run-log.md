@@ -246,3 +246,18 @@ subagent's verdict; gates run; PR opened.
   from. Carries all three orchestrator obligations: narrowed scope disclosed,
   GAM-422 linked, HEAVY tier stated and defended with the losing argument named.
   `Ignore GAM-352` so merging cannot close a row whose actual cause is untouched.
+- **PR COULD NOT BE OPENED — GAM-333's wall, hit with both credentials.**
+  `gh pr create` returned `HTTP 401: Bad credentials` on the ambient token and
+  again with `GH_TOKEN=$GITHUB_TOKEN`; a direct REST `POST /repos/.../pulls`
+  returned 401 as well. Three channels, one answer. **Not retried further** —
+  `AGENTS.md` is explicit that a refused credential is a boundary doing its job,
+  not an obstacle to route around.
+  **Nothing is lost, and that is by design:** the branch is pushed, and
+  `docs/swarm/active/GAM-387-pr-body.md` is committed and validated (exit 0), so
+  opening this is one paste for a human or a scoped session. That artifact was
+  written *before* the API call precisely because the run that skips this step
+  is the one whose work has to be reconstructed from a log.
+  **To open it:**
+  `gh pr create --base main --head claude/gam-387-error-boundary
+   --title "GAM-387: app-wide route error boundary"
+   --body-file docs/swarm/active/GAM-387-pr-body.md`
