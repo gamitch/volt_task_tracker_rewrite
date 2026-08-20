@@ -198,3 +198,40 @@ not a run that merely ran out of things to say.
   `run_in_background: false`.
   **If this line is the last one in this file, the run died holding this
   subagent.** Dead, holding it — not "review in progress".
+- **VERDICT checker: PASS**, one NIT, no BLOCKER / MAJOR / MINOR. Subagent
+  returned; run did not die holding it. It re-derived the evidence rather than
+  reading the worker's report:
+  - **Re-ran the AC7 mutation itself** in its own worktree and, crucially, ran
+    the **full** suite under mutation rather than the scoped file: **exactly 2
+    failures across all 98 files**, both of them the new ACs, exit 1. That is
+    what rules out a red signal that merely reflects collateral breakage. AC1,
+    AC2 and AC5 stayed green under mutation, which is correct — `status` is not
+    gated by `isValid`.
+  - **Item 27 connection graded, not the render.** Confirmed `sessionTimeErrors`
+    and `buildOutreachSessionsPayload` read the *identical* `sessionDates` +
+    `effectiveSessionDetails`, so the payload's emitted set is a strict subset
+    of the error map's domain — `isValid` cannot go true while the builder would
+    emit an inverted pair. Also confirmed **no bypass**: `onSaveEvent` has one
+    call site, inside a `handleSubmit` that early-returns on `!isValid`, and the
+    `console.warn` default is a test seam only — the real path is
+    `OutreachList.tsx:3521` / `OutreachDetail.tsx:2591` injecting the real
+    `saveOutreachEvent` loader.
+  - **Item 15 accessibility verified programmatically**, with its own injected
+    probe: `aria-invalid="true"` and an `aria-describedby` resolving to the copy
+    on the offending control, **neither attribute** on the valid day's control,
+    and `aria-required` still `"true"` — so `isRequired` and `status` do not
+    conflict in practice, not merely by precedent.
+  - Boundary re-checked independently: three files, and the e2e diff is 1 action
+    line + 6 comment lines deleted, **zero assertions changed**; the test file is
+    250 insertions / **0 deletions**, so no pre-existing test was weakened.
+  - Gates re-run by the checker at `6c06364`: all six exit 0, **2514/98**.
+  - Departure ruled **acceptable**: leaving `timeStringToMinutesSinceMidnight`
+    module-private follows the precedent my own §4a cited, and exporting it
+    would have added an avoidable `react-refresh` warning.
+  - **My handed-over concern was upheld in part and sharpened.** The CAVEAT-2
+    counterfactual splits: the *confirm label* half stays true (`formatHours` is
+    `Math.round(h*10)/10`, so 1/60 h renders `"0"`), but the *view delta* half is
+    now false (the view sums unrounded, so 0.01667). Graded **NIT** — no
+    assertion depends on it, and the error is conservative in direction: it
+    argues *for* a safeguard that is present and correct. Checker's advice: fold
+    the one-clause fix in rather than filing a row for a sentence.
