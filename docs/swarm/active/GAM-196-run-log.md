@@ -555,3 +555,26 @@ a stale header is what the next run has to disprove.
   purely additive, so the checker's review of everything else holds regardless.
   **If this line is the last one in this file, the run died holding these two
   subagents.**
+- `2026-08-20T12:10Z` **BOTH SUBAGENTS RETURNED. Nothing left in flight.**
+  **Worker (continued): mutation gap CLOSED, commit `1689f1a`** (test file only,
+  7 insertions). New assertion `toContain('Signed up9 hrs signed up')` — the
+  joined string read off the real rendered DOM, not guessed. **The mutation is
+  now genuinely red: exit 1, `1 failed | 128 passed`,** with the mutant DOM
+  quoted (`Team season goalConfirmed9 hrs signed up…`). Restored, green.
+  It also corrected my own expectation without being asked: the scoped count
+  stays **129, not 130**, because vitest counts `it()` cases and the assertion
+  went inside an existing one.
+  **`checker-reviewer`: PASS — no BLOCKER, no MAJOR, no MINOR; 4 NITs.** It ran
+  every gate itself rather than trusting the worker: `tsc` 0, `format:check` 0,
+  `eslint` 0 errors, scoped 129/129, **full suite 2583/2583** — the exact
+  pre-change baseline. It proved acceptance criterion 5 **byte-level**
+  (`md5sum` of all five hours-function bodies, identical pre/post), recomputed the
+  old line number of every removed test line to prove **none of the 20 protected
+  green assertions moved**, opened `HoursTab.tsx:743` to verify the new comment's
+  citation, and independently reproduced **both** mutation results — surviving at
+  `c2c18c7`, red at HEAD. Two of its NITs fold into GAM-432.
+- `2026-08-20T12:11Z` **PR #212 finalized and taken out of draft**; body written
+  through `.claude/skills/pr-body` conventions and preserved at
+  `docs/swarm/active/GAM-196-pr-body.md`. It leads with the one call the owner
+  may want to reverse (the word `Signed up` against BEH-02's prescribed
+  `confirmed`) and names the exact four lines that revert it.
