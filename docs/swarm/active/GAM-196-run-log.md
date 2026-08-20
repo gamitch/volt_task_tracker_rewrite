@@ -511,3 +511,13 @@ a stale header is what the next run has to disprove.
   net-negative loop 19a prices. **Recorded here so the call is visible and
   correctable rather than silent.** The packet is DISPATCH-able; the worker goes
   next.
+- `2026-08-20T11:52Z` **DISPATCHED `worker-implementer`** on packet revision B,
+  `run_in_background: false`. Model: the pinned default (sonnet). **Item 18's
+  four `model: "opus"` triggers are all absent** and I checked each rather than
+  defaulting: no `supabase/migrations/` file, no RLS policy or `security definer`
+  helper, no metric-view SQL, no auth/session/role/permission logic — this packet
+  changes user-visible strings and comments in one page component and its test.
+  Item 25's second obligation is the operative one: *do not bump a worker to opus
+  because a topic sounds sensitive.* Recorded per item 18.
+  **If this line is the last one in this file, the run died holding this
+  subagent** — the diff never landed and no checker ever saw it.
