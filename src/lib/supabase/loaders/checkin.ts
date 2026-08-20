@@ -236,7 +236,7 @@ interface ParticipationDbRow {
   present_ct: number;
   late_ct: number;
   excused_ct: number;
-  participation_pct: number;
+  participation_pct: number | null;
 }
 
 interface SessionUserIdDbRow {

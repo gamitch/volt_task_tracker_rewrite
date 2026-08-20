@@ -480,38 +480,43 @@ export interface AuditLogRow {
 }
 
 /**
- * `v_student_participation` -- `supabase/migrations/20260717000003_metric_views.sql`,
- * lines 21-42 (final `select` list, lines 30-38):
+ * `v_student_participation` -- `supabase/migrations/20260806000000_met01_explicit_marks.sql`,
+ * lines 102-130 (final `select` list, lines 117-128):
  * ```
  * select
- *   x.student_id, x.team_id, x.season_id,                                          -- line 31
- *   count(*) as expected_ct,                                                       -- line 32
- *   count(*) filter (where a.status in ('present','late')) as present_ct,          -- line 33
- *   count(*) filter (where a.status = 'late')    as late_ct,                       -- line 34
- *   count(*) filter (where a.status = 'excused') as excused_ct,                    -- line 35
- *   round(100.0 * count(*) filter (where a.status in ('present','late'))
- *         / greatest(count(*) - count(*) filter (where a.status = 'excused'), 1), 1)
- *     as participation_pct                                                        -- lines 36-38
- * from expected x
- * left join attendance a
- *   on a.session_id = x.session_id and a.student_id = x.student_id
- * group by x.student_id, x.team_id, x.season_id;
+ *   student_id, team_id, season_id,
+ *   count(*) as expected_ct,
+ *   count(*) filter (where status in ('present', 'late')) as present_ct,
+ *   count(*) filter (where status = 'late')    as late_ct,
+ *   count(*) filter (where status = 'excused') as excused_ct,
+ *   case
+ *     when count(*) - count(*) filter (where status = 'excused') = 0 then null
+ *     else round(
+ *       100.0 * count(*) filter (where status in ('present', 'late'))
+ *       / (count(*) - count(*) filter (where status = 'excused')), 1)
+ *   end as participation_pct
+ * from marked
+ * group by student_id, team_id, season_id;
  * ```
  *
  * `VStudentParticipationRow` is a VERBATIM camelCase rename of these seven
  * columns -- every field is a 1:1 copy of a column the view itself already
- * computed. This file performs none of the `round(100.0 * ... / greatest(...))`
+ * computed. This file performs none of the `round(100.0 * ... / (...))`
  * arithmetic shown above; that formula lives ONLY in the migration SQL
  * (constitution item 3, BLOCKER if re-derived here) -- see
  * `src/pages/reports/ParticipationTab.tsx`'s (T056) own module doc for the
  * same non-re-derivation discipline applied to this exact view.
  *
- * All seven columns are the `group by`'d/aggregated result of a query with
- * no `left join`-introduced nulls on these particular columns, so none are
- * typed nullable here -- the view's own "no completed sessions" case is
- * represented by the ROW BEING ABSENT entirely (see the migration's own
- * implementation note, line 1: "expected_ct = 0 rows simply absent"), not by
- * a null column value.
+ * `participationPct` IS typed nullable (MET-01, `:123-124`): when every
+ * counted mark for a student is `excused`, the denominator
+ * (`count(*) - count(*) filter (where status = 'excused')`) is zero and the
+ * `case` above returns SQL `NULL` instead of dividing by a floor -- the UI
+ * renders that as an em dash, never a fabricated 0%. The other six columns
+ * remain non-nullable: the `group by` only ever produces a row when at least
+ * one explicit attendance mark exists for that student/team/season (MET-01's
+ * `join attendance`, not a `left join`), so the "no marks at all" case is
+ * still represented by the row being absent entirely -- only the all-excused
+ * case newly produces a present row with a `null` `participationPct`.
  */
 export interface VStudentParticipationRow {
   studentId: string;
@@ -521,7 +526,7 @@ export interface VStudentParticipationRow {
   presentCt: number;
   lateCt: number;
   excusedCt: number;
-  participationPct: number;
+  participationPct: number | null;
 }
 
 /**
@@ -570,13 +575,15 @@ export interface VStudentHoursRow {
 }
 
 /**
- * `v_team_participation` -- `supabase/migrations/20260717000003_metric_views.sql`,
- * lines 44-49:
+ * `v_team_participation` -- `supabase/migrations/20260806000000_met01_explicit_marks.sql`,
+ * lines 139-146:
  * ```
  * create or replace view v_team_participation as
  * select team_id, season_id,
- *   round(100.0 * sum(present_ct) / greatest(sum(expected_ct) - sum(excused_ct), 1), 1)
- *     as participation_pct
+ *   case
+ *     when sum(expected_ct) - sum(excused_ct) = 0 then null
+ *     else round(100.0 * sum(present_ct) / (sum(expected_ct) - sum(excused_ct)), 1)
+ *   end as participation_pct
  * from v_student_participation
  * group by team_id, season_id;
  * ```
@@ -584,18 +591,21 @@ export interface VStudentHoursRow {
  * `VTeamParticipationRow` is PASSTHROUGH ONLY: a verbatim camelCase rename
  * of the three columns this view's `select` list already produces
  * (`team_id`, `season_id`, `participation_pct`). This file performs none of
- * the `round(100.0 * sum(...) / greatest(sum(...) - sum(...), 1), 1)`
- * arithmetic shown above -- that formula lives ONLY in the migration SQL
- * (constitution item 3, BLOCKER if re-derived here), same non-re-derivation
- * discipline as `VStudentParticipationRow`/`VStudentHoursRow` above.
+ * the `round(100.0 * sum(...) / (sum(...) - sum(...)), 1)` arithmetic shown
+ * above -- that formula lives ONLY in the migration SQL (constitution item 3,
+ * BLOCKER if re-derived here), same non-re-derivation discipline as
+ * `VStudentParticipationRow`/`VStudentHoursRow` above.
  *
- * `participationPct` is not typed nullable for the same reason as
- * `VStudentHoursRow.confirmedHours` above: the `group by` only ever
- * produces a row when at least one underlying `v_student_participation` row
- * exists for that team/season.
+ * `participationPct` IS typed nullable (MET-01, `:141-142`): when every
+ * underlying `v_student_participation` row for a team/season sums to a zero
+ * denominator (`sum(expected_ct) - sum(excused_ct) = 0`), the `case` above
+ * returns SQL `NULL` instead of dividing by a floor -- same "no fabricated
+ * 0%" rule the student-level view above follows. The `group by` still only
+ * ever produces a row at all when at least one underlying
+ * `v_student_participation` row exists for that team/season.
  */
 export interface VTeamParticipationRow {
   teamId: string;
   seasonId: string;
-  participationPct: number;
+  participationPct: number | null;
 }
