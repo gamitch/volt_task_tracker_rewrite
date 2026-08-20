@@ -234,3 +234,29 @@ statement of where it died, not as a summary.
 
 - **01:31Z — final PR body written to the artifact, then pushed to #208.**
   `check.mjs` → OK.
+
+- **01:36Z — full gate run, superseding the 01:30Z entry.** With credential
+  budget left, "not run" was replaced with evidence rather than reasoning.
+  `gates.py --require-clean` on `d66fddb`, tree clean: tsc, vite build,
+  format:check, eslint (0 errors / 380 warnings) and the full vitest suite
+  (100 files / 2566 tests) all **exit 0**. Gate 6 **SKIPPED** — no `src/` file
+  changed, so no scope is derivable. **5 of 6, and the log says five.**
+
+- **01:37Z — GAM-421 moved `Todo → In Progress → In Review`** (item 28e, never
+  `Done`) with a summary comment, and read back: state `In Review`, labels
+  `tier/heavy`, `Bug`, `provenance/other`. PR #208 marked ready for review with
+  the final body.
+
+## Close-out
+
+Run completed inside the credential window it was investigating. PR opened at
+minute 8; every milestone above was pushed as it landed. Nothing was left in
+flight: the one subagent dispatched (`checker-premise`) was dispatched blocking,
+its REVISE verdict is recorded above, and it changed the outcome of this run —
+it killed the code change and falsified a claim I had already published.
+
+**The single most useful thing here for the next run is `AGENTS.md` wall 3.**
+The second is that the premise gate paid for itself again, in the way item 19
+predicts: the author was, in half the cases, already in a position to know where
+the weak ground was — and entry 1 of my own least-confident list is the one that
+fired.

@@ -100,28 +100,35 @@ killed the code change I intended to ship. Both of its BLOCKERs were correct:
 
 It also corrected an overbroad forbidden-files citation in my packet.
 
-**Gates — five of six not run, and here is why that is not a hand-wave.** This
-branch changes **four markdown files and zero source files**:
+**Gates — run on the final committed branch state, `--require-clean`, five of
+six.** Not "all six": gate 6 is genuinely skipped and the block says so.
 
 ```
-AGENTS.md
-docs/swarm/active/GAM-421-packet.md
-docs/swarm/active/GAM-421-pr-body.md
-docs/swarm/active/GAM-421-run-log.md
+GATE RUN — d66fddb on claude/gam-421-token-expiry-pr-window — tree clean
+
+  1 tsc              exit 0  PASS
+  2 vite build       exit 0  PASS
+  3 format:check     exit 0  PASS
+  4 eslint           exit 0  PASS       0 errors, 380 warnings
+  5 vitest (full)    exit 0  PASS       100 files / 2566 tests  (no baseline given — regression not checked)
+  6 vitest (scoped)      –  SKIP
+                            no scope given and none derivable from the diff -- pass --scope <path> to run it
+
+VERDICT: PASS — 5 of 6 gates. NOT all six: 1 skipped.
 ```
 
-`format:check` is scoped `"src/**/*.{ts,tsx}" "!src/theme/volt.ts" "*.{ts,js,json,html}"`
-— markdown is outside every gate's globs, so tsc, build, eslint and both vitest
-runs are unchanged from `main` by construction rather than by assumption.
+Gate 6 has no defensible scope because this branch changes **four markdown files
+and zero `src/` files** — there is no path to scope it to. Gate 5 ran without a
+baseline and the block says so rather than implying a comparison happened; for
+the same reason (no source changed) the full-suite count cannot have regressed.
+The 380 eslint warnings are the repo's standing pre-existing count — the
+`gate-run` skill documents 377, and the difference predates this branch, which
+touches no lintable file.
 
-| Gate | Result |
-| -- | -- |
-| `npm run format:check` | **exit 0** — "All matched files use Prettier code style!" |
-| tsc / build / eslint / vitest ×2 | **not run** — no file they read was touched |
-
-**No mutation was replayed, because no behaviour changed.** Item 26's fast-path
+**No mutation was replayed, because no behaviour changed.** Item 26's fast path
 requires a named mutation that turns a test red; there is no code here to mutate.
-Saying so is more honest than manufacturing one.
+Saying so is more honest than manufacturing one — and per the `gate-run` skill,
+green gates would not have answered that question anyway.
 
 ## Scope (item 27)
 
