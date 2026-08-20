@@ -91,3 +91,36 @@ statement of where it died, not as a summary.
 
   Consequence for the rest of this run: the terminal step is already done, so a
   kill from here costs the remaining *content*, not the PR.
+
+- **00:55Z — GAM-333 re-analysis run. It confirms GAM-421's mechanism and
+  corrects its proposed variable.** GAM-421 offers this as "a hypothesis this
+  issue offers, not a result … that is a cheap query and it either confirms this
+  or kills it." Query run over all 50 `claude-linear-dispatch.yml` runs and all
+  repository PRs.
+
+  | Measurement | Result |
+  | -- | -- |
+  | `claude[bot]` PRs opened inside a dispatch run | 21 |
+  | …opened at ≤ 60 min into the run | **21** |
+  | …opened at > 60 min into the run | **0** |
+  | Latest one ever, worst-case attribution | **53.2 min** (PR #205) |
+  | The only PR anywhere opened at > 60 min | PR #162, at 81.9 min — author `gamitch`, **not** the bot |
+
+  Attribution across concurrent runs is ambiguous, so each PR is charged its
+  **maximum** plausible minutes-into-run. That biases the search *toward*
+  finding a late bot PR. None exists.
+
+  **The correction: the deciding variable is not run duration.** GAM-421
+  proposes "run duration, not wall-clock window, is the variable this predicts."
+  Nearly right, and the data separates the two. Run #42 lasted **94 minutes and
+  opened two PRs**; run #47 lasted **73 minutes and opened PR #205 at minute
+  53**, then kept running for another 20. Meanwhile run #6 lasted 60 minutes and
+  opened none. The variable is **elapsed time at the moment `gh pr create` is
+  called**, not the run's total length. A long run is not doomed; a run that
+  *defers* its PR past minute 60 is.
+
+  That distinction is the whole reason option 3 works, and it means the fix does
+  not require the run to get faster.
+
+  14 of the 19 long (>60 min) runs opened no bot PR at all — GAM-333's stranded
+  population, now explained.
