@@ -40,3 +40,10 @@ Decoded the live `ghs_` App token at minute 1 rather than guessing:
   migration-era legacy Claude route, so this runtime may hold it.
 - 03:03Z — branch `claude/gam-389-anon-view-grants` created; this run log is
   the first file write.
+- 03:06Z — **draft PR #211 opened at minute ~6**, per AGENTS.md wall 3, while
+  the branch carried only the run log and the PR-body artifact. ~54 minutes of
+  credential to spare. Body artifact written *before* the API call and passing
+  `.claude/skills/pr-body/scripts/check.mjs` (exit 0).
+- 03:07Z — starting my own repo-side verification of the issue's premise
+  before writing the HEAVY packet (item 19c: verify your own citations, do not
+  make an opus gate discover them).
