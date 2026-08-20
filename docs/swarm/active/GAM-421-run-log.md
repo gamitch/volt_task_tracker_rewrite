@@ -218,3 +218,19 @@ statement of where it died, not as a summary.
   evidence, the open-early-as-draft order, and the two-credential table
   including the extraheader gotcha that cost me a wrong claim earlier in this
   run.
+
+- **01:27Z — follow-ups filed** to `Backlog` with `tier/unreviewed` (GAM-382:
+  a row created directly in `Todo` is never dispatched). **GAM-424** — the
+  preflight is dead code, nothing invokes it, and half its fix is not behind
+  the credential wall; carries the withdrawn `pr-window` spec. **GAM-425** —
+  the owner's choice among the four options, which this run deliberately does
+  not make.
+
+- **01:30Z — gates.** `npm run format:check` → **exit 0**. The other five were
+  not run and the reason is structural, not a shortcut: this branch changes four
+  markdown files and zero source files, and every gate's globs
+  (`src/**/*.{ts,tsx}`, `*.{ts,js,json,html}`) exclude markdown. No mutation was
+  replayed because no behaviour changed.
+
+- **01:31Z — final PR body written to the artifact, then pushed to #208.**
+  `check.mjs` → OK.

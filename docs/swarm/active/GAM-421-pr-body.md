@@ -1,58 +1,173 @@
-Closes GAM-421 — the dispatch credential's expiry is now measured rather than documented, and this PR was opened at minute ~8 to prove the cheapest fix
+Closes GAM-421 — the credential's 60-minute lifetime is now measured exactly, and `AGENTS.md` carries the rule that avoids it
 
-> **Status: draft, opened early on purpose.** This PR was opened at minute ~8 of
-> the run rather than minute ~100, which is GAM-421's own **option 3**. The body
-> is finalized before the draft flag comes off. If this text is still
-> preliminary when you read it, the run was killed mid-chain — read
-> `docs/swarm/active/GAM-421-run-log.md`, whose last line says where.
+> **Read this before merging.** Merging closes GAM-421, and **the underlying
+> defect is not fixed by this PR** — fixing it is a choice among four options
+> and the choice is yours. That decision is tracked in **GAM-425** so it is not
+> lost when this row closes. If you would rather GAM-421 stay open, close
+> GAM-425 as a duplicate instead and reopen this one.
 
 ## What changed
 
-Work in progress. See the run log for the measurement that is already landed.
+Four markdown files. No source code.
 
-## What the issue got wrong
+- **`AGENTS.md` — a third wall.** The "Two walls a dispatched run hits" section
+  is now three. Wall 3 carries the measurement, the instruction to read your own
+  deadline, the evidence, the **open-the-PR-early-as-a-draft** order, and a table
+  of which credential survives the hour. This is the behavioural form of the
+  issue's **option 3**, and unlike the automated form it needs no workflow patch.
+- **`docs/swarm/active/GAM-421-run-log.md`** — the measurements, the premise
+  gate's verdict, and two corrections I had to make against my own published
+  claims.
+- **`docs/swarm/active/GAM-421-packet.md`** — the HEAVY packet, kept because the
+  gate's review of it is the record of why its code change was withdrawn.
 
-GAM-421 is right about the failure and understates it. Two corrections, both
-measured in this run:
+## What the issue got wrong, and what I got wrong
 
-1. **The lifetime did not need a long run to measure.** The issue's own
-   Verification note says the one-hour figure "is GitHub's documented behaviour
-   … and was **not** independently measured here", bounding it only between
-   minute 6 and minute 74. In fact the credential is a JWT and **states its own
-   expiry**: `iat 2026-08-20T00:46:26Z`, `exp 2026-08-20T01:46:26Z`, a lifetime
-   of exactly **3600 s**. Any run can read its own deadline at minute 0.
+**GAM-421 understated one thing.** Its Verification note says the one-hour
+lifetime "is GitHub's documented behaviour … and was **not** independently
+measured here", bounding it only between minute 6 and minute 74. It is now
+measured and it is exact: the credential is a JWT that **states its own expiry**,
+`iat 2026-08-20T00:46:26Z` → `exp 2026-08-20T01:46:26Z`, **3600 s**. No long run
+was needed. Any run can read its own deadline at minute 1.
 
-2. **The branch is not a safe harbour, and the issue assumes it is.** GAM-421
-   says the PAT "is long-lived and still pushes fine at minute 74", so "the work
-   survives on the pushed branch". In this run `secrets.CLAUDE_PR_TOKEN` is
-   **empty**: `GH_TOKEN`, `GITHUB_TOKEN` and the token `actions/checkout` writes
-   into the `origin` remote URL are byte-identical (same SHA-256), all falling
-   back to `github.token`. So `git push` is on the **same 60-minute clock** as
-   `gh pr create`. Past minute 60 a run loses the branch too.
+**GAM-421 named nearly the right variable.** It proposes "run duration … is the
+variable this predicts". The data separates duration from time-of-attempt, and
+it is the latter. Across all 50 dispatch runs and every PR in the repository:
+
+| Measurement | Result |
+| -- | -- |
+| PRs `claude[bot]` has opened inside a dispatch run | 21 |
+| …at or before minute 60 | **21** |
+| …after minute 60 | **0** |
+| Latest ever, worst-case attribution across concurrent runs | **53.2 min** (PR #205) |
+| Only PR anywhere opened later | #162 at 81.9 min — opened by `gamitch`, not the bot |
+
+But run #42 lasted **94 minutes and opened two PRs**, and run #47 lasted 73
+minutes and opened PR #205 at minute 53 before running another 20. Run #6 lasted
+60 minutes and opened none. **A long run is not doomed; a run that defers its PR
+is.** That is why option 3 works and why the fix does not require runs to get
+faster. This answers the re-analysis GAM-421 asked for and explicitly labelled a
+hypothesis rather than a result.
+
+**I got the credential model wrong mid-run, and the premise gate caught it.**
+I published a claim that there is only one credential, that `git push` is on the
+same 60-minute clock, and that "the branch is not a safe harbour". All three are
+**false and are retracted**. `http.https://github.com/.extraheader` is present,
+carries a distinct long-lived 93-char `github_pat_`, and **outranks** the remote
+URL's userinfo (`scripts/dispatch-preflight.mjs:31-41`). My probe missed it
+because it is not in `.git/config` local scope — it lives in
+`/home/runner/work/_temp/git-credentials-*.config`, so `git config --local
+--get-regexp` returns nothing where `git config --get` returns it. **GAM-421's
+two-credential model is correct exactly as filed.** I re-measured this myself
+rather than taking the gate's word; wall 3 records the gotcha so the next agent
+does not repeat it. This also **restores the issue's option 2** — the cheapest
+of the four — which my error had written off.
 
 ## Tier, stated and defended
 
-**HEAVY**, per item 26, judged at claim time as item 28d requires.
+**HEAVY**, judged at claim time as item 28d requires, and **not** relabelled
+afterwards to match what was actually built.
 
-- **Trigger:** this is the credential path of the external dispatch write path.
-  Item 26's HEAVY list names auth/role logic and "an export another session
-  builds against"; the dispatch workflow is what every later run builds against,
-  and a wrong credential path strands *every* run, not one task.
-- **The losing argument:** options 2 and 4 in the issue are a settings toggle and
-  a doctrine change — near-zero code, which reads STANDARD or even FAST. Item 26
-  resolves an arguable pair to the heavier tier, and the blast radius is the
-  whole dispatch loop.
+- **Trigger:** the credential path of the external dispatch write path. Item 26's
+  HEAVY list names auth logic and "an export another session builds against";
+  every later run builds against this, and a wrong credential path strands all of
+  them rather than one task.
+- **Losing argument:** options 2 and 4 are a settings toggle and a doctrine
+  change — near-zero code, arguably STANDARD. Item 26 resolves an arguable pair
+  to the heavier tier.
+
+**Process deviation, declared rather than hidden.** This row got the HEAVY
+premise gate. It did **not** get a worker or a `checker-reviewer`, because the
+gate removed all production code from scope (below). What remains — the run log,
+this body, `AGENTS.md` — are records the orchestrator owns and which the
+constitution forbids a worker to edit. A worker with nothing it is permitted to
+touch is ceremony, not verification.
 
 ## Verification
 
-Pending.
+**The premise gate is the verification here, and it did real work.**
+`checker-premise` (opus) returned **REVISE / BLOCKER** on my packet, ~94K tokens,
+round 1 of item 19a's two. It falsified a claim I had already published, and it
+killed the code change I intended to ship. Both of its BLOCKERs were correct:
+
+1. **Nothing in this repository invokes `scripts/dispatch-preflight.mjs`.** No
+   workflow step, no `AGENTS.md` order, no skill or hook. GAM-403's wiring is
+   still an unmerged patch behind the credential wall. The `pr-window` check I
+   specified would have shipped **dormant**. Verified by repo-wide grep. Refiled
+   as **GAM-424**.
+2. **My acceptance criterion 1 was not runnable** — the test file imports
+   `vitest`, so `node --test` dies with `ERR_MODULE_NOT_FOUND`.
+
+It also corrected an overbroad forbidden-files citation in my packet.
+
+**Gates — five of six not run, and here is why that is not a hand-wave.** This
+branch changes **four markdown files and zero source files**:
+
+```
+AGENTS.md
+docs/swarm/active/GAM-421-packet.md
+docs/swarm/active/GAM-421-pr-body.md
+docs/swarm/active/GAM-421-run-log.md
+```
+
+`format:check` is scoped `"src/**/*.{ts,tsx}" "!src/theme/volt.ts" "*.{ts,js,json,html}"`
+— markdown is outside every gate's globs, so tsc, build, eslint and both vitest
+runs are unchanged from `main` by construction rather than by assumption.
+
+| Gate | Result |
+| -- | -- |
+| `npm run format:check` | **exit 0** — "All matched files use Prettier code style!" |
+| tsc / build / eslint / vitest ×2 | **not run** — no file they read was touched |
+
+**No mutation was replayed, because no behaviour changed.** Item 26's fast-path
+requires a named mutation that turns a test red; there is no code here to mutate.
+Saying so is more honest than manufacturing one.
+
+## Scope (item 27)
+
+No user-visible surface. Nothing here reads from a fixture or a stub — the
+figures are measurements taken from the live credential and the GitHub API
+during this run. Not a Partial.
+
+## Follow-ups filed
+
+Both to `Backlog` carrying `tier/unreviewed`, per GAM-382 — promotion to `Todo`
+is your signal, not mine.
+
+- **[GAM-424](https://linear.app/gamitch/issue/GAM-424/the-dispatch-credential-preflight-is-dead-code-nothing-in-the)** —
+  the preflight is dead code; nothing invokes it. Half of the fix
+  (`--stage=pr` as an `AGENTS.md` standing order) is **not** behind the
+  credential wall and can ship today. Carries the full `pr-window` specification
+  for after it has a caller.
+- **[GAM-425](https://linear.app/gamitch/issue/GAM-425/choose-the-fix-for-the-expiring-pr-credential-gam-421-measured-the)** —
+  the decision this PR deliberately does not make. All four options with what
+  each now costs, given that option 2's PAT is confirmed present.
 
 ## Known gaps, disclosed
 
-- `.github/workflows/**` is behind the credential wall (GAM-328), so any fix
-  that edits the dispatch workflow ships here as an applyable patch, not as a
-  merged change.
-- Choosing between GAM-421's four options is **the owner's call**, and the issue
-  says so. This PR does not make that choice.
+- **The defect is mitigated, not fixed.** Wall 3 is an instruction to an agent,
+  not a mechanism. A run that ignores it fails exactly as before. Options 1 and 2
+  are mechanical; this is not. GAM-425 carries that argument.
+- **No workflow patch is preserved here.** The gate asked for one under
+  `AGENTS.md` lines 90-94 and the GAM-403 precedent, and it was right to ask.
+  I did not produce it: with one gate round left and ~19 minutes of credential
+  remaining, I chose correcting a false published claim and shipping wall 3 over
+  authoring a patch whose option the owner has not chosen. Writing option 1's or
+  option 3's patch before that choice risks preserving the wrong one. **This is a
+  disclosed omission, not an oversight** — GAM-425 is where it lands once an
+  option is picked.
+- **`exp` is an upper bound on validity, not a guarantee of it.** Nothing here
+  measures whether GitHub revokes earlier. Wall 3 says "no later than".
+- The GAM-333 re-analysis shows zero bot PRs after minute 60, which is
+  *consistent with* the expiry mechanism and does not alone prove it — PRs never
+  attempted are absent from that population by construction. The direct JWT
+  measurement is what establishes the mechanism; the correlation corroborates it.
+- **Operational note from the gate, worth one line of your attention:** the
+  long-lived PAT is recoverable in plaintext from the extraheader by anything
+  running in the workspace, and `redact()` cannot see it there because it is
+  base64-encoded inside `AUTHORIZATION: basic …`. That is stock `actions/checkout`
+  behaviour and is not introduced here, but any future step that dumps
+  `git config` output into a run log or Step Summary would leak it past the
+  redaction backstop.
 
 Linear-Issue: GAM-421
