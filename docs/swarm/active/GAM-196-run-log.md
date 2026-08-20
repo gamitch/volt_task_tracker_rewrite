@@ -58,3 +58,17 @@ worker → `checker-reviewer`. Two-round gate cap (19a), three-attempt worker ca
   Body artifact `docs/swarm/active/GAM-196-pr-body.md` written and validated
   (`check.mjs` → `OK declaration closes GAM-196`) BEFORE the API call, per the
   `pr-body` skill.
+- `2026-08-20` **PACKET WRITTEN:** `docs/swarm/active/GAM-196-packet.md`
+  (HEAVY, round 1). Orchestrator verified every citation against this branch
+  first (item 19c). Headline: **3 of the row's 4 divergences survive; divergence
+  (4) is FALSIFIED as written** — the render path already filters
+  `type === 'outreach'` at `OutreachList.tsx:4254-4258` before sessions reach
+  `computeStudentHours`, so a meeting cannot reach it on the live page. A
+  different, unnamed divergence (4′) sits behind it: `v_student_hours` joins on
+  `e.counts_volunteer_hours` while `/outreach` filters on `type`, so an outreach
+  event with the flag false diverges. That slice needs no owner ruling and is the
+  packet's work; (1)(2)(3) need the owner's (a)/(b) ruling and are escalated.
+- `2026-08-20` **DISPATCHING `checker-premise`** (item 19, round 1 of max 2),
+  `run_in_background: false`, blocking. **If this line is the last one in this
+  file, the run died holding this subagent** — that is AGENTS.md wall 2, not a
+  run still thinking.
