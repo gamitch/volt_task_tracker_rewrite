@@ -401,3 +401,21 @@ that signature unmistakable.
   https://linear.app/gamitch/issue/GAM-426
 - **Writing PR body artifact next**, per the `pr-body` skill, before attempting
   the PR-open API call.
+- **PR body artifact written and checked**: `docs/swarm/active/GAM-404-pr-body.md`,
+  `node .claude/skills/pr-body/scripts/check.mjs` → `OK declaration closes
+  GAM-404`. Committed and pushed before attempting the API call.
+- **PR opened**: https://github.com/gamitch/volt_task_tracker_rewrite/pull/209
+  (`gh pr create`, worked this run — no credential wall hit on this channel).
+- **Issue moved `In Progress → In Review`** via `issueUpdate`, read back and
+  confirmed `state.name === "In Review"`. Not moved to `Done` — the merge
+  automation closes it, per item 28e.
+- **Run complete.** Delivered: packet revision 3 implemented, independently
+  verified (diff read, mutation replayed, all six gates rerun by the
+  orchestrator, not taken on the worker's word), one item-20 follow-up filed
+  (GAM-426) for the one disclosed gap this packet's scope structurally
+  cannot reach, PR #209 opened with `Closes GAM-404` on line 1, issue in
+  `In Review`. Every dispatch line in this file has a matching verdict line;
+  nothing was left in flight at any point. Not delivered: the workflow file
+  edit itself — undeliverable from this container by design, preserved as
+  `docs/swarm/active/GAM-404-workflow-terminal-failure-notify.patch` for an
+  owner or scoped session to apply, per the GAM-314 precedent.
