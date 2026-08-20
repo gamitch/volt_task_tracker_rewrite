@@ -93,3 +93,29 @@ Decoded the live `ghs_` App token at minute 1 rather than guessing:
     Nothing breaks.
   - **Killed least-confident 1, which was the packet's load-bearing claim.**
     Detail in the next entry — this is the finding the gate existed for.
+- 03:38Z — **I re-read the cited ruling myself rather than taking the gate's
+  word for it** (`auto-mode-decisions.md:1297-1316`). The gate is right, and the
+  finding inverts this row:
+  - The owner was told, in the ruling text, that `v_student_hours` **"was
+    already `anon`-readable; not new."** The nameless siblings were in front of
+    him and were named.
+  - What he was asked about, and closed, was the first view to expose
+    **`display_name`**.
+  - The ruling's own words warn that extending it "without asking would have
+    repeated exactly the kind of scope-creep-by-analogy this project's process
+    has flagged before."
+  - "What this authorizes" names one statement on one view.
+- 03:39Z — **PREMISE DOES NOT HOLD, and the failure is the interesting kind.**
+  The issue's measured facts are all true. Its *framing* — that the six-view
+  posture is inconsistent and "one of the two is unintended" — is measured
+  **false**. There is a principled line and it is recorded: the view that
+  carries a name was closed; the five that carry none were knowingly left open.
+  My own Correction 1 (none of the five exposes a name) is what confirms the
+  line rather than undermining it. So this row's real answer is "the posture is
+  already deliberate", not "pick one and apply it".
+- 03:40Z — **STOPPING rather than shipping the migration.** Writing it would be
+  the exact scope-creep-by-analogy the ruling names and item 25 forbids, on a
+  scope the owner deliberately drew narrower. No second premise round: round 2
+  would re-check a packet I am no longer willing to dispatch. Deliverable
+  becomes the measurement plus a structured two-option question to the owner —
+  which is precisely how T205 itself was handled.
