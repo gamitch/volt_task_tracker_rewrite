@@ -664,8 +664,21 @@ const OUTREACH_FIXED_FLAGS = {
 
 /** Module doc #2 -- the ONLY place `counts_participation`/
  * `counts_volunteer_hours` are resolved in this file. For `'outreach'`,
- * always the fixed pair above; for `'competition'`, whatever the (default
- * `false`/`false`) admin-editable toggles currently hold. */
+ * always the fixed pair above; for `'competition'`, whatever the caller
+ * passes.
+ *
+ * GAM-433: the caller now passes `countsVolunteerHours: false` unconditionally
+ * for competitions. Only `counts_participation` is still admin-editable. The
+ * 2026-08-03 owner ruling
+ * (`20260804000000_volunteer_hours_outreach_only.sql`, ruling 2 -- "Volunteer
+ * hours = `type = 'outreach'` ONLY") means a competition with the volunteer-
+ * hours flag on is a state `v_student_hours` rejects by design, so the control
+ * that produced it was removed rather than left promising hours that never
+ * arrive.
+ *
+ * This signature deliberately still takes both flags: it is exported and
+ * directly tested, and keeping the shape keeps those tests meaningful about
+ * what the function does rather than about what one caller happens to pass. */
 export function resolveEventTypeFlags(
   type: OutreachDialogEventType,
   competitionFlags: { countsParticipation: boolean; countsVolunteerHours: boolean },
@@ -1060,7 +1073,6 @@ export function OutreachEventDialog({
 
   const [type, setType] = useState<OutreachDialogEventType>('outreach');
   const [competitionCountsParticipation, setCompetitionCountsParticipation] = useState(false);
-  const [competitionCountsVolunteerHours, setCompetitionCountsVolunteerHours] = useState(false);
 
   const [mode, setMode] = useState<OutreachScheduleMode>('single');
   const [singleDate, setSingleDate] = useState<ISODateString | undefined>(undefined);
@@ -1118,9 +1130,13 @@ export function OutreachEventDialog({
       setCompetitionCountsParticipation(
         initialEvent.type === 'competition' ? initialEvent.countsParticipation : false,
       );
-      setCompetitionCountsVolunteerHours(
-        initialEvent.type === 'competition' ? initialEvent.countsVolunteerHours : false,
-      );
+      // GAM-433: `countsVolunteerHours` is no longer hydrated into local state
+      // -- there is no control to hydrate it into, and the value is pinned
+      // `false` at the `resolveEventTypeFlags` call site. NOTE the deliberate
+      // consequence: editing and re-saving a competition that was previously
+      // stored with `counts_volunteer_hours = true` writes `false`. That is the
+      // cleanup path for any such row, not a loss -- the flag never produced
+      // volunteer hours on a competition after the 2026-08-03 ruling.
       setMode('custom');
       setSingleDate(undefined);
       setMultiDayRange(null);
@@ -1155,7 +1171,6 @@ export function OutreachEventDialog({
       setAddress('');
       setType('outreach');
       setCompetitionCountsParticipation(false);
-      setCompetitionCountsVolunteerHours(false);
       setMode('single');
       setSingleDate(undefined);
       setMultiDayRange(null);
@@ -1220,9 +1235,16 @@ export function OutreachEventDialog({
     [sessionDates, effectiveSessionDetails],
   );
 
+  // GAM-433: `countsVolunteerHours` is pinned `false` for competitions rather
+  // than read from a control. The 2026-08-03 owner ruling
+  // (`20260804000000_volunteer_hours_outreach_only.sql`, ruling 2) made
+  // volunteer hours `type = 'outreach'` ONLY, so a competition carrying the
+  // flag is a state every consuming view rejects by design. The switch that
+  // used to set it was removed; this is the same pinning `loaders/meetings.ts`
+  // already does for meetings.
   const effectiveFlags = resolveEventTypeFlags(type, {
     countsParticipation: competitionCountsParticipation,
-    countsVolunteerHours: competitionCountsVolunteerHours,
+    countsVolunteerHours: false,
   });
 
   // T118 (UXP-02) module doc 11c/11e -- roster scoped to currently-selected
@@ -1419,8 +1441,12 @@ export function OutreachEventDialog({
                   onChange={(value) => setType(value as OutreachDialogEventType)}
                 />
 
-                {/* Module doc #2 -- CMP-02: these flags are only ever shown
-                    as editable controls for type === 'competition'. */}
+                {/* Module doc #2 -- CMP-02: this flag is only ever shown as an
+                    editable control for type === 'competition'. GAM-433
+                    removed the sibling "Counts toward volunteer hours" switch
+                    -- it promised something the 2026-08-03 outreach-only
+                    ruling makes impossible, so it is pinned false in code
+                    above rather than offered to a coach. */}
                 {type === 'competition' && (
                   <VStack gap={2}>
                     <Switch
@@ -1428,12 +1454,6 @@ export function OutreachEventDialog({
                       value={competitionCountsParticipation}
                       onChange={(checked) => setCompetitionCountsParticipation(checked)}
                       description="Off by default for competitions. Turn this on if this competition should count toward participation percentage."
-                    />
-                    <Switch
-                      label="Counts toward volunteer hours"
-                      value={competitionCountsVolunteerHours}
-                      onChange={(checked) => setCompetitionCountsVolunteerHours(checked)}
-                      description="Off by default for competitions. Turn this on if this competition should count toward volunteer hours."
                     />
                   </VStack>
                 )}

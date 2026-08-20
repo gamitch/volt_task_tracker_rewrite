@@ -768,11 +768,17 @@ describe('<OutreachEventDialog /> type Selector + CMP-02 flag gating (Known Cont
     const participationToggle = getFieldControl(
       'Counts toward participation %',
     ) as HTMLInputElement;
-    const volunteerHoursToggle = getFieldControl(
-      'Counts toward volunteer hours',
-    ) as HTMLInputElement;
     expect(participationToggle.checked).toBe(false);
-    expect(volunteerHoursToggle.checked).toBe(false);
+
+    // GAM-433: the sibling "Counts toward volunteer hours" switch was REMOVED.
+    // This assertion previously read `volunteerHoursToggle.checked === false`
+    // -- it asserted the control existed and defaulted off. It now asserts the
+    // control is gone even for a competition, which is the one event type that
+    // ever showed it. The 2026-08-03 owner ruling
+    // (`20260804000000_volunteer_hours_outreach_only.sql`) makes
+    // `counts_volunteer_hours` on a competition unreachable by design, so a
+    // switch offering it was a false promise.
+    expect(document.body.textContent).not.toContain('Counts toward volunteer hours');
 
     // Switching back to "Outreach" hides the toggles again (module doc #2 --
     // never shown as editable controls for the outreach type).
@@ -980,6 +986,57 @@ describe('<OutreachEventDialog /> submit + cancel behavior', () => {
     expect(payload.sessions[0].startsAt).toBe('2026-07-22T14:00:00.000Z'); // 9:00 AM Chicago (CDT).
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  // GAM-433: the "Counts toward volunteer hours" switch was removed. This
+  // asserts the consequence at the SAVE PAYLOAD, not just at the render --
+  // a competition must reach `onSaveEvent` with `countsVolunteerHours: false`
+  // and no way for a coach to have made it true. Asserting only that the
+  // switch is absent would leave a regression that re-pinned the value to
+  // `true` in code entirely undetected.
+  it('GAM-433: a competition saves countsVolunteerHours false, with no control able to set it true', async () => {
+    const onSaveEvent = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(
+        <OutreachEventDialog
+          isOpen
+          onOpenChange={() => {}}
+          onSaveEvent={onSaveEvent}
+          teams={TEST_TEAMS}
+          currentUserProfileId={TEST_CURRENT_USER_PROFILE_ID}
+        />,
+      );
+    });
+
+    const typeTrigger = getFieldControl('Event type');
+    clickButton(typeTrigger);
+    const competitionOption = Array.from(document.querySelectorAll('[role="option"]')).find(
+      (el) => el.textContent?.trim() === 'Competition',
+    ) as HTMLElement;
+    clickButton(competitionOption);
+
+    // The control is gone for the one type that ever showed it.
+    expect(document.body.textContent).not.toContain('Counts toward volunteer hours');
+    // Its sibling is untouched and still editable -- guards against deleting
+    // both switches together, which is the easy mistake here.
+    expect(document.body.textContent).toContain('Counts toward participation %');
+
+    const titleInput = getFieldControl('Title') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(titleInput, 'Regional Qualifier');
+    });
+    const dateInput = getFieldControl('Date') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(dateInput, '2026-07-22');
+    });
+
+    clickButton(findButtonByText('Create event — 1 session') as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(onSaveEvent).toHaveBeenCalledTimes(1);
+    const payload = onSaveEvent.mock.calls[0][0] as SaveOutreachEventPayload;
+    expect(payload.event.type).toBe('competition');
+    expect(payload.event.countsVolunteerHours).toBe(false);
   });
 
   it('Cancel discards the form and never invokes onSaveEvent', () => {
