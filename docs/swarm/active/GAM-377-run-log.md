@@ -279,3 +279,34 @@ not a run that merely ran out of things to say.
   not against this branch, and the filing says GAM-377 inserts ~84 lines above
   `:1203` so a cold reader knows to re-derive after this merges.
   Packet §3-bis updated to name GAM-423.
+  **Correction, made before the PR body was written:** I first filed GAM-423 to
+  `Todo` carrying `heavy`. That was wrong — the `pr-body` skill records GAM-382,
+  where a row created directly in `Todo` was never dispatched, and item 28a makes
+  promotion to `Todo` the *owner's* authorization. An agent filing straight to
+  `Todo` self-authorizes the follow-up. Moved to `Backlog` and relabelled
+  `unreviewed` / `w2` / `Bug`, with read-back confirming
+  `{"state":{"name":"Backlog"},"labels":["unreviewed","w2","Bug"]}`. The HEAVY
+  recommendation stays in the issue body as a recommendation, which is what item
+  30b asks for and what item 28d then has the next claimer re-judge.
+- **PR body written to `docs/swarm/active/GAM-377-pr-body.md` and pushed BEFORE
+  attempting the API call** (`d8fd568`), and validated against the declaration
+  gate: `node .claude/skills/pr-body/scripts/check.mjs` → `OK  declaration closes
+  GAM-377`, exit 0.
+- **PR could NOT be opened by this run — the GitHub credential is dead.** Both
+  `gh pr create` attempts returned `HTTP 401: Bad credentials`;
+  `curl -H "Authorization: token …" https://api.github.com/user` returns **401**
+  for `GITHUB_TOKEN` (a `ghs_` installation token, so: expired), and
+  `OVERRIDE_GITHUB_TOKEN` is **empty** (length 0). This is GAM-333's known
+  wall, not a new failure, and it is the exact case the `pr-body` skill's
+  write-the-artifact-first rule exists for — **nothing is stranded.** Branch and
+  remote are identical at `d8fd568`; every commit, the packet, both gate
+  verdicts, the worker's diff and the finished PR body are all on the remote. A
+  human or a scoped session opens the PR from the artifact with one paste.
+- **Issue moved `In Progress → In Review`** (item 28e — never `Done`; the merge
+  closes it, not the author), with read-back to confirm, and a comment left on
+  GAM-377 recording the credential wall and the artifact path so the next reader
+  does not have to reconstruct any of it from this log.
+- **Run complete.** No subagent was left in flight at any point: all three
+  dispatches (`checker-premise` ×2, `worker-implementer`, `checker-reviewer`)
+  were made with `run_in_background: false`, and every one of them has a verdict
+  line above it in this file.
