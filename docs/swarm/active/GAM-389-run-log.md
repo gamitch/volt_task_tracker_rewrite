@@ -67,3 +67,11 @@ Decoded the live `ghs_` App token at minute 1 rather than guessing:
      `loaders/leaderboard.ts:147`, reports/home pages, weekly digest) sits
      behind `RequireAuth`.
 - 03:19Z — next: write the HEAVY packet, then the item-19 premise gate.
+- 03:24Z — packet written: `docs/swarm/active/GAM-389-packet.md`. HEAVY, worker
+  pinned **opus** per item 18. Chooses **revoke** over document-and-keep, on the
+  ground that the alternative requires reconsidering an owner ruling
+  ("Close it off", 2026-07-31) and no agent may do that. Carries three
+  corrections to the issue and a five-entry Least confident decisions list
+  (item 19d).
+- 03:25Z — **DISPATCHING `checker-premise` (opus, blocking, item 19).** If this
+  line is the last one in this file, the run died holding this subagent.
