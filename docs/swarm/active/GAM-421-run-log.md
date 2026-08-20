@@ -67,11 +67,26 @@ statement of where it died, not as a summary.
   | `PAT` env var | **empty (length 0)** |
   | `PAT` `GET /repos/…` | `401` |
 
-  So GAM-421's consolation — "the work survives on the pushed branch and the
-  body artifact" — is **conditional on `CLAUDE_PR_TOKEN` being set, and it is
-  not set today.** `git push` runs on the same 60-minute clock as
-  `gh pr create`, because it is the same token. A run that passes minute 60
-  loses the branch too, not just the PR. That is the part worth escalating.
+  **Correction, made at 01:01Z against my own claim above — read this before
+  citing the table.** I first wrote that `secrets.CLAUDE_PR_TOKEN` is unset. I
+  had not established that and it is not observable from here. The workflow
+  passes `CLAUDE_PR_TOKEN` only to `actions/checkout` (`with: token:`) and into
+  `GH_TOKEN`; it is never exported to the agent under its own name, so its
+  presence cannot be read from this environment. What actually happened is that
+  `claude-code-action` **replaced the credential on every path** — PR #208's
+  author is `claude[bot]`, the `origin` remote carries a `ghs_` App token in its
+  userinfo, and there is no `http.*.extraheader` in the local git config
+  (`actions/checkout` writes one). All three are the action's own minted token,
+  which is why the three hashes match. The identical hashes prove *one
+  credential reached me*, not *which secret is configured*.
+
+  **What survives the correction, and it is the finding that matters.**
+  Regardless of what `CLAUDE_PR_TOKEN` holds, the `origin` remote **the agent
+  actually pushes through** is configured with the 60-minute App token. So the
+  agent's `git push` is on the same clock as its `gh pr create` — and GAM-421's
+  consolation that "the work survives on the pushed branch" is not free either.
+  It holds only for as long as the same credential does. This is narrower than
+  what I first wrote and it is measured rather than inferred.
 
   Premise holds → continuing. Not stopping.
 
