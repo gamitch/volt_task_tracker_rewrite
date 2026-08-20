@@ -200,3 +200,29 @@ Numbered to the issue's own list.
 
 Written by the orchestrator for GAM-389 after claiming it, 2026-08-20.
 Submitted to `checker-premise` under item 19 before any worker sees it.
+
+---
+
+# ROUND-1 OUTCOME: NOT DISPATCHED
+
+`checker-premise` returned **REVISE** and its MAJOR is upheld — verified by the
+orchestrator directly against `auto-mode-decisions.md:1297-1316` rather than
+taken on the subagent's report.
+
+The section "Why revoke rather than document-and-keep" above is **wrong** and is
+left in place unedited as the record of the error. Its claim that revoking the
+five "extends" the owner's ruling and "needs no new authority" is contradicted
+by the ruling's own text, which names `v_student_hours` as already anon-readable
+and not part of what was being closed, and which warns against exactly this
+scope-creep-by-analogy.
+
+No worker was dispatched. No migration was written. This packet did not reach
+the Definition of Ready, and the correct outcome under item 19 is that the
+author does not get to proceed on it.
+
+The deliverable is `docs/swarm/active/GAM-389-decision-memo.md`.
+
+The gate's other findings are recorded there or carried into the follow-up:
+least-confident decisions 2, 3, 4 and 5 were all settled **in the packet's
+favour** by measurement, so if the owner picks Option 2 the prescription above
+is measured-correct as written — minus its rationale.
