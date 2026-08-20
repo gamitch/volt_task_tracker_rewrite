@@ -413,3 +413,18 @@ a stale header is what the next run has to disprove.
   attendance-backed formula, **which is not what `/outreach` computes.**
   25 existing assertions in `OutreachList.test.tsx` pin the current strings, plus
   `GoalBar.test.tsx:35,81-82` and `StatCell.test.tsx:34-36`.
+- `2026-08-20T11:39Z` **PACKET WRITTEN** — `GAM-196-packet-round2.md`. Supersedes
+  run 1's packet entirely (that one proposed the `counts_volunteer_hours`
+  alignment the round-1 gate refuted; none of it is carried forward). Scope:
+  user-visible wording on `/outreach` only, plus the comments that now state
+  something false. **No arithmetic changes** — option B is not authorized.
+  Allowed Files: `OutreachList.tsx` and its test, and nothing else. Ends with five
+  **Least confident decisions** (item 19d), led by the BEH-02 prescribed-legend
+  question.
+- `2026-08-20T11:40Z` **DISPATCHED `checker-premise`** (`model: "opus"` per item 18
+  / AGENTS.md HEAVY premise-checker tier) against the round-2 packet, with
+  `run_in_background: false`. Item 19 forbids the packet reaching a worker until
+  this returns **DISPATCH**. Round 1 of the two-round cap (item 19a) was spent by
+  the first run on a *different* packet; this is round 1 for this packet.
+  **If this line is the last one in this file, the run died holding this
+  subagent** — no verdict came back and no worker was ever dispatched.
