@@ -198,3 +198,28 @@ subagent's verdict; gates run; PR opened.
 - **DISPATCHED `checker-reviewer`** (opus, `run_in_background: false`) — HEAVY
   requires a separate checker; a worker may not self-certify. *If this line is
   the last one in this file, the run died holding this subagent.*
+- **CHECKER VERDICT: PASS** (one MINOR, plus NITs; no BLOCKER, no MAJOR). It
+  replayed rather than trusted — seven mutations in its own worktree, removed
+  after, shared tree never touched.
+  * **The load-bearing pair holds, measured independently:** under
+    `key={pathname}` exactly one test goes red and it is AC2b, with AC2a among
+    the eight still passing. Not "both red", not "neither".
+  * Removing the wrapper from `router.tsx` turns AC1b and nothing else red, so
+    the mount is genuinely proven.
+  * AC3 ruled **not circular**: the mechanism (a rejected lazy payload rethrowing
+    through `Suspense` into the boundary) is real in the production nesting; only
+    the rejection *value* is authored, which jsdom makes unavoidable and which
+    the packet's own wording prescribes.
+  * Every Astryx prop checked against `astryx-api.md` — none hallucinated.
+    Accessibility verified against **rendered DOM**, not inferred:
+    `role="status"` + real `<h2>` + native `<a>` for the generic case,
+    `role="alert"` + native `<button>` for the chunk case, no `tabIndex`.
+  * Gates all exit 0; suite 99 files / 2514 tests.
+  * Item 27 checked explicitly and cleared: the surface reads real caught errors
+    on the real user path, so this is Passed and not Partial.
+  * **MINOR:** `RouteErrorBoundary.test.tsx:417` carries the *same* blind
+    word-boundary defect the worker fixed one line above — `\bOK\b` cannot match
+    at a `textContent` seam. The checker proved it: with a bare "OK" planted in
+    the shipped copy, AC4b stayed **green**. Exactly the class of bug a green
+    suite cannot show you, found twice in one file by two different agents
+    running mutations.
