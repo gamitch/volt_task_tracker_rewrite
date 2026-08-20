@@ -45,3 +45,28 @@ dispatch line is the last line in this file, the run died holding that subagent.
 | 11:43 | **All six gates PASS** at `3a22bb6`, tree clean, `--require-clean`. Full suite 2587 (baseline 2583, +4); scoped 39 (baseline 35, +4); eslint 0 errors / 380 warnings (standing `react-refresh` class). Figures match the worker's independently — three agents, one set of numbers. |
 | 11:43 | **Mutation replayed by the orchestrator, in its own worktree (item 23) — the shared tree was never modified.** Reverting the predicate to `if (!event \|\| !event.countsVolunteerHours) continue;` turned the suite **red, exit 1, exactly 2 failures**, both named: criterion 1 (pure function) and **criterion 4, which asserts through `buildStudentRows`** — so the test follows the value into the row the table actually renders, not just into an exported function. That is the gap v1's criteria could not have caught. Worktree removed; `git status` clean. |
 | 11:44 | Run-log timestamps corrected against real commit times — the later entries had been written from estimates and ran ahead of the clock. |
+| 11:46 | **PR #213 finalized and taken out of draft.** Body validated by `check.mjs` (`declaration closes GAM-428`, exit 0) and preserved at `docs/swarm/active/GAM-428-pr-body.md`. |
+| 11:47 | **GAM-428 → `In Review`** (item 28e — never `Done`; the merge closes it, not the agent). Read back: `In Review`. Comment posted recording the premise correction, the gate evidence, and the two open questions that are the owner's, not an agent's. |
+| 11:47 | **GAM-430 read back: `Backlog`, `tier/unreviewed`.** Filed to `Backlog` deliberately — a row created directly in `Todo` is never dispatched (GAM-382), and promotion is the owner's signal. |
+| 11:47 | **Run complete. No subagent in flight; both returned and both verdicts are recorded above.** |
+
+## Outcome
+
+**The premise held for one of the two surfaces it named, and the run says so rather
+than papering over it.**
+
+- **Fixed and merged-ready:** the Reports → Hours tab. One predicate, three stale
+  comments, four tests. Six gates green at `3a22bb6`; the mutation turns it red.
+- **Falsified:** `StudentHome.tsx`'s `computePlannedHours` is dead on the render
+  path. Left byte-unchanged. Fixing it would have bought a "fixed" claim and no
+  behaviour.
+- **Relocated:** the student-facing defect is `v_planned_rsvp_hours`, filed as
+  **GAM-430** — metric-view SQL, item 3, the owner's route. It is the larger half.
+- **Left to the owner, deliberately:** whether the competition "Counts toward
+  volunteer hours" Switch should exist at all. Its on-screen text has been untrue
+  since T322. That is a product call and an agent should not make it.
+
+**What earned its cost.** The premise gate. It did not read the packet — it
+executed the prescription, ran 2583 tests, and stood up a real PostgreSQL cluster
+to read the view back. That is the only reason this run did not ship a confident
+two-file fix whose second file changes nothing, and the only reason GAM-430 exists.
