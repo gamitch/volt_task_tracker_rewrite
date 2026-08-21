@@ -1640,9 +1640,7 @@ describe('<CoachHome /> T124 hours by team', () => {
         const base = await fixtureLoadDashboardData();
         return {
           ...base,
-          teamHours: [
-            { teamId: 't1', teamName: 'Ravens', seasonId, confirmedHours: 3.999998805 },
-          ],
+          teamHours: [{ teamId: 't1', teamName: 'Ravens', seasonId, confirmedHours: 3.999998805 }],
         };
       },
       nowFn: () => FIXTURE_REFERENCE_NOW,
