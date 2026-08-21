@@ -79,3 +79,8 @@ Append-only. One line per milestone, committed and pushed as it happens.
   `.claude/skills/pr-body/scripts/check.mjs` first (`OK declaration closes
   GAM-456`). Body currently states no source diff exists yet; will be
   updated once the worker lands and gates are replayed.
+- **worker-implementer dispatched** against `docs/swarm/active/GAM-456-packet.md`
+  on this worktree/branch. Dispatched with `run_in_background: false` — the
+  orchestrator blocks on the result rather than ending its turn with the
+  subagent in flight. If this line is the last one in this file, the run
+  died holding this subagent.
