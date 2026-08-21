@@ -72,3 +72,10 @@ Append-only. One line per milestone, committed and pushed as it happens.
   criteria including a named mutation (two: one Card-wrap revert, one
   H1-weight revert), a 3-entry least-confident-decisions list (not strictly
   required at STANDARD, included because two calls are genuinely close).
+- **Draft PR opened early, per wall 3.** Decoded the live PR credential at
+  minute ~21 of this run: `iat 11:13:32 UTC`, `exp 12:13:32 UTC` — a 60-minute
+  window, ~47 minutes remaining at open time. Opened **PR #228** (draft) with
+  `docs/swarm/active/GAM-456-pr-body.md` as the body, verified against
+  `.claude/skills/pr-body/scripts/check.mjs` first (`OK declaration closes
+  GAM-456`). Body currently states no source diff exists yet; will be
+  updated once the worker lands and gates are replayed.
