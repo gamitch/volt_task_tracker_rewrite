@@ -101,3 +101,9 @@ before any worker was dispatched.
    output, the mutation-replay table, and the live-browser evidence; PR #219
    moved out of draft (`gh pr ready 219`). Proceeding to move the Linear
    issue to `In Review` with the close-out comment next.
+
+9. **Close-out** · 2026-08-21 · posted the close-out run-log comment on
+   GAM-437 (gate block, mutation-replay, live-browser evidence, no
+   follow-ups, disclosed gaps) and moved the issue `In Progress → In
+   Review` (never `Done` — item 28e; merge closes it). PR #219 is ready for
+   review. Run complete.
