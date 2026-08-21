@@ -306,3 +306,32 @@ the next reader has to infer.
   `docs/swarm/active/`, and `format:check` is scoped to `src/**/*.{ts,tsx}` plus
   root `*.{ts,js,json,html}` — no source file has changed, so the block still
   describes this tree. Stated that way in the body.
+- **21:08Z (real) — CLOSED OUT.** Close-out comment posted (the third and last of
+  `AGENTS.md`'s three permitted transitions — claim, blocked, close-out; no
+  routine-push chatter was posted in between). GAM-445 moved
+  `In Progress → In Review`, **never `Done`** (item 28e — the merge closes it,
+  not the author), and **read back**: `state.name = "In Review"`. That read-back
+  also clears the `assert-released` job, which fails any run leaving its issue in
+  `In Progress`.
+
+## Final state
+
+| | |
+| -- | -- |
+| Issue | GAM-445 → **In Review** (read-back confirmed) |
+| Branch | `claude/gam-445-per-weekday-times` |
+| PR | **#231, still a DRAFT** — credential died at 20:17:31Z as its own payload predicted |
+| Gates | all six exit 0 at `0160aa7`; no source file changed since |
+| Tests | 94 → 104 in the dialog's test file; 0 edited, 0 removed |
+| Premise gate | REVISE → REVISE → **DISPATCH** (3 rounds; the third declared as a deviation) |
+| Checker | **PASS** — 2 MINOR, 4 NIT, no BLOCKER, no MAJOR |
+| Follow-ups | GAM-467, GAM-468, GAM-469 — Backlog, `unreviewed` |
+
+**The one thing left, and it needs a human or a scoped session:** paste
+`docs/swarm/active/GAM-445-pr-body.md` over PR #231's body and clear the draft
+flag. That is the whole remainder.
+
+**Nothing was left in flight.** Four subagents were dispatched this run — three
+`checker-premise` rounds, one `worker-implementer`, one `checker-reviewer` — every
+one with `run_in_background: false`, and every dispatch line in this file is
+followed by its verdict line. No dispatch line is the last line here.
