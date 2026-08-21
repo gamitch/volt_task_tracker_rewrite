@@ -49,7 +49,7 @@ If a worker believes the standard is wrong, impossible, contradictory, or harmfu
 
 ### Stack locks
 8. Vite + React 19 + TypeScript strict + Supabase. **No Tailwind, no shadcn, no alternate UI/CSS libraries** (PRD D2/D3) → BLOCKER. *React 19 is an approved, human-authorized deviation from PRD D2's "React 18" — see dispute-log D002 for the ruling and evidence (`@astryxdesign/core` requires React 19 at runtime, not just in peer metadata). The PRD text itself is intentionally unedited; D002 is the record of the deviation.*
-9. Dependency allowlist: `@astryxdesign/*`, `@supabase/supabase-js`, `@tanstack/react-query`, `react-router-dom`, `qrcode.react`, `ical-generator` (Edge Function), plus dev tooling (vitest, playwright, eslint, prettier). Anything else requires boss-architect approval recorded in the ledger.
+9. Dependency allowlist: `@astryxdesign/*`, `@supabase/supabase-js`, `@tanstack/react-query`, `react-router-dom`, `qrcode.react`, `lucide-react`, `ical-generator` (Edge Function), plus dev tooling (vitest, playwright, eslint, prettier). Anything else requires boss-architect approval recorded in the ledger. *`lucide-react` is a human-authorized addition (owner, 2026-08-21) — Astryx's semantic icon set is a closed 26-name list that cannot name four of the seven side-nav destinations, and `Icon`'s own props table directs callers to lucide or heroicons for anything outside it. See dispute-log D021 for the measured gap, the choice between the two, and the disclosed divergence (lucide is outline-only, so `SideNavItem.selectedIcon` goes unused). Recorded there rather than in the ledger, which item 29 froze.*
 10. Database changes are additive migrations via the Supabase CLI; editing an applied migration file → BLOCKER.
 
 ### UI & quality
