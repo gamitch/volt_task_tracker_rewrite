@@ -668,6 +668,40 @@
  *     accent-tinted border on the one goal-related tile per row) without
  *     hand-copying production's own raw hex values, which are that app's
  *     palette, not this one's.
+ *
+ * -----------------------------------------------------------------------
+ * 17. GAM-456 -- panels the three remaining bare sections, restores the H1's
+ *     approved size/weight. No schema/loader/RLS/metric-math change.
+ *
+ * (a) Hours by team (`:2792-2815`), Goal projection (`:2823-2859`), and Top
+ *     events by student hours (`:2864-2887`) are now each wrapped in the
+ *     same plain `Card` primitive already used for Next up/Activity feed
+ *     (module doc #16(c)) -- contents, ids, and `role="group"`/
+ *     `aria-labelledby` wiring are unchanged. The four surrounding
+ *     `<Divider />` elements are left in place, matching this file's own
+ *     established pattern (the Leaderboard/Season-setup `Card`s at
+ *     `:2924`/`:2935` both still keep their own preceding `<Divider />`
+ *     too) -- unlike the Next up/Activity feed pair's `Divider`, which
+ *     module doc #16(c) removed only because that one sat between two
+ *     side-by-side `Grid` columns, not stacked siblings.
+ *
+ * (b) Header H1 restored to 46px/800 (`COACH_HOME_TITLE_STYLE`) and the
+ *     eyebrow made an uppercase, 800-weight, accent-orange treatment
+ *     (`COACH_HOME_EYEBROW_STYLE` + `color="accent"`). Both are scoped
+ *     `style` overrides, not a theme-token change: `--text-heading-1-*`
+ *     (`theme.css:134-135`) backs every `Heading level={1}` in the app
+ *     (~25 other call sites), so widening that token would resize all of
+ *     them for a one-page treatment. `Heading`'s own `type="display-1"`
+ *     prop was considered and rejected -- `theme.css:166-168` resolves it
+ *     to 42px/400 (lighter than today's 600, the wrong direction on
+ *     weight). 800 has no matching token anywhere in the theme (the full
+ *     scale tops out at `bold`/700, `astryx.css:53`), so it is a literal
+ *     numeric `fontWeight: 800`, same as this file's existing precedent of
+ *     literal values in `CSSProperties` constants for anything the token
+ *     scale can't express. `style` reliably wins with no `!important`
+ *     because `Heading`/`Text` both merge it in after their own StyleX
+ *     classes (confirmed against the installed source), the same mechanism
+ *     `KpiCard` already uses above.
  */
 import { useEffect, useId, useState, type CSSProperties, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -1960,6 +1994,24 @@ const KPI_GOAL_ACCENT_STYLE: CSSProperties = {
   borderColor: 'var(--color-accent-muted)',
 };
 
+/** GAM-456 (module doc #17(b)): the approved page header treats the H1 at
+ * 46px/800 -- neither value has a matching theme token (`--text-heading-1-*`
+ * is 24px/600, and `type="display-1"` is 42px/400, the wrong direction on
+ * weight), so this is a page-scoped literal override, not a token change. */
+const COACH_HOME_TITLE_STYLE: CSSProperties = {
+  fontSize: '2.875rem',
+  fontWeight: 800,
+};
+
+/** GAM-456 (module doc #17(b)): the eyebrow's uppercase, 800-weight
+ * treatment has no matching theme token either (the weight scale tops out
+ * at `bold`/700) -- combined with the real `color="accent"` prop below,
+ * never a hardcoded hex. */
+const COACH_HOME_EYEBROW_STYLE: CSSProperties = {
+  textTransform: 'uppercase',
+  fontWeight: 800,
+};
+
 function KpiCard({
   label,
   value,
@@ -2489,12 +2541,18 @@ function CoachHomeContent({
 
               <HStack hAlign="between" vAlign="center" wrap="wrap" gap={3}>
                 {/* GAM-438 (module doc #16(a)): eyebrow (active season
-                    name) + large title, replacing the plain "Home" heading. */}
+                    name) + large title, replacing the plain "Home" heading.
+                    GAM-456 (module doc #17(b)): restores the approved 46px/
+                    800 H1 and the uppercase/800/accent-orange eyebrow via
+                    scoped `style` overrides -- see the constants' own doc
+                    comments for why no theme token applies. */}
                 <VStack gap={1}>
-                  <Text type="supporting" color="secondary">
+                  <Text type="supporting" color="accent" style={COACH_HOME_EYEBROW_STYLE}>
                     {seasonName}
                   </Text>
-                  <Heading level={1}>Coach dashboard</Heading>
+                  <Heading level={1} style={COACH_HOME_TITLE_STYLE}>
+                    Coach dashboard
+                  </Heading>
                 </VStack>
                 <HStack gap={2} wrap="wrap">
                   {checkInSession !== null && (
@@ -2788,103 +2846,119 @@ function CoachHomeContent({
               <Divider />
 
               {/* T124 hours by team (UXP-06, module doc #13). Consumes T116's
-                `v_team_hours` unmodified -- season-wide, every team. */}
-              <VStack gap={3}>
-                <Heading level={2} id={hoursByTeamHeadingId}>
-                  Hours by team
-                </Heading>
-                <div role="group" aria-labelledby={hoursByTeamHeadingId}>
-                  {sortedTeamHours.length === 0 ? (
-                    <EmptyState
-                      headingLevel={3}
-                      title="No team hours yet"
-                      description="Confirmed hours will appear here once attendance is recorded this season."
-                    />
-                  ) : (
-                    <List hasDividers>
-                      {sortedTeamHours.map((entry) => (
-                        <TeamHoursRowItem
-                          key={entry.teamId}
-                          entry={entry}
-                          maxHours={maxTeamHours}
-                        />
-                      ))}
-                    </List>
-                  )}
-                </div>
-              </VStack>
+                `v_team_hours` unmodified -- season-wide, every team.
+                GAM-456 (module doc #17(a)): wrapped in the existing `Card`
+                primitive for the bordered-panel look, matching the other
+                already-panelled sections -- contents/ids/aria wiring
+                unchanged. */}
+              <Card>
+                <VStack gap={3}>
+                  <Heading level={2} id={hoursByTeamHeadingId}>
+                    Hours by team
+                  </Heading>
+                  <div role="group" aria-labelledby={hoursByTeamHeadingId}>
+                    {sortedTeamHours.length === 0 ? (
+                      <EmptyState
+                        headingLevel={3}
+                        title="No team hours yet"
+                        description="Confirmed hours will appear here once attendance is recorded this season."
+                      />
+                    ) : (
+                      <List hasDividers>
+                        {sortedTeamHours.map((entry) => (
+                          <TeamHoursRowItem
+                            key={entry.teamId}
+                            entry={entry}
+                            maxHours={maxTeamHours}
+                          />
+                        ))}
+                      </List>
+                    )}
+                  </div>
+                </VStack>
+              </Card>
 
               <Divider />
 
               {/* T124 per-student goal projection (UXD-07, module doc #13).
                 Motivation-ethics BLOCKER-class: annotations state facts,
                 the Below-goal filter is coach-facing triage, never a
-                ranking/shame framing (Trap #2). */}
-              <VStack gap={3}>
-                <HStack hAlign="between" vAlign="center" wrap="wrap" gap={3}>
-                  <Heading level={2} id={goalProjectionHeadingId}>
-                    Goal projection · confirmed + planned
-                  </Heading>
-                  <ToggleButton
-                    label="Below goal"
-                    isPressed={goalProjectionFilter === 'belowGoal'}
-                    onPressedChange={(pressed) =>
-                      setGoalProjectionFilter(pressed ? 'belowGoal' : 'all')
-                    }
-                  />
-                </HStack>
-                <div role="group" aria-labelledby={goalProjectionHeadingId}>
-                  {sortedGoalProjection.length === 0 ? (
-                    <EmptyState
-                      headingLevel={3}
-                      title={
-                        goalProjectionFilter === 'belowGoal'
-                          ? 'No one is below goal'
-                          : 'No projection yet'
-                      }
-                      description={
-                        goalProjectionFilter === 'belowGoal'
-                          ? 'Every active student is projected to reach their season goal.'
-                          : 'Confirmed and planned hours will appear here once recorded this season.'
+                ranking/shame framing (Trap #2).
+                GAM-456 (module doc #17(a)): wrapped in the existing `Card`
+                primitive for the bordered-panel look -- contents/ids/aria
+                wiring unchanged. */}
+              <Card>
+                <VStack gap={3}>
+                  <HStack hAlign="between" vAlign="center" wrap="wrap" gap={3}>
+                    <Heading level={2} id={goalProjectionHeadingId}>
+                      Goal projection · confirmed + planned
+                    </Heading>
+                    <ToggleButton
+                      label="Below goal"
+                      isPressed={goalProjectionFilter === 'belowGoal'}
+                      onPressedChange={(pressed) =>
+                        setGoalProjectionFilter(pressed ? 'belowGoal' : 'all')
                       }
                     />
-                  ) : (
-                    <List hasDividers>
-                      {sortedGoalProjection.map((row) => (
-                        <GoalProjectionRowItem key={row.studentId} row={row} />
-                      ))}
-                    </List>
-                  )}
-                </div>
-              </VStack>
+                  </HStack>
+                  <div role="group" aria-labelledby={goalProjectionHeadingId}>
+                    {sortedGoalProjection.length === 0 ? (
+                      <EmptyState
+                        headingLevel={3}
+                        title={
+                          goalProjectionFilter === 'belowGoal'
+                            ? 'No one is below goal'
+                            : 'No projection yet'
+                        }
+                        description={
+                          goalProjectionFilter === 'belowGoal'
+                            ? 'Every active student is projected to reach their season goal.'
+                            : 'Confirmed and planned hours will appear here once recorded this season.'
+                        }
+                      />
+                    ) : (
+                      <List hasDividers>
+                        {sortedGoalProjection.map((row) => (
+                          <GoalProjectionRowItem key={row.studentId} row={row} />
+                        ))}
+                      </List>
+                    )}
+                  </div>
+                </VStack>
+              </Card>
 
               <Divider />
 
-              {/* T124 top events by student hours (UXP-06, module doc #13). */}
-              <VStack gap={3}>
-                <Heading level={2} id={topEventsHeadingId}>
-                  Top events by student hours
-                </Heading>
-                <div role="group" aria-labelledby={topEventsHeadingId}>
-                  {sortedTopEvents.length === 0 ? (
-                    <EmptyState
-                      headingLevel={3}
-                      title="No events with hours yet"
-                      description="Events that award volunteer hours will show up here once attendance is recorded."
-                    />
-                  ) : (
-                    <List hasDividers>
-                      {sortedTopEvents.map((entry) => (
-                        <TopEventRowItem
-                          key={entry.eventId}
-                          entry={entry}
-                          maxHours={maxEventHours}
-                        />
-                      ))}
-                    </List>
-                  )}
-                </div>
-              </VStack>
+              {/* T124 top events by student hours (UXP-06, module doc #13).
+                GAM-456 (module doc #17(a)): wrapped in the existing `Card`
+                primitive for the bordered-panel look -- contents/ids/aria
+                wiring unchanged. */}
+              <Card>
+                <VStack gap={3}>
+                  <Heading level={2} id={topEventsHeadingId}>
+                    Top events by student hours
+                  </Heading>
+                  <div role="group" aria-labelledby={topEventsHeadingId}>
+                    {sortedTopEvents.length === 0 ? (
+                      <EmptyState
+                        headingLevel={3}
+                        title="No events with hours yet"
+                        description="Events that award volunteer hours will show up here once attendance is recorded."
+                      />
+                    ) : (
+                      <List hasDividers>
+                        {sortedTopEvents.map((entry) => (
+                          <TopEventRowItem
+                            key={entry.eventId}
+                            entry={entry}
+                            maxHours={maxEventHours}
+                          />
+                        ))}
+                      </List>
+                    )}
+                  </div>
+                </VStack>
+              </Card>
 
               <Divider />
 
