@@ -105,3 +105,24 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   cannot mark it ready after that, and marking it ready *before* the gates ran
   would have been a false claim. Its description already carries the premise
   findings and the declared item-19a deviation. Pushes continue to work.
+- 23:57Z — **Gates run independently by the orchestrator, on the committed tree
+  (`--require-clean`), and they agree with the worker's report.**
+
+  ```
+  GATE RUN — 8ef9612 on claude/gam-447-series-card — tree clean
+
+    1 tsc                                                  exit 0  PASS
+    2 vite build                                           exit 0  PASS
+    3 format:check                                         exit 0  PASS
+    4 eslint                                               exit 0  PASS       0 errors, 380 warnings
+    5 vitest (full)                                        exit 0  PASS       109 files / 2654 tests  baseline 2633 (+21)
+    6 vitest src/pages/meetings/coach/SeriesCard.test.tsx  exit 0  PASS       1 files / 21 tests  baseline 21 (+0)
+
+  VERDICT: PASS — all six gates exit 0
+  ```
+
+  Baseline **measured, not assumed**: `npx vitest run` at the merge base
+  `3d27d8a` in a separate worktree → 108 files / 2633 tests. The branch adds
+  exactly one file and 21 tests; nothing disappeared. The 380 eslint warnings
+  are the repo's standing `react-refresh/only-export-components` class — `npx
+  eslint` on the two changed files alone emits **zero**.
