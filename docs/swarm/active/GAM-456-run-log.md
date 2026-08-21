@@ -84,3 +84,21 @@ Append-only. One line per milestone, committed and pushed as it happens.
   orchestrator blocks on the result rather than ending its turn with the
   subagent in flight. If this line is the last one in this file, the run
   died holding this subagent.
+- **worker-implementer verdict: completed, uncommitted diff left in the
+  working tree** on `CoachHome.tsx`/`CoachHome.test.tsx` only. Both required
+  named mutations run and reported red-then-green (Card-wrap revert on
+  Hours by team → `AssertionError: expected null not to be null`;
+  `fontWeight` 800→600 → `AssertionError: expected '600' to be '800'`; both
+  restored and green after). Six-gate `gate-run` evidence reported PASS on
+  all six (tsc, build, format:check, eslint 0 errors/380 warnings, full
+  vitest 2600/2600 (+2 over the 2598 baseline), scoped `src/pages/home/`
+  230/230 (+2 over 228 baseline)). One disclosed deviation: the packet
+  assumed `resolveAriaLabelledbyTarget` (`CoachHome.test.tsx:1813`) was
+  file-scoped; the worker re-verified per item 19c, found it is actually
+  closure-scoped to its enclosing `describe`, and nested the new Card-
+  ancestry assertions inside that same `describe` to get genuine reuse
+  rather than a re-implementation — reasonable, not re-litigating.
+  **Orchestrator has not yet independently inspected the diff or replayed
+  the mutations — that is the next step, per item 26 STANDARD ("the
+  primary agent independently inspects the diff and replays the named
+  mutation and verification").**
