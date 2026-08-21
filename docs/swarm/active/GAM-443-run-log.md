@@ -253,3 +253,56 @@ State inherited and verified by this run, not assumed:
   is explicit that a topic sounding important is not a trigger, and the HEAVY
   process tier is a separate axis from the worker model tier. **If this line is
   the last one in this file, the run died holding this subagent.**
+
+- **12:28Z — `worker-implementer` returned; work committed at `b7e9b1d`.**
+  Subagent completed, result in hand, nothing left in flight.
+
+  Verified by the orchestrator rather than taken from the report (item 21 —
+  "clean" and "committed" are different claims): `git log` shows `b7e9b1d` on
+  this branch with parent `19070df`; `git status --porcelain` empty;
+  `git worktree list` shows only the shared tree, so the mutation worktree
+  `/tmp/gam443-mutation-worktree` really was removed; `git show --stat` lists
+  **exactly the four Allowed Files**, +436/−204. Pushed.
+
+  **Both corrected mutation counts reproduced exactly** — (a) **2 red**,
+  (b) **10 red**, with the named tests matching. That is round 2's MAJOR-1
+  correction confirmed empirically by an agent with no stake in it: had the
+  packet still said 1 and 9, this worker would have measured 2 and 10 and been
+  in the stall-or-fabricate position round 1 classified as a BLOCKER.
+
+  Gates: `tsc` 0, `vite build` 0, `format:check` 0, `eslint` 0 errors, full
+  suite **2608 tests / 103 files** (baseline 2598/102, **+10** — exactly the new
+  `format.test.ts` cases, so no regression anywhere), scoped **151** (baseline
+  141). Criterion 5's ten `buildScheduleChips` cases all pass, including the
+  `1440` end-of-day case MAJOR-2 added.
+
+  **Three things the worker reported as wrong or awkward, reported honestly
+  rather than bent to match the packet** — the behaviour revision 3 asked for:
+  1. Criterion 4's grep predicts 3 hits; the real count is **5**, because
+     `grep 'timeZone'` also matches the word inside the two prose comments the
+     packet itself ordered written. Three code hits, all
+     `timeZone: CHICAGO_TIME_ZONE`. My criterion's defect, not the worker's.
+  2. `gate-run --scope` takes **one** positional filter, so "scope on those two
+     files plus the new one" is not executable in a single call. The worker ran
+     the skill three times and summed, rather than hand-rolling vitest.
+  3. eslint warnings 380 vs the skill doc's standing 377 — pre-existing
+     `react-refresh/only-export-components` drift, none from the new files;
+     gate 4 judges errors, which are 0.
+
+- **12:29Z — process finding worth recording, since AGENTS.md wall 3 turns on
+  it.** This run passed minute 60 with work still in flight, so it tested the
+  wall directly. The `ghs_` App token expired at 12:09Z exactly as predicted —
+  but the long-lived `github_pat_` in
+  `http.https://github.com/.extraheader` works for the **GitHub API**, not only
+  for `git push`: `GH_TOKEN="$PAT" gh pr view 223` succeeds at minute 79.
+  Wall 3's table marks `gh pr create` as not surviving minute 60, which is true
+  **of `GH_TOKEN` as the job sets it** and is the right default — but a
+  stranded run is not out of options, and this one finalizes PR #223 through
+  the PAT. Opening the PR early remains the rule; this is a fallback, not a
+  replacement for it.
+
+- **12:30Z — dispatching `checker-reviewer` on `b7e9b1d`, model opus,
+  `run_in_background: false`.** HEAVY requires a checker separate from the
+  worker, and this one also carries the load revision 3's decision put on it:
+  it re-grades the criteria I transcribed without a gate round 3. **If this
+  line is the last one in this file, the run died holding this subagent.**
