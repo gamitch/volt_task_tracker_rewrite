@@ -44,3 +44,9 @@ before any worker was dispatched.
 
 If this line is the last one in this file, the run died holding the draft PR
 before any worker was dispatched.
+
+4. **Worker dispatched** · 2026-08-21 · dispatching `worker-implementer` with
+   `docs/swarm/active/GAM-437-packet.md`, `run_in_background: false`, default
+   (sonnet) tier per item 18 (no migration/RLS/auth trigger present). If this
+   line is the last one in this file, the run died holding this subagent —
+   dispatched but with no recorded verdict.
