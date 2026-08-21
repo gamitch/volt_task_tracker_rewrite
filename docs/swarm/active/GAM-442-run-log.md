@@ -213,3 +213,35 @@ PR credential (`ghs_`) decoded at minute 1: `iat 2026-08-21T05:02:29Z`,
   subagent.** The packet is complete and gated at revision 3; nothing under
   `supabase/` was written. Resume by dispatching a worker against
   `docs/swarm/active/GAM-442-worker-packet.md` — it needs no further gating.
+
+---
+
+## Run 2 — resumed 2026-08-21 11:10Z
+
+**The line above is the last line run 1 wrote, and it is a dispatch with no
+verdict.** Run 1 died holding its `worker-implementer`, exactly as it predicted
+in writing. Its instruction to the next reader was correct and is what this run
+is executing. Nothing is being re-derived: the packet is gated at revision 3 and
+run 1's own gate said in terms that no re-gate is required.
+
+Measured on resume rather than assumed:
+
+- `git diff --stat main...HEAD -- supabase/` is **empty** — run 1's worker
+  produced nothing that survived, confirming the loss.
+- Branch already carries run 1's three artifacts (run log, PR body, packet,
+  828 lines) and **draft PR [#222] is already open** — so wall 3's early-PR
+  requirement is already satisfied and this run inherits it.
+- **This run's own PR credential**: `iat 2026-08-21T11:09:33Z`,
+  `exp 2026-08-21T12:09:33Z` (decoded from the live `GH_TOKEN`, not assumed).
+  Run 1's died at `06:02:29Z`; this is a fresh hour.
+
+Claim re-confirmed against Linear on resume: GAM-442 read back `In Progress`
+at `2026-08-21T11:10:26.152Z`. Tier judgement **unchanged and independently
+re-derived** before reading run 1's log: HEAVY, because item 26's trigger list
+names "a migration or metric-view SQL" and this is both, and because item 26
+requires the heavier of two arguable tiers. Run 1 reached the same conclusion
+on the same grounds.
+
+- **11:1xZ — resume recorded and pushed.** No new gate round is being opened;
+  item 19a's two-round cap was spent by run 1 and its round-2 verdict closed
+  with "no re-gate is required."
