@@ -4,9 +4,10 @@
 **Branch:** `claude/gam-439-inline-season-goal-editor`
 **Tier:** HEAVY (item 26 — write path). Packet → `checker-premise` → worker → `checker-reviewer`.
 **Author:** orchestrator (Claude, Opus 5), 2026-08-21.
-**Revision 2**, after `checker-premise` round 1 returned REVISE (2 MAJOR,
-6 MINOR, 2 NIT). Every line number below has been re-checked; the round-1
-corrections are folded in and called out where they change a decision.
+**Revision 3 — cleared for dispatch.** Round 1 returned REVISE (2 MAJOR,
+6 MINOR, 2 NIT); round 2 returned **DISPATCH** (3 MINOR, 3 NIT). Every finding
+from both rounds is folded in and called out where it changed a decision. See
+§9 for the gate record.
 
 ---
 

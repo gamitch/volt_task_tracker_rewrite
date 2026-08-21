@@ -121,3 +121,17 @@ holding that subagent.*
   the verified-props list, and the in-`loaders/` test harnesses the gate found.
   Added §9, the premise-gate record. Packet is cleared for dispatch under the
   Definition of Ready.
+- **05:30Z — DISPATCHED `worker-implementer`, `run_in_background: false`.**
+  Model: the agent's pinned **sonnet**, with **no `model: "opus"` override**,
+  and that is a deliberate call. Item 18's four triggers are concrete —
+  migration file, RLS policy or `security definer`, metric-view SQL, or
+  auth/session/role-resolution logic — and this task hits **none** of them: no
+  schema change (round 2 confirmed), and D3's `user.role === 'admin'` is a
+  render condition following the `AdminToggles` precedent, not a change to how
+  roles are resolved. Item 26's "write path" trigger sets the *process* tier
+  (HEAVY, which this got), not the model tier, and item 25 explicitly retires
+  bumping a worker because a topic sounds sensitive. The premise gate has
+  already built this design end to end and proved it compiles and passes 2602
+  tests, so the prescription is unusually de-risked.
+  *If this line is the last one in this file, the run died holding this
+  subagent.*
