@@ -432,7 +432,7 @@ describe('NAV-07 mixed-list exception + DES-04 Badge color mapping', () => {
     expect(competitionVariants.length).toBeGreaterThan(0);
     expect(meetingVariants.every((v) => v === 'purple')).toBe(true); // Meeting Violet, paired with label
     expect(outreachVariants.every((v) => v === 'blue')).toBe(true); // Circuit Blue, paired with label
-    expect(competitionVariants.every((v) => v === 'orange')).toBe(true); // Comp Orange, paired with label
+    expect(competitionVariants.every((v) => v === 'teal')).toBe(true); // Comp Teal (D020), paired with label
   });
 
   it('the legend renders exactly three DES-04 category Badges, in Meeting/Outreach/Competition order', async () => {
@@ -465,7 +465,7 @@ describe('NAV-07 mixed-list exception + DES-04 Badge color mapping', () => {
     expect(legendPairs).toEqual([
       ['Meeting', 'purple'],
       ['Outreach', 'blue'],
-      ['Competition', 'orange'],
+      ['Competition', 'teal'],
     ]);
   });
 

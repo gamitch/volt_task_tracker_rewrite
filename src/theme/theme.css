@@ -203,7 +203,7 @@
     --color-background-card: light-dark(#FEFBFF, #1D1A21);
     --color-background-popover: light-dark(#FEFBFF, #322F36);
     --color-background-muted: light-dark(#1D1A210D, #1D1A2180);
-    --color-accent: light-dark(#5B2EE5, #9B7BFF);
+    --color-accent: light-dark(#A8560A, #f79a4a);
     --color-accent-muted: light-dark(color-mix(in srgb, var(--color-accent) 20%, transparent), color-mix(in srgb, var(--color-accent) 25%, transparent));
     --color-neutral: light-dark(#1D1A211A, #E5E1EA33);
     --color-overlay: light-dark(#1D1A2166, #1D1A2199);
@@ -215,7 +215,7 @@
     --color-text-accent: var(--color-accent);
     --color-on-dark: #ffffff;
     --color-on-light: #171717;
-    --color-on-accent: light-dark(#FFFFFF, #00008D);
+    --color-on-accent: light-dark(#FFFFFF, #081310);
     --color-on-success: light-dark(#ffffff, #171717);
     --color-on-error: light-dark(#ffffff, #171717);
     --color-on-warning: #171717;
@@ -500,7 +500,7 @@
   }
 
   .astryx-progressbar.accent {
-    --color-accent: #0074e2;
+    --color-accent: light-dark(#6E3300, #f79a4a);
   }
 
   .astryx-progressbar.success {
