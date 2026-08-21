@@ -201,8 +201,10 @@ this to a bare `number` is one. Precedent for the nullable shape:
 - `src/lib/meetings/types.ts` — **additive only**, exactly the five optional
   fields above; no existing field changed, removed or re-typed;
   `SeriesCardModel` **not touched**
-- `src/pages/meetings/MeetingsList.test.tsx` — **table whitelists at `:182`
-  and `:246` ONLY**
+- `src/pages/meetings/MeetingsList.test.tsx` — **the table whitelist at `:182`
+  ONLY.** (`checker-reviewer` NIT 3: this line still read "`:182` and `:246`"
+  after §3 struck `:246`. §3 was authoritative and the worker followed it;
+  corrected here so the archived packet does not contradict itself.)
 
 **Forbidden:** `src/lib/meetings/coachModel.ts`,
 `src/lib/meetings/resolveCurrentStudentId.ts`,
