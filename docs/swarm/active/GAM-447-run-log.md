@@ -79,3 +79,11 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   extraheader) and so do Linear writes (`LINEAR_API_KEY`); `gh pr edit` and
   `gh pr ready` do not. Updating the PR body on GitHub NOW, before the work is
   finished, so the PR is informative even if the credential dies mid-run.
+- 23:24Z — PR #232's description on GitHub updated from the artifact (declaration
+  re-checked: `OK declaration closes GAM-447`). It now carries the three premise
+  findings, the tier defence, the item-27 Partial scope call and the declared
+  item-19a deviation. It stays a **draft** — the work is not verified yet, and a
+  ready flag on unverified work would be a lie.
+- 23:25Z — **RE-DISPATCHED `checker-premise` (round 2, fresh agent, delta-scoped)**
+  after the 529. Blocking on it with `run_in_background: false`. **If this line
+  is the last one in this file, the run died holding this subagent.**
