@@ -46,3 +46,28 @@ holding that subagent.*
   five-entry Least confident decisions list first.
   *If this line is the last one in this file, the run died holding this
   subagent.*
+- **05:26Z — `checker-premise` round 1 VERDICT: REVISE.** 2 MAJOR, 6 MINOR,
+  2 NIT. It ran a real probe in its own worktree (item 23) rather than only
+  reading, and that is what earned the verdict:
+  - **MAJOR 1 — my §8.5 doubt was correct, and worse than I guessed.**
+    `activeSeason.refresh()` re-enters `status:'loading'` synchronously, which
+    **unmounts `CoachHomeContent` entirely** — measured
+    `hasDashboard=false, hasSkeleton=true` immediately after `refresh()`, with
+    `loadData` and `loadDashboardData` each called twice per save. So the
+    packet's "success" state was *impossible as specified*: the component that
+    would render the confirmation is destroyed in the same tick. A5's success
+    leg was unmeasurable.
+  - **MAJOR 2 — acceptance criterion A6 named a seam that does not exist.**
+    `CoachHomeContent` is not exported, so no test could inject
+    `onSeasonChanged`.
+  - MINORs: `coachHome.test.ts` has no `update` spy so it was the wrong harness
+    model (two real ones exist); `SupabaseLoaderError.message` is a fixed
+    *load*-flavoured string and the type is a plain object, not an `Error`;
+    three surfaces write `seasons` today, not two; my `is_active: false`
+    precedent line was the `true` half; HOME-04's module-doc entry is #6 at
+    `:174-192`, not #7 at `:201-206`; the mutation-replay mutant as worded
+    would not compile.
+  - Clean results it recorded: every Astryx prop prescribed is real, entry 2 of
+    my doubts list (no `updated_at` on `seasons`) fully verified, no schema
+    change needed, `scratch-postgres` correctly omitted.
+  Round 2 of the item-19a two-round cap remains.
