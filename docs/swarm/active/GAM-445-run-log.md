@@ -194,3 +194,10 @@ the next reader has to infer.
   `disabled=true` on a *correct* build and call it a failure), and §7.5 now
   carries the 1→N→N+1 stale-seed sibling. Two NIT citation fixes applied
   (`Dow` is at `format.ts:202`, not `:201`; `insertSessions` is `:1102-1115`).
+- **20:22Z — `worker-implementer` DISPATCHED** against the DISPATCH-verdict
+  packet at `c53be8a`. `run_in_background: false`. **Model: the pinned sonnet
+  default, no override** — item 18's four triggers are all absent and item 25
+  forbids bumping on topic sensitivity, so an override here would be the exact
+  error item 25 was written to retire.
+  **If this line is the last one in this file, the run died holding this
+  subagent.**
