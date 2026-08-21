@@ -207,9 +207,10 @@ known regression."*
 
 `20260806000000_met01_explicit_marks.sql:95-100` says D014 must be revisited if
 those counts stop being shown. **The consuming SeriesCard ticket inherits that
-obligation.** It is filed as an item-20 follow-up row at this run's close-out
-rather than left in a code comment; the row id is recorded in the Linear
-close-out comment on GAM-442 and in `docs/swarm/active/GAM-442-run-log.md`.
+obligation.** It is filed under item 20 as **GAM-460**, which names the
+constraint that the percentage and the counts must not be separable by a
+responsive rule, and should be closed by GAM-447's own acceptance criteria
+rather than by separate work.
 
 ## Scope note: three files, not the issue's one
 
@@ -234,9 +235,10 @@ Both verified on a second **virgin** cluster, since this PR's own runner creates
 2. **`.claude/skills/scratch-postgres/scripts/start.sh` cannot run as non-root
    here** — `chown: … Operation not permitted` at uid 1001.
 
-Neither is in this task's Allowed Files, neither was repaired here, and both get
-an item-20 follow-up row at this run's close-out rather than a code comment —
-ids in the Linear close-out comment and the run log. On the same
+Neither is in this task's Allowed Files, neither was repaired here, and both are
+filed under item 20 — **GAM-458** (the `service_role` guard, which
+`run_t503_widen_rsvp_read.sh:27-45` already solves) and **GAM-459** (the
+non-root `chown`). On the same
 cluster where t205 fails, this PR's runner exits 0 at 16/16 — so neither defect
 is evidence about this work.
 
