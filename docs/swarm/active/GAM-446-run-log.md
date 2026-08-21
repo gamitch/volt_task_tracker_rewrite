@@ -75,3 +75,10 @@ mid-chain, the last line names what the run was holding when it died.
   6. **Concurrency hazard: PR #232 (GAM-447, SeriesCard) is OPEN right now** on
      a sibling branch. Disjoint files from this ticket, but both are downstream
      of `types.ts`.
+- **23:08 — packet revision 1 written and pushed** (`GAM-446-packet.md`),
+  carrying three corrections to the issue text (mandatory `graded_marks_ct`;
+  the frozen `SeriesCardModel` has nowhere to put the new fields so `types.ts`
+  is added to Allowed Files additively; "roster size" disambiguated from the
+  existing RSVP `expectedCt`) and a five-entry Least-confident-decisions list.
+- **23:09 — DISPATCHING `checker-premise` (item 19), blocking, `run_in_background: false`.**
+  *If this line is the last one in this file, the run died holding this subagent.*
