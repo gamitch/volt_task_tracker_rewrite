@@ -50,3 +50,11 @@ describes, and it means the work was never seen to finish.
 - This file is the first file write of the run, per the dispatch's standing
   instruction that anything living only in the working tree dies with the
   container.
+
+## 2026-08-21T19:22Z — draft PR opened (wall 3 satisfied)
+
+- `docs/swarm/active/GAM-444-pr-body.md` written first, then checked:
+  `node .claude/skills/pr-body/scripts/check.mjs` → `OK  declaration closes GAM-444`, exit 0.
+- **Draft PR #230** — https://github.com/gamitch/volt_task_tracker_rewrite/pull/230
+  Opened at ~minute 5 of a 60-minute PR credential. The body is a skeleton and
+  says so; it is finalized before the draft flag clears.
