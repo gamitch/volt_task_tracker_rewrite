@@ -58,3 +58,32 @@ describes, and it means the work was never seen to finish.
 - **Draft PR #230** — https://github.com/gamitch/volt_task_tracker_rewrite/pull/230
   Opened at ~minute 5 of a 60-minute PR credential. The body is a skeleton and
   says so; it is finalized before the draft flag clears.
+
+## 2026-08-21T19:40Z — packet written; premise measured by the orchestrator first
+
+`docs/swarm/active/GAM-444-packet.md`. Item 19c says verify your own citations
+before submitting, so I measured before writing rather than after. **Four
+findings against the issue text, all reproducible:**
+
+1. `MeetingsList.tsx` is **2910** lines, not 2997. `2997` was exact at `0138bfc`;
+   `b7e9b1d` (GAM-443) then hoisted the formatters to `src/lib/meetings/format.ts`
+   and cut 87 lines. The issue was verified against the pre-GAM-443 commit.
+2. Role switch is at **:2857–2910**, not `:2944–2996` — the cited range is past EOF.
+3. **106 tests, not 121.** `npx vitest run src/pages/meetings/MeetingsList.test.tsx`
+   → `Tests 106 passed`. It has been 106 since `f8cba40`; no commit in the last
+   twelve had 121. This is the dangerous one: a worker told "121 must still pass"
+   would have to invent 15 tests, which the same plan item forbids.
+4. **Plan item 6 is not implementable and is cut.** `defineTheme.d.ts:201` types
+   `tokens` as `Partial<Record<TokenName, TokenValue>>` and `:42` makes
+   `TokenName` a *closed* union, so `'--color-series-1'` is a `tsc` error; and
+   every entry is a real `[light, dark]` hex pair, so there is no "names only"
+   form. The `meetings-design` skill independently forbids inventing hues
+   ("a blocker to raise, not a gap to fill"). Filed as a follow-up instead; the
+   packet records that Astryx's ten `--color-data-categorical-*` tokens are the
+   likely legal landing spot, which is an owner/design call, not this ticket's.
+
+Packet also tightens the Forbidden set beyond the issue's: `StudentMeetingView.tsx`
+(exports `ConsistencyStrip`; imported by `ParentHome.tsx:402` and
+`loaders/checkin.ts:210` — outside this label group), plus the two theme files.
+
+Committed and pushed before dispatching anything.
