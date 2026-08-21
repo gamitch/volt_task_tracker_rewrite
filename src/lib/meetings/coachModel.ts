@@ -12,15 +12,17 @@
  *   `MeetingsList.tsx` before this move; they were reachable only because
  *   `buildStudentMeetingsData` lived in the same file).
  *
- *   `MeetingsList.tsx`'s own former module doc sections `#1` (ground truth
- *   `events`/`event_sessions`/`attendance` column shapes), `#2` (NAV-07 --
- *   this route shows meeting-type sessions only, `meetingEventIdsOf` below
- *   is the ONLY type predicate) and `#3` (participation shape --
- *   `PastAttendanceSummary` is a plain per-session tally, never a
- *   percentage) travel here, since this file is where the fixture/builder
- *   code those sections describe now lives; see
- *   `src/pages/meetings/MeetingsList.tsx`'s own header for the map of every
- *   other section (GAM-444 packet §6b).
+ *   GAM-444 Stage C update: `MeetingsList.tsx`'s own former module doc
+ *   sections `#1` (ground truth `events`/`event_sessions`/`attendance`
+ *   column shapes), `#2` (NAV-07 -- this route shows meeting-type sessions
+ *   only, `meetingEventIdsOf` below is the ONLY type predicate) and `#3`
+ *   (participation shape -- `PastAttendanceSummary` is a plain per-session
+ *   tally, never a percentage) describe the fixture/builder code in this
+ *   file, but their full verbatim text lives in
+ *   `../../pages/meetings/coach/CoachMeetingsView.tsx`'s own doc, alongside
+ *   the rest of `MeetingsList.tsx`'s former module doc (packet §6b) -- not
+ *   duplicated a third time here on top of this file's own `@position`
+ *   summary above.
  *
  * @output `buildCoachMeetingRows`, `summarizeCoachMeetingRow`,
  *   `partitionCoachMeetingRows`, `buildCoachMeetingTableRows`,

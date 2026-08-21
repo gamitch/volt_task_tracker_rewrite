@@ -55,6 +55,87 @@ import type {
 } from '../../../lib/meetings/types';
 import { partitionByStatus } from '../../../lib/meetings/studentModel';
 
+/**
+ * T030: `/meetings` list page -- student/parent role variant's own historical
+ * doc, moved verbatim from `MeetingsList.tsx:22-30,130-191` (GAM-444 Stage C,
+ * packet §6b). The coach-view preamble and sections #1-#5/#7-#10 live instead
+ * in `../coach/CoachMeetingsView.tsx`'s own doc, alongside the code they
+ * describe.
+ *
+ * Student/parent view (MTG-14, PRD line 288: "`/meetings` for students =
+ * their own history (status per session) + participation %. ... Read-only.")
+ * -- own Upcoming/Past history rows (no MoreMenu, no Schedule action -- this
+ * variant is read-only per MTG-14's own text). T180 mounts the real BEH-06
+ * consistency strip (`StudentMeetingView.tsx`, T037) beneath that history --
+ * see module doc #7d, below -- which is now this view's sole participation
+ * figure; this file no longer renders a participation `ProgressBar` of its
+ * own (constitution item 3 / Known Context/Traps #3 still governs the strip
+ * itself, a separate, already-Passed file this task only wires in).
+ *
+ * -----------------------------------------------------------------------
+ * 6. T096 (ED-1 Packet P7): `PLACEHOLDER_CURRENT_STUDENT_ID` resolution --
+ *    `AuthUser` (`guards.tsx`) still carries only `{id, email, role}`, no
+ *    direct `students.id` field, but this task DOES resolve a real
+ *    `students.id` from that identity instead of leaving it a placeholder
+ *    (Trap #4 of this task's own worker packet -- full reasoning restated
+ *    here, since this is a genuinely new resolution problem, not a reused
+ *    hook):
+ *
+ *    - Logged-in STUDENT: `students.profile_id = auth.uid()` is a direct,
+ *      unambiguous 1:1 lookup -- exactly one (or zero, for a not-yet-linked
+ *      account) row.
+ *    - Logged-in PARENT: `guardian_links.parent_profile_id = auth.uid()` can
+ *      match MULTIPLE rows (one per linked child) -- but `StudentMeetingsView`
+ *      below (unchanged by this task) still only ever accepts ONE
+ *      `studentId: string`, not a list, and this task's own Allowed Files
+ *      (`MeetingsList.tsx` + a new `loaders/meetings.ts`) do not extend to
+ *      redesigning this route into ParentHome.tsx's own multi-card-per-child
+ *      architecture (`ParentHome.tsx`'s module doc #4) -- that would be a
+ *      genuinely new, much larger UI (N independent cards, N independent
+ *      loads) this task's packet never asks for and Trap #4 explicitly warns
+ *      against inventing. Investigated `ParentHome.tsx` (an already-real-wired
+ *      parent-facing surface) for precedent per Trap #4's own instruction:
+ *      its OWN precedent for "which parent is this" is to NOT attempt any
+ *      `guardian_links`-keyed-by-`auth.uid()` resolution at all (that file's
+ *      own module doc #7: "this page does not attempt to resolve 'which
+ *      parent is signed in' from `useAuth()`"), because at the time that page
+ *      was built no shared Supabase client existed yet to do so. That
+ *      specific limiting reason no longer applies to THIS task (a real client
+ *      now exists, and Trap #4 explicitly directs a real
+ *      `guardian_links.parent_profile_id = auth.uid()` lookup) -- so the
+ *      precedent actually followed here is narrower than "don't resolve at
+ *      all": resolve for real, but stay honest about the one-student-only
+ *      limitation `MeetingsList`'s own pre-existing (not-this-task's)
+ *      `studentId: string` signature already imposes, the same way
+ *      `ParentHome.tsx` stays honest about ITS OWN pre-existing gap rather
+ *      than silently faking a resolution. `resolveCurrentStudentId`
+ *      (`../../lib/supabase/loaders/meetings.ts`) resolves a parent to their
+ *      EARLIEST-linked child only (`guardian_links` ordered by `created_at`
+ *      ascending, first row) -- a disclosed, minimal, real answer for a
+ *      single-student parent (the common case), with a known limitation for a
+ *      genuinely multi-student parent (documented in this task's own worker
+ *      output "Known risks", not silently accepted as correct for that case).
+ *    - Coach/admin: `resolveCurrentStudentId` is never called at all (the
+ *      `isCoachOrAdminView` branch below renders `CoachMeetingsView`
+ *      instead), but returns `null` defensively rather than throwing if it
+ *      ever were.
+ *
+ *    `resolveStudentId` (new injectable prop on `MeetingsListProps`, default
+ *    `resolveCurrentStudentId`) is only ever invoked when a caller does NOT
+ *    supply an explicit `studentId` prop -- an explicit `studentId` (as every
+ *    existing test in `MeetingsList.test.tsx` before this task already
+ *    passes) bypasses resolution entirely and is used as-is, unchanged
+ *    behavior. `PLACEHOLDER_CURRENT_STUDENT_ID` is KEPT as a named export
+ *    (per this task's own Known Context/Traps #5 -- `MeetingsList.test.tsx`
+ *    still imports and uses it) but its role changes: it is no longer this
+ *    component's own runtime default for an unresolved `studentId` (that
+ *    placeholder default is removed below); it now exists solely as the
+ *    fixture literal identifying "the current viewer" inside `FIXTURE_*`
+ *    data below, for tests/callers that want fixture data rendered
+ *    explicitly.
+ *
+ */
+
 type BadgeVariant =
   | 'neutral'
   | 'info'

@@ -12,18 +12,23 @@
  *   `FIXTURE_ATTENDANCE`, `PLACEHOLDER_CURRENT_STUDENT_ID`,
  *   `PLACEHOLDER_SEASON_ID`) live in `./coachModel` -- not duplicated here.
  *   `MeetingsList.tsx`'s own former module doc section `#6` (student/parent
- *   `studentId` resolution) partially travels here (the fixture-identifier
- *   half); the resolution-wrapper half (`ResolvedStudentMeetingsView`,
- *   `StudentMeetingsViewContainer`) travels to
- *   `src/pages/meetings/student/StudentMeetingsView.tsx` in GAM-444 Stage B,
- *   since that is where the code it documents lives. See
- *   `src/pages/meetings/MeetingsList.tsx`'s own header for the full section
- *   map (GAM-444 packet §6b).
+ *   `studentId` resolution) describes the fixture-identifier half of what
+ *   moved here, but its full verbatim text lives in
+ *   `../../pages/meetings/student/StudentMeetingsView.tsx`'s own doc,
+ *   alongside `ResolvedStudentMeetingsView`/`StudentMeetingsViewContainer`
+ *   -- the code that section is mostly about (GAM-444 packet §6b). See
+ *   `src/pages/meetings/MeetingsList.tsx`'s own short header for the map of
+ *   where every section landed.
  *
  * @output `buildStudentMeetingsData`, `partitionByStatus`,
  *   `defaultLoadStudentMeetingsData`.
  */
-import type { PartitionedRows, SessionStatus, StudentMeetingsData, StudentParticipationMetric } from './types';
+import type {
+  PartitionedRows,
+  SessionStatus,
+  StudentMeetingsData,
+  StudentParticipationMetric,
+} from './types';
 import {
   FIXTURE_ATTENDANCE,
   FIXTURE_EVENTS,
