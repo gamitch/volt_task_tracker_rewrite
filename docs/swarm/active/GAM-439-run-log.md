@@ -107,3 +107,11 @@ holding that subagent.*
     verified-props list; three ranges off by a line or two.
   - 33 of 33 changed citations landed on the construct named.
   Gate closed at round 2 of 2. No escalation needed.
+
+> **Timestamp correction.** Every entry above carries a *guessed* time, and the
+> guesses ran ahead of the clock — the "05:46Z" DISPATCH line was written at a
+> real `date -u` of **05:28Z**. The ordering of entries is correct and no other
+> figure is affected. Timestamps from here down are read from `date -u`, not
+> estimated. Recorded rather than silently rewritten, because the run log's
+> value is that it is contemporaneous.
+
