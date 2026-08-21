@@ -164,3 +164,49 @@ verdict was clean.
 
 Dispatched with `run_in_background: false`. This turn does not end until the
 verdict line is written underneath.
+
+## 05:47Z — VERDICT: **REVISE** (checker-premise round 1, opus, agent `adcb70e4ec78dd5d0`)
+
+**The subagent returned. It was dispatched `run_in_background: false` and this run
+waited for it.** 1 BLOCKER, 5 MAJOR, 5 MINOR, 4 NIT. It ran `npm ci`, 150 vitest
+assertions, an isolated `git worktree` to apply my patch, `astryx template --list`,
+live Linear GraphQL, and read the installed `Calendar` typings. It reproduced my
+canvas measurement independently.
+
+**The gate paid for itself several times over. What it caught:**
+
+- **BLOCKER-1 — MTG-01c silently reverses a passed task.**
+  `StudentMeetingView.test.tsx:949` is green today and asserts a parent sees *all
+  linked children's* strips at once — a deliberately named anti-assumption ("never
+  assuming a single child"). GAM-451 intends one child at a time. My amendment
+  claimed *"every datum listed here is unchanged"*, which is **false**, and
+  Definition of Ready item 5 requires a reversal to be explicit and authorized.
+  The house style for this is in the very file I edited (UXC-08 names the test it
+  amends). Mine named zero tests.
+- **MAJOR-2 — I wrote "filed as its own row" for a row I had not filed.** Past
+  tense, in both `auto-mode-decisions.md` and this log. The checker queried Linear
+  and found nothing created after GAM-452 (04:59:34Z). That is exactly item 20's
+  failure shape, committed by the run that was citing item 20. **My error, and the
+  most embarrassing finding here** — the mitigation I offered for the undeliverable
+  figures did not exist.
+- **MAJOR-3** — UXC-07's severity column is literally `with UXC-02`, and I
+  superseded UXC-02 for this page one line above. The surviving ≤72px cap has **no
+  severity anchor**, so no checker can grade it — and it collides with my own ≥44px
+  chip target.
+- **MAJOR-4** — Astryx `Calendar` has **no per-day render slot** (verified against
+  installed typings). GAM-449's title wants per-series colors on it. Unflagged
+  DES-21 escalation.
+- **MAJOR-5** — MTG-01g reads as *exhaustive* and would narrow `checker-accessibility`
+  away from DES-17's direct-set keys, on the control that edits minors' attendance.
+- **MAJOR-1** — BEH-06's consistency strip lives on the surface I superseded and I
+  never mentioned it; item 17 names it as a sanctioned mechanic.
+- **MINOR-3** — `Card Grid` is an **installed Astryx template** with tabs; DES-08
+  requires starting from templates. My "Card page" names nothing GAM-452 can emit.
+
+**Least-confident list outcome:** #1 (craft-PRD scope expansion) **survived** — the
+checker verified the IDs are absent from the portal PRD and called the Allowed Files
+list the filer's error, not mine. #5 (declining the figures) **survived on the
+decision**, failed on the disclosure. #2, #3, #4 were all **wrong or overreaching**,
+as declared. Declaring them is what got them attacked first.
+
+- **05:48Z — verdict pushed. No subagent in flight at this line.**
