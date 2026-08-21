@@ -64,3 +64,7 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   false — those are `TableColumn` width helpers. (MINOR-4) my
   `MeetingsList.tsx:2019` citation was pre-rebase; that file is now 193 lines
   and the seam is at `:120`.
+- 23:16Z — Packet revised against all eight findings (round 1 applied). Re-submitting
+  the delta to the SAME `checker-premise` agent (its context is intact, so the
+  round-2 re-check is a delta verification rather than a fresh audit).
+  **If this line is the last one in this file, the run died holding that subagent.**

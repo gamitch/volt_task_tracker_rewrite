@@ -15,14 +15,18 @@ Every claim below was checked against `origin/main` at `3d27d8a` (after PRs
 | `src/pages/meetings/coach/SeriesCard.tsx` is a stub with frozen props | **True.** 44 lines; `SeriesCardProps = { model: SeriesCardModel; overlapCount?: number; isSelected?: boolean; onSelect?: (r: MeetingsFocusRequest) => void }` |
 | `buildScheduleChips` lives in `src/lib/meetings/format.ts` | **True**, `format.ts:291`, with `Dow`/`ScheduleRule` at `:202`/`:204` |
 | `SeriesCardModel` is frozen in `src/lib/meetings/types.ts` | **True**, `types.ts:268-306` |
-| `onSaveMeetingSeries` seam exists in `MeetingsListProps` | **True**, `MeetingsList.tsx:2019` — but it is **not** on `SeriesCardProps` (see §3) |
+| `onSaveMeetingSeries` seam exists in `MeetingsListProps` | **True but my citation was stale** (premise gate MINOR-4): `MeetingsList.tsx:120` (the file is 193 lines after GAM-444's split), plus `CoachMeetingsViewProps` (`CoachMeetingsView.tsx:1282`, wired `:1693`) and `ScheduleMeetingsDialogProps` (`:932`). It is **not** on `SeriesCardProps`, and `CoachMeetingsView` does not render `SeriesCard` at all (see §3c) |
 | Series palette `--color-series-1…8` in `src/theme/volt.ts` | **FALSE — absent.** Zero occurrences of `series` in `volt.ts` (see §3) |
 | Card / ProgressBar / Badge documented in `astryx-api.md` | **True** — and they are the only legal prop source (item 2) |
 
 ## 1. Allowed Files — nothing else, at all
 
-- `src/pages/meetings/coach/SeriesCard.tsx` (replace the stub body; **keep the
-  exported `SeriesCardProps` shape as-is**)
+- `src/pages/meetings/coach/SeriesCard.tsx` (replace the stub body; keep the
+  four existing props' **names, types and meanings** unchanged. **Additive,
+  optional props are permitted** and are not a freeze violation — the premise
+  gate established that `SeriesCard` has no callers anywhere in the tree, so
+  nothing can break; a repo-wide grep for `SeriesCard` outside its own file
+  matches only `src/lib/meetings/types.ts`.)
 - `src/pages/meetings/coach/SeriesEditPanel.tsx` (new, only if §3's decision
   says build it — read §3 before creating it)
 - `src/pages/meetings/coach/SeriesCard.css` (only if genuinely required; see §5)
@@ -89,11 +93,16 @@ in the issue submits through that seam, but the frozen props expose no such
 callback, and adding a required one would break `CoachMeetingsView` (a sibling
 ticket's file).
 
-→ **Do not create `SeriesEditPanel.tsx` in this ticket.** Render the `Edit`
-affordance only if it can be raised through an existing prop; it cannot, so
-**omit it entirely** rather than shipping a button that does nothing (item 27 —
-an inert control on a real surface is exactly the `SettingsPage` light/dark
-failure). A follow-up is filed to add the seam and the panel together.
+→ **Do not create `SeriesEditPanel.tsx` in this ticket.** Two independent
+reasons, both established by the premise gate: (i) the seam cannot be threaded
+to this component without editing `CoachMeetingsView.tsx`, which §1 forbids —
+and `CoachMeetingsView` does not render `SeriesCard` at all yet, so there is no
+render site to thread through; (ii) **the PRD does not put an Edit on the
+card** — MTG-01a (`VOLT_Portal_PRD.md:303-313`) lists no edit affordance, and
+`:315-317` places the per-row `Edit` chip in MTG-01b's drill-out, which is a
+sibling ticket. Item 1 puts the PRD above the issue text. Omit it entirely
+rather than shipping a button that does nothing (item 27 — an inert control on
+a real surface is the `SettingsPage` light/dark failure). A follow-up is filed.
 
 If you disagree with any of 3a–3c, **stop and say so in your report** rather
 than working around it.
@@ -110,17 +119,24 @@ session count. Contents, top to bottom:
    chip. The strings arrive pre-formatted from `buildScheduleChips`; **never
    reformat them**. Cap the visible chips at a fixed number (4) and render a
    `+N more` chip for the remainder — this is one of the two places height
-   invariance is actually won.
+   invariance is actually won. **Two rulings to record in the module doc:**
+   the cap is a declared deviation from the `meetings-design` skill's literal
+   "one chip per rule" (SKILL.md:40), taken because MTG-01a's fixed-size
+   promise outranks it and the drill-out carries the detail; and using `Badge`
+   for chips/counts is ruled by SKILL.md:38-46,70-71 and MTG-01a over
+   `astryx-api.md:521-522`'s general "don't use badges for metadata" Don't.
 3. **Overlap badge** — when `overlapCount` is truthy, one neutral `Badge`
    reading `N overlap` (BEH-04's precedent: a neutral computed count, never
    error/red, never urgency copy — item 17). Absent when `0`/`undefined`.
-4. **Progress** — `ProgressBar` plus the label
-   `"{sessionsCompleted} of {sessionsTotal} sessions held"`. **No percentage
-   arithmetic in this component** (DATA-01/item 3). `ProgressBar`'s own
-   `value`/`max` props (see `astryx-api.md`) take the two counts directly; if
-   the documented API only accepts a 0–1 or 0–100 `value`, that ratio is a
-   progress-bar rendering input and is permitted — but the *attendance* figure
-   is never computed, only passed through.
+4. **Progress** — `<ProgressBar label={…} value={model.sessionsCompleted}
+   max={model.sessionsTotal} />` plus the visible text
+   `"{sessionsCompleted} of {sessionsTotal} sessions held"`. `label` is
+   **required** (`astryx-api.md:5450`); `value`/`max` are documented at
+   `:5451-5452` and `hasValueLabel` defaults `false` (`:5454`), so no
+   percentage is rendered. **No percentage arithmetic in this component**
+   (DATA-01/item 3). In-repo precedent: `src/pages/reports/HoursTab.tsx:295`
+   and `:1035-1050` — including its "no denominator ⇒ render no bar" rule,
+   which the `sessionsTotal === 0` empty branch must match.
 5. **Attendance** — `model.attendancePct` rendered as `"{n}%"`, and as the
    em-dash `"—"` when `null` (`v_student_participation`'s convention; a
    fabricated `0%` is a BLOCKER), with the supporting words
@@ -139,10 +155,9 @@ session count. Contents, top to bottom:
 **DES-12 four states (item 12).** The component takes no async props, so the
 four states are rendered from what it is given, and all four must be reachable
 in tests:
-- **loading** — an explicit `Skeleton`-based branch (add an optional
-  `isLoading?: boolean` prop **only if** it is additive and optional, so no
-  existing caller breaks; otherwise render the loading shape from a
-  documented Astryx skeleton and say in your report how a caller reaches it);
+- **loading** — an explicit `Skeleton`-based branch behind an additive optional
+  `isLoading?: boolean` prop (§1 authorizes additive optional props; there are
+  no callers to break);
 - **empty** — `sessionsTotal === 0`: an `EmptyState`-style body inside the same
   fixed-size card, no progress bar, no next-session line;
 - **error** — an optional `errorMessage?: string` prop (additive, optional)
@@ -154,22 +169,41 @@ four frozen ones.
 
 ## 5. Styling
 
-DES-21 escalation order: component → theme token → `xstyle` → custom CSS. The
-repo has exactly one CSS file in `src/` (`src/theme/theme.css`) — there is no
-per-component CSS convention here. **Prefer Astryx primitives and inline style
-objects** (the `pixel`/`proportional` idiom `CoachMeetingsView.tsx` uses).
-Create `SeriesCard.css` only if a fixed-height guarantee genuinely needs a
-selector you cannot express inline, and justify it in your report.
+**The effective DES-21 ladder in this app is component prop → theme token →
+`style`/`className`.** `xstyle` is **nonfunctional here** — F-2
+(`docs/swarm/VOLT_UX_Craft_PRD_v3.md:55-60`): StyleX is compile-time, the app
+has no StyleX plugin (`vite.config.ts` is `[react()]`), and `stylex.create()`
+throws at runtime. Do not use it, and ignore every `xstyle` row in
+`astryx-api.md`.
+
+**`style`, `className`, `data-*` and `aria-*` on `<Card>` are authorized for
+this ticket and are not item-2 findings.** `CardProps extends
+BaseProps<HTMLDivElement>` and declares both
+(`node_modules/@astryxdesign/core/dist/Card/Card.d.ts:31-37`); `BaseProps`
+types `[key: \`data-${string}\`]` and all `aria-*`
+(`dist/BaseProps.d.ts:24-33`); and `Card.js` spreads `...props` onto the root
+`div`. In-repo precedent: `src/pages/home/CoachHome.tsx:643-670`. Record that
+citation in the module doc, as `CoachHome` does — there is a contrary
+precedent (`CheckinResult.tsx:110-121`) and the note is what stops a checker
+re-litigating it.
+
+Get the fixed size from `Card`'s own documented `height`/`minHeight`/`width`
+props (`astryx-api.md:2996-2999`) — `Card` switches on `hasFixedHeight` to keep
+overflow contained. **`SeriesCard.css` is expected NOT to be created**; make it
+only if you hit something those props plus `style` genuinely cannot express,
+and justify it in your report.
 
 The fixed size is the design's core promise: give the card a fixed height (or a
 fixed min+max) and make the chip row and title clamp rather than reflow.
 
 ## 6. Acceptance criteria — each must be a real assertion in `SeriesCard.test.tsx`
 
-1. **Height invariance:** rendering the same card with 4 sessions and with 56
-   sessions produces identical structural height inputs — assert the applied
-   fixed-height style/class is identical, and that the number of rendered chip
-   badges never exceeds the cap regardless of `scheduleChips.length`.
+1. **Height invariance:** the real height risks are chip count and title
+   length, not session count (premise gate NIT-8). Assert that the applied
+   fixed-height prop/style is **identical** across: 1 chip vs 12 chips, a short
+   title vs a 300-character title, and 4 sessions vs 56 sessions — and that the
+   number of rendered chip badges never exceeds the cap regardless of
+   `scheduleChips.length`.
 2. **`attendancePct: null` renders `—`** and **never** `0%`.
 3. **`attendancePct: 0` renders `0%`** (a real zero is not an em dash).
 4. All four DES-12 states reachable and asserted: loading, empty
