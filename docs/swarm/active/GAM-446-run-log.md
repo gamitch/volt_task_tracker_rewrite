@@ -146,3 +146,20 @@ mid-chain, the last line names what the run was holding when it died.
   - Seven MINOR/NIT line-edits to fold in before dispatch; it stated
     explicitly that a third round would be the wrong call over editorial
     corrections (19a).
+- **23:13 — item 20 follow-ups filed BEFORE the worker runs, not after.**
+  **GAM-471** (roster count — blocked on GAM-340, needs an owner decision on
+  whether MTG-01a should carry the field at all) and **GAM-472**
+  (`LinkedStudentSummary` lives in a page module; move it to the frozen `lib`
+  address before GAM-451 consumes it). Both to `Backlog` with
+  `tier/unreviewed` — a row created directly in `Todo` is never dispatched
+  (GAM-382), and promotion is the owner's signal. Written through the
+  `linear-task-writing` skill (item 30).
+- **23:15 — packet revision 3** folds all seven gate findings in, including the
+  gate's correction of its own round-1 error (`:246` struck), the measured
+  baselines (2633 / 238 / 380 warnings) and the `meetings-design` skill
+  reconciliation a checker would otherwise fail the worker on.
+- **23:16 — DISPATCHING `worker-implementer` on gated packet revision 3, blocking.**
+  Sonnet default per item 18 — no migration, no RLS, no security definer, no
+  metric-view SQL authored, no auth/session/permission logic; item 25 forbids
+  bumping to opus because a topic merely sounds sensitive.
+  *If this line is the last one in this file, the run died holding this subagent.*

@@ -1,4 +1,28 @@
-# GAM-446 task packet — revision 2
+# GAM-446 task packet — revision 3 (GATED: `checker-premise` returned DISPATCH)
+
+## Read first
+
+`.claude/skills/meetings-design/SKILL.md` — mandatory before writing anything
+under `src/pages/meetings/**` or `src/lib/meetings/**`, both of which are in
+Allowed Files below. Also read the `gate-run` and `mutation-replay` skills;
+this packet's evidence requirements are theirs.
+
+**Reconciling §2 with that skill, because a checker will grade you against
+it.** The skill's frozen-types table lists `CoachMeetingRow` and says *"Do not
+reshape a frozen type to fit your component … do not widen it locally."*
+Adding OPTIONAL fields is **not** what that sentence forbids, and this is
+pre-approved rather than left for you to argue:
+
+- "Widen" in this wave means *re-typing an existing field* — GAM-444's packet
+  uses it that way twice (`:183`, `:429-430`).
+- There is shipped precedent for additive-optional extension of **this exact
+  interface**: `types.ts:115-122`, where T510 added `teamIds?` and
+  `description?` precisely because optionality leaves every existing literal
+  valid.
+- `SeriesCardModel` is **not** touched. GAM-447's "do not add fields" was
+  scoped to its own file grant, not a global ruling.
+- Measured by the premise gate: `tsc --noEmit` exit 0 and 2633/2633 green with
+  exactly these five fields applied.
 
 **Tier: HEAVY.** Base `3d27d8a` (`origin/main`). Branch
 `claude/gam-446-coach-card-loader-data`.
@@ -39,7 +63,7 @@ the suite.
    `v_team_kpis.active_students_count` is the figure any new count must agree
    with. Re-deriving it in TypeScript is a BLOCKER under constitution item 3.
 
-→ Filed as a follow-up row, blocked on GAM-340, rather than built here.
+→ Filed as **GAM-471** (Backlog, `tier/unreviewed`), blocked on GAM-340, rather than built here.
 
 ### Why `listGuardianChildren` is cut (gate finding 4)
 
@@ -69,6 +93,13 @@ children.
 → No new module. The discovery is recorded on the issue and in the PR body so
 the consuming ticket (GAM-451) knows what to import.
 
+One thing the gate found and GAM-451 will need: `LinkedStudentSummary` is
+declared in `src/pages/meetings/StudentMeetingView.tsx:370-373` — a **page**
+module — and `checkin.ts:206-208` reaches it via `import type`, a `lib → pages`
+edge of the class GAM-444 §5 removed. Erased at compile time, zero bundle
+weight, so not a defect; filed as **GAM-472** so GAM-451 does not solve it by
+declaring a second copy. **Out of scope for this ticket — do not fix it here.**
+
 ## The one thing to build
 
 ### 1. `queryEventAttendance` — a seventh query in the existing batch
@@ -87,7 +118,8 @@ async function queryEventAttendance(
 }
 ```
 
-Declare `EventAttendanceDbRow` beside the other `*DbRow` types, and
+Declare `EventAttendanceDbRow` beside the other `*DbRow` types first (the gate
+placed it next to `SeasonIdDbRow` at `meetings.ts:320`, `tsc` clean), and
 `mapEventAttendanceDbRow` beside the other `map*DbRow` functions
 (**`:334-389`** — revision 1 cited `:319` and was wrong). Add its
 `createLoader` closure and a seventh slot in the **existing** `Promise.all`
@@ -140,11 +172,19 @@ passed exit 1.
 - `src/lib/supabase/loaders/meetings.test.ts:51` — extend `OTHER_TABLES` so
   `makeRecordingClient` (`:47-62`) stops throwing at `:61`. Without this the
   new select-string guard cannot even run.
-- `src/pages/meetings/MeetingsList.test.tsx:182` **and** `:246` — extend the
-  `fromSpy` table whitelists. **This file is added to Allowed Files for this
-  narrow purpose only: add `'v_event_attendance'` to the two whitelists and
-  return an empty result for it. Change no assertion, no fixture, and nothing
-  else in the file.**
+- `src/pages/meetings/MeetingsList.test.tsx:182` — extend the `fromSpy` table
+  whitelist. **This file is added to Allowed Files for this narrow purpose
+  only: add `'v_event_attendance'` to the whitelist at `:182` and return an
+  empty result for it. Change no assertion, no fixture, and nothing else in
+  the file.**
+
+  **`:246` is NOT to be touched** — an earlier revision said "`:182` and
+  `:246`" and that was wrong. `:246` is inside
+  `describe('loadStudentMeetingsData …')` (opens `:231`), which calls
+  `makeLoadStudentMeetingsData`; a query added to the COACH loader cannot
+  reach it. Adding the view there would be dead code implying the student
+  loader reads the view. The premise gate patched `:182` alone and measured
+  the full suite green.
 
 ### 4. NULL discipline — not negotiable
 
@@ -194,8 +234,17 @@ write path**; `saveMeetingSeries` / `cancelMeetingSession` semantics unchanged.
    (`git diff --stat` shows neither).
 8. `resolveCurrentStudentId`'s behaviour is byte-identical; its existing tests
    pass unmodified.
-9. All six gates green via the `gate-run` skill, **and** the two previously
-   red tests the gate identified are green again.
+9. All six gates green via the `gate-run` skill, **and** the **three**
+   previously red tests in two files are green again — `meetings.test.ts:73`
+   and `:101` (via `makeRecordingClient`'s throw at `:61`) plus
+   `MeetingsList.test.tsx:124` (throw at `:182`).
+
+   **Baselines, measured on clean `main` by the premise gate — a test count
+   means nothing without one:** full suite **2633 tests / 108 files**; scoped
+   `src/lib/supabase/loaders/` **238 tests / 15 files**; eslint **0 errors,
+   380 warnings**. Your run must show 2633 + your new tests, and **380
+   warnings is the baseline, not a regression** (the `gate-run` skill's own
+   doc text says 377 and is stale by 3).
 10. **Two mutations replayed with real red output** (`mutation-replay`,
     item 23 — your own worktree, candidate fix committed first):
     (i) change the NULL passthrough to `?? 0` → criterion 3 goes red;
@@ -220,9 +269,11 @@ Do not self-certify — a `checker-reviewer` grades this against these criteria.
    yet.** The gate noted `buildSeriesCardModel` does not exist anywhere, so
    these fields currently reach no card. *What would make it wrong:* if the
    integration ticket intends to build `SeriesCardModel` straight from loader
-   output, these belong on that path instead and this is dead weight. I kept
-   them because GAM-460 and the integration ticket both need the values to
-   exist somewhere real, and item 27 prefers a real loader over a fixture.
+   output, these belong on that path instead and this is dead weight.
+   **The gate answered this: the falsifier does not fire.**
+   `CoachMeetingsView.tsx:1269` already takes `loadData: LoadCoachMeetingsDataFn`,
+   so "straight from loader output" and "from `CoachMeetingRow`" are the same
+   path. `gradedMarksCt` is additionally a hard prerequisite for GAM-460.
 3. **Editing `MeetingsList.test.tsx` at all.** *What would make it wrong:* if
    the right fix is to make that whitelist tolerant of unknown tables generally
    rather than enumerate a seventh — which would be a better fix and a
