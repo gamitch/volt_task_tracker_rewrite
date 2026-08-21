@@ -99,3 +99,25 @@ the next reader has to infer.
   **Upheld:** decisions 2 and 4. Decision 5 upheld in substance but wrong in
   framing — no mode-switch reset exists at all, so preserving per-day times is
   the free option and resetting would be the new behaviour.
+- **19:55Z — packet revised (round 2), and the gate's own citations re-verified
+  before I inherited them.** I independently re-read `format.ts:201-211`
+  (`Dow`/`ScheduleRule` confirmed), `astryx-api.md:3337-3339`
+  (`CheckboxListItem` body is a literal `undefined` — zero props),
+  `test.tsx:141-154` (`getFieldControl` really does match by `startsWith`, so
+  weekday-first labels are load-bearing) and `test.tsx:2101`. One fact the gate
+  raised that changes a prescription: **`src/lib/meetings/types.ts` does not
+  exist yet** — the directory holds only `format.ts`, `format.test.ts`,
+  `resolveCurrentStudentId.ts` — so `Dow` can only come from `format.ts`, and
+  the packet says so rather than pointing at a file GAM-444 has not written.
+  All twelve required revisions applied and marked `[R1-n]` in the packet.
+  **Decision on BLOCKER-1: option (a) GATE, not (b) thread.** Per-day rows
+  render only when `!isEditMode`, so `buildEditDesiredFutureSessions` is not
+  touched and T611's reconcile tests stay out of scope. This leaves a real gap —
+  a coach cannot edit an existing series into per-day times — which is disclosed
+  in §3.8 and becomes an item 20 follow-up row filed before the PR leaves draft,
+  not a silent omission.
+- **19:56Z — `checker-premise` DISPATCHED, round 2 of 2** (item 19a cap: a third
+  REVISE escalates to the human owner rather than looping). `run_in_background:
+  false`; opus pin self-applying.
+  **If this line is the last one in this file, the run died holding this
+  subagent.**
