@@ -201,3 +201,39 @@ the next reader has to infer.
   error item 25 was written to retire.
   **If this line is the last one in this file, the run died holding this
   subagent.**
+- **21:08Z — `worker-implementer` RETURNED.** 345K tokens, 194 tool uses,
+  ~45 min. Did not self-certify, filed no dispute.
+
+  **Existence verified by me, not taken on report (item 21).** HEAD moved
+  `c9b7b97 → 0160aa7`; `git status --porcelain` empty; three commits
+  (`313b2cf` feature, `02eb0d5` format, `0160aa7` e2e). **Allowed-Files boundary
+  checked mechanically** — every changed path matches the packet's four
+  pathspecs and nothing else. The worker claimed "zero existing tests edited";
+  I checked rather than believed it: `--numstat` shows `495/0` on the test file
+  and `93/0` on the e2e spec, so all 35 deletions in the diff are in the
+  production file, where they belong.
+
+  Gates reported all six exit 0; `ScheduleMeetingsDialog.test.tsx` 104 passed
+  (94 baseline + 10 new, none removed). Mutation replay ran in the worker's own
+  worktree (item 23) after committing the fix (item 26's "commit before
+  mutating"): the named mutation reddened 2 tests, exit 1, then restored green.
+
+  **The worker found a real bug in its own first draft and says so** — seeding
+  `perDayTimes` on the first checkbox cached the shared pair's value at that
+  moment, so a later second-weekday check reused a stale time and silently
+  discarded every edit the coach made in between. Caught because criterion 8's
+  DOM test failed *for the wrong reason*. That is the trap criterion earning its
+  place before the mutation step was even reached.
+
+  **Three disclosures I am carrying forward rather than burying:** (1) §7.5's
+  1→N→N+1 stale-seed sibling is deliberately NOT fixed, using the packet's own
+  "disclose if not cheap" escape; (2) §8's Linear follow-up is unfiled — the
+  worker has no Linear tool, so filing it is mine; (3) per-day rows measure
+  ~19–20px/31px at 375px, below the 44px guideline — but the worker measured the
+  **unmodified** shared pair the same way and got identical numbers, so this is a
+  pre-existing Astryx `TimeInput` characteristic and not a regression from this
+  ticket. No horizontal overflow at 375px.
+- **21:10Z — `checker-reviewer` DISPATCHED** against `0160aa7`.
+  `run_in_background: false`; opus pin self-applying.
+  **If this line is the last one in this file, the run died holding this
+  subagent.**
