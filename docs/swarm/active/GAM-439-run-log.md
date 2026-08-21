@@ -135,3 +135,36 @@ holding that subagent.*
   tests, so the prescription is unusually de-risked.
   *If this line is the last one in this file, the run died holding this
   subagent.*
+
+---
+
+## Run 2 — 2026-08-21T16:18Z, re-dispatched after run 1 died
+
+- **16:19:34Z — re-claimed.** Linear had GAM-439 back in `Todo` (run 1's
+  `assert-released` release, or a hand reset), so this run repeated item 28c in
+  full: `issueUpdate` → `In Progress`, then a read-back returning
+  `state.name = "In Progress"`. Labels re-read from the API and resolved through
+  their groups: **`tier/heavy`**, **`executor/claude`**, `provenance/other`,
+  `Feature`, `dashboard update`. No `gate/human`. Not `tier/unreviewed`, so no
+  re-tiering was owed; I concur with HEAVY on item 26's write-path trigger.
+  Dependency **GAM-438 read as `Done`**, so the surface this control lands on is
+  settled — the issue's stated precondition holds.
+- **16:19:41Z — PR credential deadline measured** (not guessed): `GH_TOKEN` is a
+  `ghs_` JWT with `iat 2026-08-21T16:18:28Z`, `exp 2026-08-21T17:18:28Z`.
+  Draft PR **#221 is already open** from run 1, so wall 3's expensive call is
+  already paid; what remains inside the hour is the body edit and `gh pr ready`.
+- **16:20Z — run 1's fate established from the artifacts, not assumed.**
+  `origin/claude/gam-439-inline-season-goal-editor` was 11 commits ahead of
+  `main` and my fresh branch was rejected non-fast-forward. Resetting to it
+  recovered: draft PR #221, the PR-body artifact, the packet at **revision 3**,
+  and a run log whose **last line is the `worker-implementer` dispatch with no
+  verdict** — the exact signature that file was worded to leave. `git diff
+  main...HEAD -- src/ supabase/` is **empty** and `git worktree list` shows only
+  the main tree, so **run 1's worker produced nothing**: no partial edit to
+  reconcile, no orphan worktree to verify. Run 1 died holding that subagent.
+- **16:20Z — what run 2 does NOT redo.** The item-19 premise gate is **closed**:
+  round 1 REVISE, round 2 **DISPATCH**, at the item-19a two-round cap, recorded
+  in packet §9. Re-running it would spend a third round on a plan already
+  cleared and would exceed the cap. Run 2 resumes at the worker.
+- **16:20Z — `node_modules` confirmed ABSENT** in this container (packet §4).
+  `npm ci` is required before any gate, test or mutation command.
