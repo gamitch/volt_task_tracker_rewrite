@@ -29,3 +29,19 @@ no write path/schema/RLS/auth, no signature change, ~2 line production change, n
   the ~60-minute dispatch-credential window (decoded `exp` ~12:13:24Z, opened ~11:27Z). e2e-personas
   verification as coach is the one remaining step, noted in the body as in-progress; will update body
   and clear draft once it lands.
+- 2026-08-21 · **e2e-personas verdict: GREEN, then RED, then GREEN (mutation-replayed in a real
+  browser too).** Ran the harness under `sudo` (scratch-postgres needs root for `chown postgres`/`su
+  postgres`, unavailable to the `runner` user directly); confirmed `v_team_hours.confirmed_hours` /
+  `v_event_student_hours.total_hours` both come back `3.9999991469444444` — same raw-float defect
+  shape as the issue, not the identical digits. Wrote
+  `tests/e2e-personas/gam-455-coach-dashboard-hours-rounding.spec.ts`, ran it as `coach@volt.test`
+  against `/` — passed, screenshot captured. Reverted both `roundForDisplay(...)` calls, rebuilt
+  (`vite build --mode e2e`), reran — failed with the raw `3.9999991469444445h` back on screen, exactly
+  as expected. Restored the fix, rebuilt, reran — green (commit `7131ba0`). Harness torn down via
+  `tests/e2e-harness/stop.sh`. Re-ran the full six-gate block against `7131ba0` — still PASS (2600/230,
+  no regression from adding the spec file).
+- 2026-08-21 · **finalized PR #229**: updated body with the e2e-personas verdict (commit `abadad1`),
+  `gh pr edit` + `gh pr ready` — PR is now out of draft, ready for review.
+- 2026-08-21 · **moved GAM-455 Todo → In Progress → In Review** via Linear API (issueUpdate to the
+  `In Review` state), posted the item-24 close-out comment (six-gate block, PR link, e2e-personas
+  verdict). Work is complete pending human merge; this run does not close its own issue.
