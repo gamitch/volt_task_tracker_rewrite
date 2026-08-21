@@ -1,7 +1,7 @@
 # Owner session record — 2026-08-21: coach dashboard redesign
 
 Written so this session's context can be cleared without losing anything. Same
-purpose as the 08-14 and 08-18 records.
+purpose as the 08-14 and 08-18 records. Filed as GAM-457.
 
 **Written at `main` = `e1c49b8`.** That pin rots on every merge; run `git log -1`
 for the true tip and do not treat a mismatch as evidence this file is stale.
