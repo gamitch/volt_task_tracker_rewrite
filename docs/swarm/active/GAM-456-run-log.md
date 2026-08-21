@@ -102,3 +102,39 @@ Append-only. One line per milestone, committed and pushed as it happens.
   the mutations — that is the next step, per item 26 STANDARD ("the
   primary agent independently inspects the diff and replays the named
   mutation and verification").**
+- **Orchestrator independently inspected the full diff** (`git diff` on both
+  files, read in full, not summarized). Confirmed: only the two Allowed
+  Files touched; the three `Card` wraps are structurally identical to the
+  existing Next up/Activity feed pattern with contents/ids/aria wiring
+  byte-identical to before (diff is large only from the wrapped block's
+  re-indentation, not scope creep); the two new `CSSProperties` constants
+  and module-doc `17.` entry match the packet. Committed as `d675b14`
+  ("commit before mutating", item 26's fast-tier rule applied here too).
+- **Orchestrator independently replayed both named mutations myself**,
+  from a clean git state, not by re-reading the worker's transcript:
+  (1) manually stripped the `<Card>`/`</Card>` around Hours by team,
+  re-ran the targeted test → same red (`AssertionError: expected null not
+  to be null` at `CoachHome.test.tsx:1939`), `git checkout --` to restore,
+  re-ran → green (1/1, 102 skipped). (2) edited
+  `COACH_HOME_TITLE_STYLE.fontWeight` 800→600, re-ran the targeted test →
+  same red (`AssertionError: expected '800' to be '600'` — note: the
+  actual output read "expected '600' to be '800'", Vitest's own
+  received/expected ordering; matches the worker's report), restored,
+  re-ran → green. Both match the worker's reported output exactly.
+- **Orchestrator independently ran all six gates** (`gate-run` skill) on
+  the clean committed tree at `d675b14`, with `--require-clean`, using the
+  worker's own reported baselines (2598 full / 228 scoped, from the
+  pre-change commit):
+  ```
+  GATE RUN — d675b14 on claude/gam-456-coach-dashboard-panel-consistency — tree clean
+    1 tsc                     exit 0  PASS
+    2 vite build              exit 0  PASS
+    3 format:check            exit 0  PASS
+    4 eslint                  exit 0  PASS       0 errors, 380 warnings
+    5 vitest (full)           exit 0  PASS       102 files / 2600 tests  baseline 2598 (+2)
+    6 vitest src/pages/home/  exit 0  PASS       4 files / 230 tests  baseline 228 (+2)
+  VERDICT: PASS — all six gates exit 0
+  ```
+  Figures match the worker's dirty-tree run exactly (independent agreement,
+  per the skill's own "every agent runs it themselves" rule) — no
+  discrepancy found. **STANDARD-tier work accepted.**
