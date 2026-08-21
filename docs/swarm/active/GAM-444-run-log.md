@@ -87,3 +87,12 @@ Packet also tightens the Forbidden set beyond the issue's: `StudentMeetingView.t
 `loaders/checkin.ts:210` — outside this label group), plus the two theme files.
 
 Committed and pushed before dispatching anything.
+
+## 2026-08-21T19:42Z — DISPATCHED checker-premise (round 1 of a 2-round cap)
+
+Premise gate on `docs/swarm/active/GAM-444-packet.md`, item 19. Dispatched with
+`run_in_background: false`; I am blocking on it and will not end the turn while
+it is in flight.
+
+**If this line is the last one in this file, the run died holding this subagent** —
+the packet was never gated, no worker ran, and nothing below this point happened.
