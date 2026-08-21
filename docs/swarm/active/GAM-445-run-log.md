@@ -64,3 +64,38 @@ the next reader has to infer.
   **If this line is the last one in this file, the run died holding this
   subagent** — that is wall 2 exactly, and the verdict line that should follow
   was never written because the process exited while waiting.
+- **19:48Z — `checker-premise` round 1 VERDICT: REVISE (BLOCKER).** Subagent
+  returned; the run did not die holding it. 132K tokens, 43 tool uses, ~11 min.
+  The gate ran rather than only read (item 26): it built its own worktree
+  (item 23 — shared tree never mutated), `npm ci`'d it, wrote a probe test,
+  drove the dialog, and captured a real payload.
+
+  **BLOCKER-1 — my least-confident decision 3 was wrong, and the gate proved it
+  by running it.** I recorded that weekly mode was "create-mode-only in
+  practice" because `resetForm()` forces `'custom'` (`:973`). It is reachable in
+  **two clicks**: `SegmentedControl` (`:1336-1344`) renders all three items
+  unconditionally, the weekly block has no `!isEditMode` guard, and the
+  mode-derived `sessionDates` feed `buildEditDesiredFutureSessions` at
+  `:1204-1210`. The probe drove it and wrote **12 Tue/Thu sessions onto an
+  EXISTING series, all at one shared 21:00–22:30Z**, without touching a time
+  field. Had this reached a worker, per-day rows would have rendered in edit
+  mode and been silently discarded — the failure this very file already names
+  unacceptable in its own T609 comment (`:1457-1465`).
+
+  **Findings against my own citations (item 19c, exactly as advertised):**
+  §2 row 11 was **false** — eight tests name weekly mode, not one, and the
+  DOM-level `:979-1014` is the one most at risk; baseline is **94 green**.
+  §3.2 and §7.1 described two different UIs (N rows vs N−1). §7.4's `:1927`
+  was stale — the real site is `test.tsx:2101`; I copied it from a source
+  comment instead of reading it. §4's Allowed Files could not hold the work:
+  `capture()` is mandatory per the `e2e-personas` skill and
+  `tests/e2e-personas/screenshots/**` is tracked but was not listed.
+
+  **MAJOR-4, the cheapest finding of the round:** `src/lib/meetings/format.ts:201-211`
+  already exports `Dow` and `ScheduleRule` — *one weekday-with-time rule* —
+  frozen by GAM-443, whose module doc names this dialog as the caller. GAM-443
+  wrote the shape anticipating GAM-445 and I was about to re-derive it.
+
+  **Upheld:** decisions 2 and 4. Decision 5 upheld in substance but wrong in
+  framing — no mode-switch reset exists at all, so preserving per-day times is
+  the free option and resetting would be the new behaviour.
