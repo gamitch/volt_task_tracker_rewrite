@@ -27,3 +27,16 @@ holding that subagent.*
   GAM-439`).
 - **05:05Z — reading the real code to verify the issue's citations before
   writing the packet** (item 19c: verify your own citations before submitting).
+- **05:15Z — packet written:** `docs/swarm/active/GAM-439-worker-packet.md`.
+  Four decisions made rather than deferred: (D1) new column-scoped
+  `updateSeasonGoal` loader, **not** a reuse of the full-row `updateSeason` and
+  **not** read-then-write, because read-then-write only narrows the race;
+  (D2) new types in the loader module, no page-to-page import, and the existing
+  `UpdateSeasonPayload` is *not* relocated; (D3) admin-only, matching
+  `/settings/season`; (D4) `activeSeason.refresh()` after save.
+  Item 19d list has 5 entries.
+  **Three of my own citations were wrong and are corrected in the packet**
+  (item 19c): `router.tsx:231` is the *kiosk* route — `/` carries `RequireAuth`
+  only, with no `RequireRole`; `SeasonSettings.tsx` has three `RequireRole`
+  wraps, not one; and `src/lib/supabase/loaders/seasons.test.ts` does not
+  exist. Found by checking before submitting, which is the point of 19c.
