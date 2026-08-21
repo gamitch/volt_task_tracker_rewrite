@@ -231,3 +231,38 @@ Dispatched `run_in_background: false`; blocking on it.
 **If this line is the last one in this file, the run died holding this
 confirmation** — the packet is complete and gated to within four verified edits,
 but no worker was ever dispatched and no source file was touched.
+
+## 2026-08-21T20:32Z — **DISPATCH**. Item 19's gate is satisfied.
+
+The confirmation returned; the run did not die holding it. Verdict **DISPATCH**,
+severity **NIT** — 0 BLOCKER, 0 MAJOR, 0 MINOR. Both round-2 MAJORs closed, all
+twelve round-1 findings still closed, no new false claim and no new contradiction.
+It re-measured §6b's structural claims itself (`:1-506` is exactly one doc block,
+imports `:507-621`, first declaration `:627`) and verified all ten external
+citations at their exact lines. Shared tree confirmed clean at `c6bc21f`; both
+experiment worktrees removed and pruned.
+
+Three NITs carried into the worker prompt rather than looping the packet again:
+**NIT-1** the "84 back-references" figure is file-wide — precisely, 71 from code
+into the doc and 13 within the doc block; the frozen-numbering instruction is
+unaffected. **NIT-2** two of §6b's map parentheticals are loose (`#7c` is the
+row-level Cancel seam at `:452`, and `#10b`'s subject already shipped to
+`format.ts` under GAM-443) — the destinations are right and the map is
+illustrative. **NIT-3** criterion 5's `gzip 10.32 kB` was measured on §5 in
+isolation; the two *binding* assertions are lazy-chunk survival and no
+entry-chunk growth, not that figure.
+
+**Worker model tier: the pinned default (sonnet), deliberately not overridden.**
+Item 18's four triggers are migrations, RLS/`security definer`, metric-view SQL,
+and auth/session/role-resolution logic. None is present: the role switch is moved
+*verbatim*, not changed, and no SQL or policy is touched. Item 25's second
+obligation is explicit that tier follows those triggers rather than apparent
+weight, and the worker/checker loop is what catches tier-appropriate errors.
+
+## 2026-08-21T20:33Z — DISPATCHED worker-implementer (attempt 1 of 3)
+
+Three staged commits, pushed as each lands, per packet §7.
+
+**If this line is the last one in this file, the run died holding this subagent** —
+check the branch for Stage A/B/C commits before assuming nothing landed, because
+the worker commits as it goes and its work may have outlived this log.
