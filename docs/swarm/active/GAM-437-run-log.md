@@ -21,3 +21,18 @@ approved addition (dispute-log D021, constitution item 9).
 
 If this line is the last one in this file, the run died holding the premise
 verification below and no subagent has been dispatched yet.
+
+2. **Premise verified** · 2026-08-21 · GAM-435 confirmed `Done` via Linear
+   API; `lucide-react` confirmed allowlisted (constitution item 9,
+   dispute-log D021); `SideNavItem.icon`/`.selectedIcon` confirmed real via
+   both the `astryx` CLI JSON output and the installed package's
+   `.d.ts` source (not hallucinated, constitution item 2). One correction
+   found and folded into the packet: `SideNavItem` does have a `size` prop,
+   contra the issue's own text, but it only maps to height/padding, not
+   font-size, so the theme-level override plan is unaffected. Packet written
+   at `docs/swarm/active/GAM-437-packet.md`. No premise-checker dispatched
+   (item 19b: STANDARD tier, orchestrator did the verification directly,
+   scope is narrow and single-module).
+
+If this line is the last one in this file, the run died holding the packet
+before any worker was dispatched.
