@@ -182,3 +182,36 @@ Append-only. One line per milestone, committed and pushed as it happens.
   Filing is not dispatching (item 28a); left for the owner to promote.
 - New spec, 7 screenshots, and the findings JSON committed
   (`5b78120`) — nothing left uncommitted from this verification pass.
+- Cleanup: the e2e spec carried 4 unused `eslint-disable-next-line
+  no-console` comments (no such rule is active in this repo's eslint
+  config for test files); removed, re-verified eslint/prettier/tsc clean,
+  committed `915066e`.
+- **Final six-gate run on `915066e`** (clean tree, `--require-clean`):
+  tsc/build/format/eslint (0 errors, 380 warnings — back to the pre-spec
+  baseline) all PASS; full vitest 2600/2600 (baseline 2598, +2); scoped
+  `src/pages/home/` 230/230 (baseline 228, +2). All six PASS.
+- PR body finalized with real evidence (six-gate block, mutation table,
+  e2e-personas measured values, GAM-461 follow-up) at
+  `docs/swarm/active/GAM-456-pr-body.md`, checked against
+  `.claude/skills/pr-body/scripts/check.mjs` (`OK declaration closes
+  GAM-456`), committed `93200e5`, pushed.
+- **PR #228 updated** (`gh pr edit --body-file`) and **marked ready for
+  review** (`gh pr ready`) — done at ~minute 36 of this run, well inside
+  the ~47-minute credential window measured at claim time (exp
+  `12:13:32 UTC`, done at `12:02:34 UTC`).
+- **Issue moved `In Progress → In Review`** via `issueUpdate`, confirmed
+  `state.name === "In Review"` in the mutation's own response.
+- **Close-out comment posted to GAM-456** (comment id
+  `27bccb10-4020-4777-b5c4-606abbe3a2c9`): PR link, six-gate evidence
+  block, mutation table, e2e-personas summary, GAM-461 cross-reference.
+  Per item 24, this is the third and final of the three run-log
+  transitions (claim → [no blocking escalation needed] → close-out).
+- **Run complete.** Delivered: GAM-456 fully implemented (three sections
+  panelled, H1/eyebrow restored), independently re-verified by the
+  orchestrator at every layer (diff inspection, mutation replay, six
+  gates, real-browser e2e), PR #228 open and ready for human review, issue
+  in `In Review`. One unrelated finding (GAM-461) filed to Backlog rather
+  than folded into this row's scope. No premise-gate escalation was
+  needed (item 19b skip was itself justified and held up under
+  independent replay). Nothing left uncommitted or unpushed on this
+  branch.
