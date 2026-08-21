@@ -297,3 +297,25 @@ holding that subagent.*
   more, per AGENTS.md. Final state: PR #221 open and non-draft, branch
   `claude/gam-439-inline-season-goal-editor` at the commit below, working tree
   clean, no worktrees left behind, issue in `In Review`.
+
+- **18:52Z (real, `date -u`) — base branch merged in, conflict resolved.** `origin/main` had moved
+  21 commits ahead (`e1c49b84` → `e66c79f`) while this branch was stalled, so
+  the PR was `mergeable_state: dirty`. Merged `origin/main` into the branch —
+  **not** rebased, since this branch carries two runs' history and a rebase
+  would invalidate any existing checkout of it. One conflict, in
+  `CoachHome.tsx`, and it was **numbering only, not code**: GAM-456 (merged
+  meanwhile) had added its own module-doc entry numbered `17`, colliding with
+  this run's. Resolved by keeping GAM-456 at `17` (it landed first) and
+  renumbering this run's to `18`, with its 13 in-body back-references updated;
+  GAM-456's own six `#17(b)` references were left alone. `CoachHome.test.tsx`
+  auto-merged. Verified after the merge that all three sides survived —
+  GAM-439's `SeasonGoalEditor`/`updateSeasonGoal`/retention/`key={season.id}`,
+  GAM-456's `COACH_HOME_TITLE_STYLE`/`COACH_HOME_EYEBROW_STYLE`, and GAM-455's
+  `roundForDisplay` at both float sites.
+- **Six gates on the merge commit `bf4d01b`, tree clean: all six exit 0.**
+  `104 files / 2623 tests`, scoped `src/pages/home/` `4 files / 240 tests`,
+  eslint `0 errors, 380 warnings` (unchanged). Baseline measured independently
+  on `origin/main` @ `e66c79f` in a separate worktree: **103 files / 2612
+  tests**. The merge is `+1 file / +11 tests` — exactly this branch's own
+  contribution (8 `CoachHome`, 3 `seasons`), so the merge is a clean union and
+  dropped nothing from either parent.

@@ -35,7 +35,7 @@ form showing all four; its full-row write is correct there.
 | -- | -- |
 | `src/lib/supabase/loaders/seasons.ts` | `+35` — `UpdateSeasonGoalPayload`, `OnUpdateSeasonGoalFn`, `makeUpdateSeasonGoal`, `updateSeasonGoal`. No new imports. |
 | `src/lib/supabase/loaders/seasons.test.ts` | `+77`, new file — the key-set assertion, plus resolve and reject cases. |
-| `src/pages/home/CoachHome.tsx` | `+270/-14` — the `SeasonGoalEditor` control, its injectable seam, the D5 retention, `key={season.id}`, module-doc entry #17. |
+| `src/pages/home/CoachHome.tsx` | `+270/-14` — the `SeasonGoalEditor` control, its injectable seam, the D5 retention, `key={season.id}`, module-doc entry #18 (renumbered from #17 when `main` was merged in — GAM-456 landed its own entry 17 first). |
 | `src/pages/home/CoachHome.test.tsx` | `+232` — role gating, all four write states, the post-save re-fetch, and the real-default seam. |
 
 No dependency was added; `package.json` is unchanged. No migration: the column
