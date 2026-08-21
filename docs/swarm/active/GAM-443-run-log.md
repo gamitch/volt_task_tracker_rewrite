@@ -122,3 +122,39 @@ last line says what the run was holding when it died.
   re-auditing settled ground is what 19b says not to spend a round on. Round 2
   attacks only what revision 2 newly wrote. **If this line is the last one in
   this file, the run died holding this subagent.**
+
+---
+
+## Run 2 — resumed 2026-08-21 11:09Z (a second dispatch on the same row)
+
+**That line WAS the last one in the file, and the warning it carries is
+accurate: run 1 died holding the round-2 `checker-premise`.** The issue was back
+in `Todo`, which is why this second run was dispatched. Nothing from round 2
+exists — no verdict, no worktree, no artifact. Run 1's own log is why this run
+knew where to resume instead of re-deriving the packet from scratch; that is the
+entire argument for the log.
+
+State inherited and verified by this run, not assumed:
+
+- Remote branch `claude/gam-443-meetings-format-extract` @ `6dfe51c`, six
+  commits, all documentation. **No source file has been touched yet** — the
+  worker was never dispatched.
+- Draft **PR #223** is open on this branch (`isDraft: true`, `state: OPEN`), so
+  wall 3 is already discharged; this run pushes into it rather than opening one.
+- `docs/swarm/active/GAM-443-packet.md` is at **revision 2**, carrying all 9 of
+  round 1's findings.
+
+- **11:09Z — re-claimed.** `GAM-443` was `Todo` again; moved
+  `Todo → In Progress` and read back `state.name = "In Progress"` (item 28c).
+  Labels unchanged: `heavy`, `Improvement`, `meetings-redesign`; no
+  `gate/human`, no executor route → legacy Claude-only (item 28b). Run 1's
+  HEAVY tier judgement stands and this run adopts it unchanged.
+- **11:11Z — credential deadline for THIS run:** `iat 2026-08-21T11:09:27Z`,
+  `exp 2026-08-21T12:09:27Z`. PR #223 already exists, so nothing this run needs
+  depends on that token except a final `gh pr ready`; `git push` outlives it.
+- **11:14Z — re-dispatching `checker-premise` round 2, SCOPED (item 19b), model
+  opus, `run_in_background: false`.** This is round 2 of item 19a's two-round
+  cap — run 1 spent round 1, and a dispatch that returned no verdict spends no
+  round. A REVISE here escalates to the human owner rather than looping.
+  **If this line is the last one in this file, the run died holding this
+  subagent — for the second time on this row.**
