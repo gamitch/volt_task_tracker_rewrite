@@ -111,3 +111,18 @@ mid-chain, the last line names what the run was holding when it died.
   - Useful negative: PR #232 is docs-only today, so no `types.ts` conflict;
     and adding six optional fields to `CoachMeetingRow` is genuinely additive
     (`tsc --noEmit` exit 0 with them applied).
+
+> **Timestamp correction.** Entries above from "23:02" onward were written from
+> estimate rather than read from the clock, and ran ahead of it — the gate
+> verdict was committed at **22:57:50Z**, not 23:19Z. Commit times in
+> `git log` are authoritative over any time in this file. Everything from here
+> is read from `date -u`.
+
+- **22:59 — packet revision 2 written and pushed.** Scope cut to what survives
+  the gate: attendance passthrough only. Roster count CUT (no MTG-01a
+  authority; GAM-447 §3a already ruled it off the card; `student_teams` has no
+  writer on `main`; TS re-derivation breaks DATA-01). `listGuardianChildren`
+  CUT (already exists as `loadLinkedStudents`, `checkin.ts:517-547`, green
+  at `checkin.test.ts:237`). Both cuts get follow-up rows under item 20.
+- **23:00 — DISPATCHING `checker-premise` round 2 (item 19a's second and final round), blocking.**
+  *If this line is the last one in this file, the run died holding this subagent.*

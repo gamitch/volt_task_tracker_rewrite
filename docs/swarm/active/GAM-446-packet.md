@@ -1,106 +1,80 @@
-# GAM-446 task packet — revision 1
+# GAM-446 task packet — revision 2
 
-**Tier: HEAVY.** Base commit `3d27d8a` (`origin/main`). Branch
+**Tier: HEAVY.** Base `3d27d8a` (`origin/main`). Branch
 `claude/gam-446-coach-card-loader-data`.
 
-Every line number below was re-read against `3d27d8a` on 2026-08-21, after a
-rebase off a stale base (item 19c — the run log records the correction).
+Revision 1 went to `checker-premise` and came back **REVISE** with 2 BLOCKERs
+and 4 MAJORs. It found that **two of this ticket's three deliverables rest on
+premises that do not hold**. Revision 2 cuts both, keeps the one that survives,
+and files the cut work as its own rows. Every finding below was *measured* by
+the gate — it built a worktree, applied revision 1's own prescription, and ran
+the suite.
 
-## Goal
+## What this ticket now builds, and what it no longer builds
 
-Read-side only. Give the coach meetings loader the three things the redesigned
-cards need and the data layer does not return:
-
-1. per-event attendance from `v_event_attendance`,
-2. per-series roster size (expected roster) beside the existing RSVP counts,
-3. a parent's full list of linked children, via a new `listGuardianChildren`.
-
-This ticket is the sole owner of loader-layer change for the redesign; no other
-redesign ticket touches `loaders/meetings.ts`.
-
-## Ground truth (verified, not assumed)
-
-**The view.** `supabase/migrations/20260821000000_meetings_event_attendance_view.sql`
-defines `public.v_event_attendance`, one row per `events.id`, columns:
-
-| Column | Meaning |
+| Issue deliverable | Revision 2 |
 | -- | -- |
-| `event_id` | grain — one row per event, **including zero-session events** |
-| `held_ct` | counts SESSIONS (`count(distinct es.id)`, `status='completed'`) |
-| `graded_marks_ct` | counts MARKS on held sessions, incl. excused |
-| `excused_ct` | excused marks |
-| `attended_marks_ct` | present + late (MET-05) |
-| `attendance_pct` | `numeric`, **NULL never 0** when the denominator is 0 |
+| Per-event attendance % from `v_event_attendance` | **BUILD** — premise sound |
+| Per-series roster size / expected rosters | **CUT** — no PRD authority, no data on `main`, already ruled off the card |
+| `listGuardianChildren(viewer)` | **CUT** — it already exists as `loadLinkedStudents` |
 
-**The loader.** `src/lib/supabase/loaders/meetings.ts:899-936` —
-`makeLoadCoachMeetingsData` builds six `createLoader` closures and awaits them
-in one `Promise.all`, then calls `buildCoachMeetingRows(...)` and threads
-`teams` through. Each query is a small named `async function query*` returning
-`LoaderQueryResult<T>` (`:395-445`).
+### Why the roster count is cut (gate findings 2, 3, 5, 6)
 
-**The select-string guard precedent.** `src/lib/supabase/loaders/meetings.test.ts:72`,
-`describe('queryTeams (via makeLoadCoachMeetingsData) -- GAM-305 criterion 5
-select-string guard')`. Copy that shape.
+1. **No authority.** MTG-01a (`docs/swarm/VOLT_Portal_PRD.md:303-313`) lists the
+   series card's contents exhaustively — title and team scope, schedule chips,
+   season progress, attendance %, next-session line. **No roster count.**
+2. **The consuming ticket was already told not to render it.** GAM-447's packet
+   §3a: *"The issue asks for a supporting line 'location · team scope · N on
+   roster' … Build MTG-01a's card from the fields that exist … Do not add
+   fields."*
+3. **The data is not there.** `student_teams` has **no writer on `main`** —
+   its writer is PR #192 / GAM-340, still open. Students added since the
+   `20260721` backfill have no membership row, and GAM-391 records a second
+   broken population (re-teamed students holding an active row for the team
+   they left). `rosterCt` would read "3 on roster" for a 12-student team —
+   item 26's "lie to a user about their own data", exactly.
+4. **It would break DATA-01.** The active-roster predicate already exists in
+   SQL three times (`kpi_views.sql:252-257`,
+   `met01_explicit_marks.sql:109-116`, `dashboard_views.sql:203-210`), and
+   `v_team_kpis.active_students_count` is the figure any new count must agree
+   with. Re-deriving it in TypeScript is a BLOCKER under constitution item 3.
 
-**The parent resolver.** `src/lib/meetings/resolveCurrentStudentId.ts` holds
-`queryFirstLinkedStudentId`, which is exactly:
+→ Filed as a follow-up row, blocked on GAM-340, rather than built here.
 
-```ts
-.from('guardian_links').select('student_id')
-.eq('parent_profile_id', parentProfileId)
-.order('created_at', { ascending: true }).limit(1)
-```
+### Why `listGuardianChildren` is cut (gate finding 4)
 
-`guardian_links` is `(id, parent_profile_id, student_id, relationship,
-created_at)` with `unique (parent_profile_id, student_id)`
-(`supabase/migrations/20260716000000_identity_roster.sql:72-79`). RLS
-`own_read` already scopes a parent to their own links
-(`20260717000002_rls.sql:114`).
+`src/lib/supabase/loaders/checkin.ts:517-547` already exports
+`makeLoadLinkedStudents` / `loadLinkedStudents`, returning
+`LinkedStudentSummary[]` = `{ studentId: string; displayName: string }` —
+**byte-identical to the shape this issue asked for**. It reads
+`guardian_links.select('student_id').eq('parent_profile_id', …)
+.order('created_at', { ascending: true })` with **no `.limit()`** (all
+children, earliest first) and joins `students.display_name` client-side via a
+second `.in('id', ids)` query. It is green-tested at
+`src/lib/supabase/loaders/checkin.test.ts:237`: *"joins display names
+client-side and preserves guardian_links order (earliest-linked first)."*
 
-## Three corrections to the issue text — read these before coding
+Writing a second one would create the exact "two competing contracts" hazard
+revision 1 invoked to justify editing `types.ts`. The only deltas are that it
+resolves the parent from `client.auth.getSession()` rather than a
+`CurrentViewerIdentity`, and it has no role short-circuit — and the gate proved
+the role short-circuit would have been a **defect**, not a feature: `Role` is
+single-valued (`identity_roster.sql:12,20`), `guardian_links.parent_profile_id`
+is an unconstrained FK to `profiles(id)` (`:74`), the invite trigger inserts
+links without checking role, and RLS `own_read` scopes purely by
+`parent_profile_id`. So a coach who is also a parent **has readable links**,
+and revision 1's `role !== 'parent' → []` would have silently hidden their
+children.
 
-**(A) `graded_marks_ct` is mandatory and the issue omits it.** The view's own
-catalog comment states, in capitals, that a consumer rendering `attendance_pct`
-without also rendering `graded_marks_ct` reintroduces D014's known inverted
-failure mode (forgetting to mark someone *inflates* the percentage; measured at
-100% for an event 60% of the roster skipped). GAM-460 (Backlog) owns the render
-side. **The loader must carry `gradedMarksCt` through**, or GAM-460 cannot be
-built. Carry `attendedMarksCt` and `excusedCt` too — they are free, they come
-from the same row, and re-querying later costs another ticket.
+→ No new module. The discovery is recorded on the issue and in the PR body so
+the consuming ticket (GAM-451) knows what to import.
 
-**(B) The frozen `SeriesCardModel` has nowhere to put these fields.**
-`src/lib/meetings/types.ts:268-306` freezes `SeriesCardModel` with
-`attendancePct: number | null` — and no `heldCt`, no `gradedMarksCt`, no roster
-field. `CoachMeetingRow` (`:108-123`) has none either. So the issue's
-instruction to use "exact field names per the frozen `types.ts` contracts"
-names fields that **do not exist**.
+## The one thing to build
 
-*Resolution for this packet:* `src/lib/meetings/types.ts` is **added to Allowed
-Files, additively only** — new optional fields on `CoachMeetingRow`, no
-existing field changed, removed, or re-typed. It is not on the issue's
-Forbidden list (that list is `loaders/attendance.ts`, `loaders/endMeeting.ts`,
-`src/pages/**`), and the alternative — inventing a second row type inside the
-loader — would give the redesign two competing contracts, which is the exact
-thing GAM-444 froze this file to prevent. **`SeriesCardModel` itself is NOT
-touched**: it is MTG-01a's copied field list and belongs to the card tickets.
+### 1. `queryEventAttendance` — a seventh query in the existing batch
 
-*Hazard, disclosed:* PR #232 (GAM-447, SeriesCard) is open on a sibling branch
-right now. Keep every added field optional so nothing downstream breaks, and
-expect a possible merge conflict in `types.ts`.
-
-**(C) "Roster size / expected rosters" is underspecified.** The existing
-`CoachMeetingSessionDetail.expectedCt` (`types.ts:89`) is already the real RSVP
-`status === 'going'` count, and `CoachMeetingRowSummary.expectedCt`
-(`:212-214`) sums it across the series. Those are RSVP counts, **not roster
-size**. "Roster size" means how many students the event is scoped to —
-`student_teams` filtered by the event's `team_ids` (`null` = all teams).
-
-## What to build
-
-### 1. `queryEventAttendance` — a seventh parallel query
-
-In `src/lib/supabase/loaders/meetings.ts`, beside the existing `query*`
-functions, following their exact shape:
+In `src/lib/supabase/loaders/meetings.ts`, beside the existing `query*` helpers
+(`:395-446`), in their exact shape:
 
 ```ts
 async function queryEventAttendance(
@@ -113,148 +87,151 @@ async function queryEventAttendance(
 }
 ```
 
-Add its `createLoader` closure and its slot in the existing `Promise.all` — a
-seventh entry in the same batch, not a second round trip. Add a
+Declare `EventAttendanceDbRow` beside the other `*DbRow` types, and
 `mapEventAttendanceDbRow` beside the other `map*DbRow` functions
-(`:319-389`), camelCasing verbatim.
+(**`:334-389`** — revision 1 cited `:319` and was wrong). Add its
+`createLoader` closure and a seventh slot in the **existing** `Promise.all`
+(`:899-937`) — one batch, not a second round trip.
 
-### 2. `queryEventRosterCounts` — roster size per event
+### 2. Merge onto the rows — inside `meetings.ts`, after the builder returns
 
-Roster size is `student_teams` membership scoped by the event's `team_ids`.
-Fetch the membership rows in the same batch and compute per-event counts in
-the loader; a student on two of an event's teams counts **once** (de-duplicate
-by `student_id`). An event with `team_ids === null` is scoped to all teams.
+`makeLoadCoachMeetingsData` does **not** construct `CoachMeetingRow`s; it
+delegates to `buildCoachMeetingRows`, which lives at
+`src/lib/meetings/coachModel.ts:303-310`. **`coachModel.ts` is NOT in Allowed
+Files and must not be edited.** Merge the attendance fields onto the returned
+array inside `makeLoadCoachMeetingsData`, keyed by `eventId`.
 
-Exclude students who have left: `student_teams.left_on` is the existing
-convention (`types.ts:60-65` and `v_student_participation` both rely on it).
-**Confirm the real column set of `student_teams` before writing the select
-string** rather than trusting this paragraph.
-
-### 3. Attach to the row model
-
-Add to `CoachMeetingRow` in `src/lib/meetings/types.ts`, **all optional**, each
-with a doc comment naming its source column:
+Add to `CoachMeetingRow` in `src/lib/meetings/types.ts` — **all optional,
+purely additive** (the gate confirmed `tsc --noEmit` exit 0 with exactly these
+six applied, breaking no construction site or test literal):
 
 ```ts
-attendancePct?: number | null;   // v_event_attendance.attendance_pct — NULL is "—", never 0
-heldCt?: number;                 // SESSIONS held, not marks
-gradedMarksCt?: number;          // D014 mitigation — a card rendering attendancePct must render this
+attendancePct?: number | null;   // v_event_attendance.attendance_pct — NULL is "—", NEVER 0
+heldCt?: number;                 // counts SESSIONS held, not marks
+gradedMarksCt?: number;          // D014 mitigation — see below; a card rendering attendancePct must render this
 attendedMarksCt?: number;
 excusedCt?: number;
-rosterCt?: number;               // distinct active students in the event's team scope
 ```
 
-An event with no `v_event_attendance` row cannot occur (the view left-joins, so
-every event has one), but code defensively anyway: absent row → `attendancePct`
-`null`, counts `0`.
+**`gradedMarksCt` is mandatory, not optional value-wise** (gate finding
+confirmed verbatim). The view's own catalog comment states in capitals: *"A
+CONSUMER THAT RENDERS attendance_pct WITHOUT ALSO RENDERING graded_marks_ct
+REINTRODUCES D014's KNOWN REGRESSION."* Since T508 an unmarked student normally
+has no attendance row, so forgetting to mark someone *inflates* the percentage
+— measured at 100% for an event 60% of the roster skipped. GAM-460 owns the
+render side; this loader must carry the value or GAM-460 cannot be built.
 
-### 4. `listGuardianChildren`
+**Real edge case, replacing revision 1's wrong one.** Revision 1 worried about
+an event with no `v_event_attendance` row; that cannot happen (the view LEFT
+joins, so every event gets a row). The real edge is the inverse:
+`coachModel.ts:321` — `if (eventSessions.length === 0) continue;` — so a
+**zero-session event never becomes a row at all**, and only `type === 'meeting'`
+events become rows. Extra view rows with no matching row are simply unused. A
+row whose event is somehow absent from the view keeps `attendancePct`
+undefined; do not fabricate `0`.
 
-New sibling module `src/lib/meetings/listGuardianChildren.ts` (**not** an edit
-to `resolveCurrentStudentId.ts`, whose behaviour is explicitly unchanged),
-following that file's `makeX(getClient)` + `createLoader` shape exactly, and
-its NFR-04 leaf-module discipline — it must import only from
-`../supabase/loader` / `../supabase/client` and `import type` from `./types`,
-never from `src/pages/**`.
+### 3. Extend the two test-client table whitelists
 
-```ts
-listGuardianChildren(viewer: CurrentViewerIdentity):
-  Promise<Array<{ studentId: string; displayName: string }>>
-```
+This is the fix for the gate's BLOCKER 1. Revision 1 was **unsatisfiable**:
+adding a seventh table turned a currently-green test red in a file revision 1
+forbade. Measured — baseline 42/42 exit 0, after the patch 3 failed / 2630
+passed exit 1.
 
-- `viewer.role !== 'parent'` → `[]` immediately, no query. (Students and
-  coaches have no guardian links; the issue says empty for both.)
-- Otherwise `guardian_links.parent_profile_id = viewer.id`, ordered
-  `created_at` ascending — the same order `queryFirstLinkedStudentId` uses, so
-  the first element of this list is by construction the child
-  `resolveCurrentStudentId` already returns. **That invariant is an acceptance
-  criterion.**
-- `displayName` comes from `students.display_name`.
-- Item 6: `display_name` is first name + last initial in this codebase's
-  fixtures and is permitted; use fabricated names in tests regardless.
+- `src/lib/supabase/loaders/meetings.test.ts:51` — extend `OTHER_TABLES` so
+  `makeRecordingClient` (`:47-62`) stops throwing at `:61`. Without this the
+  new select-string guard cannot even run.
+- `src/pages/meetings/MeetingsList.test.tsx:182` **and** `:246` — extend the
+  `fromSpy` table whitelists. **This file is added to Allowed Files for this
+  narrow purpose only: add `'v_event_attendance'` to the two whitelists and
+  return an empty result for it. Change no assertion, no fixture, and nothing
+  else in the file.**
 
-### 5. NULL discipline — the one rule that is not negotiable
+### 4. NULL discipline — not negotiable
 
 `attendancePct` passes through as `null`. **Never** `?? 0`, never
-`Number(x) || 0`, no `greatest(...,1)` equivalent in TypeScript. Constitution
-item 3 / PRD DATA-01: re-deriving a metric in TypeScript is a BLOCKER. The
-loader's job is passthrough, and `types.ts:285-294` already spells out why
-widening this to a bare `number` is a BLOCKER.
+`Number(x) || 0`. Constitution item 3 / PRD DATA-01: re-deriving a metric in
+TypeScript is a BLOCKER, and `types.ts:285-294` already spells out why widening
+this to a bare `number` is one. Precedent for the nullable shape:
+`StudentParticipationMetric.participationPct: number | null` (`types.ts:164`).
 
 ## Allowed files
 
 - `src/lib/supabase/loaders/meetings.ts`
 - `src/lib/supabase/loaders/meetings.test.ts`
-- `src/lib/meetings/listGuardianChildren.ts` (new)
-- `src/lib/meetings/listGuardianChildren.test.ts` (new)
-- `src/lib/meetings/types.ts` — **additive only** (see correction B)
+- `src/lib/meetings/types.ts` — **additive only**, exactly the five optional
+  fields above; no existing field changed, removed or re-typed;
+  `SeriesCardModel` **not touched**
+- `src/pages/meetings/MeetingsList.test.tsx` — **table whitelists at `:182`
+  and `:246` ONLY**
 
-**Forbidden:** `src/lib/supabase/loaders/attendance.ts`,
-`src/lib/supabase/loaders/endMeeting.ts`, all of `src/pages/**`,
-`supabase/migrations/**`, `docs/swarm/**`, `.claude/**`,
-`.github/workflows/**`. `resolveCurrentStudentId.ts` is read-only reference.
-`saveMeetingSeries` / `cancelMeetingSession` semantics are unchanged — this
-ticket adds no write path.
+**Forbidden:** `src/lib/meetings/coachModel.ts`,
+`src/lib/meetings/resolveCurrentStudentId.ts`,
+`src/lib/supabase/loaders/attendance.ts`,
+`src/lib/supabase/loaders/endMeeting.ts`, `src/lib/supabase/loaders/checkin.ts`,
+everything else under `src/pages/**`, `supabase/migrations/**`,
+`docs/swarm/**`, `.claude/**`, `.github/workflows/**`. This ticket adds **no
+write path**; `saveMeetingSeries` / `cancelMeetingSession` semantics unchanged.
 
-## Acceptance criteria (each independently measurable today)
+## Acceptance criteria
 
 1. **Select-string guard** for `v_event_attendance` naming all six columns, in
-   the shape of `meetings.test.ts:72`'s `queryTeams` guard.
-2. **Select-string guard** for the roster-count query.
-3. `loadCoachMeetingsData` still issues **one** `Promise.all` batch — assert
-   the added queries are in it, not sequential after it.
-4. **NULL passthrough:** a stubbed view row with `attendance_pct: null` yields
-   `attendancePct === null` on the row model. A separate case proves `0` is
-   preserved as `0` and not confused with null.
-5. **`held_ct` is not read as a mark count** — a fixture where `held_ct` and
+   the shape of `meetings.test.ts:72`'s `queryTeams` guard (`parseSelectedColumns`
+   at `:24-28`), and it must actually **run** — i.e. `OTHER_TABLES` extended.
+2. **Single batch:** all seven `from()` calls fire before the first await
+   settles. The gate proved this is assertable — its probe recorded
+   `SYNC_FROM_CALLS = 7, TOTAL = 7`.
+3. **NULL passthrough:** a stubbed view row with `attendance_pct: null` yields
+   `attendancePct === null`. A second case proves a real `0` survives as `0`
+   and is not conflated with null.
+4. **`held_ct` is not read as a mark count:** a fixture where `held_ct` and
    `graded_marks_ct` differ, asserting each lands in its own field.
-6. **Multi-child parent:** `listGuardianChildren` returns *all* children in
-   `created_at` order for a parent with ≥2 links.
-7. **Order invariant:** for the same fixture, `listGuardianChildren(...)[0]
-   .studentId === await resolveCurrentStudentId(...)`.
-8. **Non-parent:** student and coach viewers each return `[]` **and issue no
-   query** (assert the stub client was never called).
-9. `resolveCurrentStudentId`'s own behaviour is byte-identical — its existing
-   tests pass unmodified.
-10. All six gates green (`gate-run`), and **two mutations replayed with real
-    red output**: (i) change the NULL passthrough to `?? 0` → criterion 4 goes
-    red; (ii) change `listGuardianChildren`'s order to `descending` →
-    criterion 6 or 7 goes red.
+5. **`gradedMarksCt` is carried** and reaches the row model — GAM-460 depends
+   on it.
+6. **Merge is keyed by `eventId`**, not array position: a fixture whose view
+   rows arrive in a different order from the event rows still lands each value
+   on the right row.
+7. `buildCoachMeetingRows` and `coachModel.ts` are **unmodified**
+   (`git diff --stat` shows neither).
+8. `resolveCurrentStudentId`'s behaviour is byte-identical; its existing tests
+   pass unmodified.
+9. All six gates green via the `gate-run` skill, **and** the two previously
+   red tests the gate identified are green again.
+10. **Two mutations replayed with real red output** (`mutation-replay`,
+    item 23 — your own worktree, candidate fix committed first):
+    (i) change the NULL passthrough to `?? 0` → criterion 3 goes red;
+    (ii) change the merge to key by array index → criterion 6 goes red.
 
 ## Evidence required
 
 `gate-run`'s evidence block verbatim with exit codes; the mutation table with
-real red output and exit codes, run in **your own worktree** (item 23), with
-the candidate fix committed first (item 26's fast-tier working rule applies to
-any mutation). Report the commit SHA your work landed in (item 21).
+real red output and exit codes; the commit SHA your work landed in (item 21).
+Do not self-certify — a `checker-reviewer` grades this against these criteria.
 
-## Least confident decisions (item 19d) — attack these first
+## Least confident decisions (round 2)
 
-1. **Widening Allowed Files to `types.ts` (correction B).** The issue did not
-   list it. I judged that additive optional fields on `CoachMeetingRow` are
-   safer than a competing row type defined in the loader. *What would make it
-   wrong:* if GAM-447's open PR #232 or another live redesign ticket already
-   adds these exact fields, this duplicates a contract instead of extending
-   one — or if the owner intends `SeriesCardModel`, not `CoachMeetingRow`, to
-   be where the card reads them, in which case the fields belong to a card
-   ticket and this one should stop at the loader's return value.
-2. **Roster size defined as `student_teams` scoped by `team_ids`
-   (correction C).** *What would make it wrong:* if "expected roster" in the
-   redesign actually means the RSVP `going` count that already exists as
-   `expectedCt`, this whole query is redundant work against a number the
-   summary already computes. I could not find MTG-01a text settling it.
-3. **`student_teams.left_on` as the active-membership filter.** Asserted from
-   convention, **not** read from the migration during packet authoring. *What
-   would make it wrong:* the column is named differently, or active membership
-   is expressed some other way — in which case criterion 2's guard string is
-   wrong and the roster count silently includes departed students.
-4. **A seventh and eighth query in the same `Promise.all`.** *What would make
-   it wrong:* if the roster query's result is large enough that fetching whole
-   `student_teams` is a real cost, this trades a round trip for a payload;
-   the existing loader already fetches whole `attendance` and `rsvps` tables,
-   so I judged it consistent — but consistent with an existing cost is not the
-   same as cheap.
-5. **`role !== 'parent'` → `[]` with no query.** *What would make it wrong:* a
-   coach who is also a parent of a team member. If `Role` is single-valued and
-   a coach-parent's role reads `coach`, this silently denies them the child
-   switcher. I did not verify whether that case exists in this data model.
+1. **Cutting the roster count entirely rather than shipping it disclosed.**
+   *What would make it wrong:* if the owner considers the roster count part of
+   what they authorized in GAM-446 and would rather have a disclosed-wrong
+   number than none. I judged a knowingly-wrong count worse than an absent one
+   under item 26, and MTG-01a plus GAM-447 §3a both point the same way — but
+   this narrows a row the owner promoted to `Todo`, so it is their call to
+   reverse.
+2. **Adding the five fields to `CoachMeetingRow` when nothing consumes them
+   yet.** The gate noted `buildSeriesCardModel` does not exist anywhere, so
+   these fields currently reach no card. *What would make it wrong:* if the
+   integration ticket intends to build `SeriesCardModel` straight from loader
+   output, these belong on that path instead and this is dead weight. I kept
+   them because GAM-460 and the integration ticket both need the values to
+   exist somewhere real, and item 27 prefers a real loader over a fixture.
+3. **Editing `MeetingsList.test.tsx` at all.** *What would make it wrong:* if
+   the right fix is to make that whitelist tolerant of unknown tables generally
+   rather than enumerate a seventh — which would be a better fix and a
+   different ticket's business. I chose the minimal enumeration because a
+   tolerant stub silently stops catching unexpected queries, which is what the
+   whitelist is for.
+4. **Keeping HEAVY after the scope shrank to one query plus a merge.** On
+   revision 2's contents alone this now reads STANDARD. *What would make it
+   wrong:* nothing much — it costs one checker round. I kept HEAVY because the
+   premise gate has already run and found real BLOCKERs, and re-tiering
+   downward after a gate found defects would look like relabelling the row to
+   match what I felt like doing (item 26 forbids exactly that).
