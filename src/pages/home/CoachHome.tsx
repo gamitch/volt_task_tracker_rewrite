@@ -608,6 +608,66 @@
  * `teamId`/team-linkage product question above (bundled together since
  * building real per-team queries for these would risk wasted work if that
  * question resolves toward season-wide widgets instead).
+ *
+ * -----------------------------------------------------------------------
+ * 16. GAM-438 -- presentation-only restructure to match the production
+ *     tracker's visual language. No schema/loader/RLS/metric-math change.
+ *
+ * (a) Header: the plain `<Heading level={1}>Home</Heading>` is replaced by
+ *     an eyebrow (the active season's own `name`, already in scope via
+ *     `activeSeason.season.name` in the outer `CoachHome` wrapper -- no new
+ *     fetch, threaded down as the `seasonName` prop the same way
+ *     `defaultGoalHours` already is) above a large `Heading level={1}`
+ *     reading "Coach dashboard". Action buttons ("Start check-in", "New
+ *     outreach event") are unchanged in label/behavior/position.
+ *
+ * (b) Regrouping: "Hours vs. team goal" (including its `ProgressBar` and
+ *     the `GOAL_MILESTONES` 25/50/75/100 badge/text row) is now its own
+ *     full-width `KpiCard` panel, rendered before the tile grids -- the
+ *     `GOAL_MILESTONES` map and badge-vs-text logic are byte-identical to
+ *     before, only relocated out of the old 3-card `:2430` grid.
+ *     "Last meeting attendance" and "Events in next 7 days" (the other two
+ *     cards from that same old grid) move into the secondary tile `Grid`
+ *     (the old 6-tile `:2521` grid), unconditionally -- they never depended
+ *     on `dashboardState` before and still do not, so they render in every
+ *     one of that section's own DES-12 states (loading/error/success),
+ *     joined by the 6 analytics tiles only once `dashboardData` is ready,
+ *     for 8 tiles total once everything has loaded.
+ *
+ * (c) The Next up / Activity feed pairing (`:2617`) is structurally
+ *     unchanged (same responsive `Grid`, same `List`/`EmptyState`
+ *     contents) -- each side is now wrapped in a plain `Card` (default
+ *     variant, reused, not invented) for the bordered-panel look, per the
+ *     issue's own "reuse the existing Card/Divider primitives" framing.
+ *
+ * (d) Styling mechanism -- F-2, not `xstyle`. This task's own packet asked
+ *     for `xstyle`/`stylex.create()` (component → theme token → xstyle →
+ *     custom CSS, constitution item 11's abstract ladder), but that rung is
+ *     provably nonfunctional in this app: `VOLT_UX_Craft_PRD_v3.md:55-60`'s
+ *     binding, installed-source-verified **F-2** finding ("StyleX is
+ *     compile-time and the app has no StyleX plugin ... `stylex.create()`
+ *     throws at runtime") -- re-verified live for this task with a
+ *     throwaway probe importing the real installed `@stylexjs/stylex` and
+ *     calling `stylex.create()` inside this app's own Vitest config: it
+ *     throws `Unexpected 'stylex.create' call at runtime. Styles must be
+ *     compiled by '@stylexjs/babel-plugin'.` (`vite.config.ts` has no
+ *     StyleX plugin, confirmed). F-2's own text states the EFFECTIVE DES-21
+ *     ladder here is "component → theme token → custom CSS" (xstyle
+ *     skipped), with `className`/`style` as the sanctioned custom-CSS
+ *     surface (`Card`'s own `Card.d.ts` genuinely documents `style?:
+ *     React.CSSProperties`, merged in via `mergeProps` AFTER StyleX's own
+ *     classes -- confirmed against the installed source -- so it reliably
+ *     wins, no `!important` needed, same mechanism `OutreachList.tsx`/T131
+ *     and `GoalBar.tsx` already used for the identical reason). `KPI_TILE_
+ *     GRADIENT_STYLE`/`KPI_GOAL_ACCENT_STYLE` below are therefore plain
+ *     `React.CSSProperties` objects passed via `Card`'s `style` prop, never
+ *     `xstyle`. Every value inside them is one of this app's own existing
+ *     `var(--color-*)` custom properties (`theme.css:203-207`) -- never a
+ *     hardcoded hex literal, matching production's own token-relationship
+ *     (a subtle two-stop background gradient on every KPI tile, plus an
+ *     accent-tinted border on the one goal-related tile per row) without
+ *     hand-copying production's own raw hex values, which are that app's
+ *     palette, not this one's.
  */
 import { useEffect, useId, useState, type CSSProperties, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -1874,22 +1934,48 @@ function useLoadState<T>(load: () => Promise<T>, deps: readonly unknown[]): Load
 }
 
 // ---------------------------------------------------------------------------
-// KPI cards -- module doc #2 (BEH-05).
+// KPI cards -- module doc #2 (BEH-05), styling per module doc #16(d) (F-2:
+// `style`, not `xstyle` -- `xstyle`/`stylex.create()` is nonfunctional in
+// this app).
 // ---------------------------------------------------------------------------
+
+/** Plain KPI-tile treatment -- a subtle top-to-bottom two-stop background
+ * gradient over the tile's normal border, matching production's
+ * `.metric-card`. Both stops are this app's own existing
+ * `--color-background-*` custom properties (`theme.css:203-205`) -- never a
+ * hardcoded hex literal. */
+const KPI_TILE_GRADIENT_STYLE: CSSProperties = {
+  background:
+    'linear-gradient(180deg, var(--color-background-card), var(--color-background-muted))',
+};
+
+/** The one goal-related tile per row additionally gets an accent-tinted
+ * border over the same gradient shape, matching production's
+ * `.goal-ring-card`/`.accent-card`. `--color-accent-muted` is already the
+ * accent pre-mixed to ~20-25% alpha (`theme.css:207`) -- used verbatim for
+ * both the border color and the gradient's accent stop, never a hand-copied
+ * hex. */
+const KPI_GOAL_ACCENT_STYLE: CSSProperties = {
+  background: 'linear-gradient(180deg, var(--color-accent-muted), var(--color-background-card))',
+  borderColor: 'var(--color-accent-muted)',
+};
 
 function KpiCard({
   label,
   value,
   secondary,
   children,
+  accent = false,
 }: {
   label: string;
   value: string;
   secondary?: ReactNode;
   children?: ReactNode;
+  /** GAM-438: the one goal-related tile per row (module doc #16). */
+  accent?: boolean;
 }): ReactNode {
   return (
-    <Card>
+    <Card style={accent ? KPI_GOAL_ACCENT_STYLE : KPI_TILE_GRADIENT_STYLE}>
       <VStack gap={2}>
         <Heading level={4}>{label}</Heading>
         <Heading level={2}>{value}</Heading>
@@ -2218,6 +2304,7 @@ export function CoachHome({
         <CoachHomeContent
           user={user}
           seasonId={activeSeason.season.id}
+          seasonName={activeSeason.season.name}
           loadData={loadData}
           loadDashboardData={loadDashboardDataProp}
           loadLeaderboardData={loadLeaderboardDataProp}
@@ -2241,6 +2328,11 @@ export function CoachHome({
 interface CoachHomeContentProps {
   user: AuthUser;
   seasonId: string;
+  /** GAM-438: the active season's own `name`, threaded down for the
+   * header's eyebrow line (module doc #16(a)) -- same "already in scope,
+   * threaded as a plain prop" pattern `defaultGoalHours` already
+   * established, not a new fetch. */
+  seasonName: string;
   loadData: LoadCoachHomeDataFn;
   loadDashboardData: LoadDashboardDataFn;
   loadLeaderboardData: LoadLeaderboardDataFn;
@@ -2252,6 +2344,7 @@ interface CoachHomeContentProps {
 function CoachHomeContent({
   user,
   seasonId,
+  seasonName,
   loadData,
   loadDashboardData: loadDashboardDataProp,
   loadLeaderboardData: loadLeaderboardDataProp,
@@ -2395,7 +2488,14 @@ function CoachHomeContent({
               ))}
 
               <HStack hAlign="between" vAlign="center" wrap="wrap" gap={3}>
-                <Heading level={1}>Home</Heading>
+                {/* GAM-438 (module doc #16(a)): eyebrow (active season
+                    name) + large title, replacing the plain "Home" heading. */}
+                <VStack gap={1}>
+                  <Text type="supporting" color="secondary">
+                    {seasonName}
+                  </Text>
+                  <Heading level={1}>Coach dashboard</Heading>
+                </VStack>
                 <HStack gap={2} wrap="wrap">
                   {checkInSession !== null && (
                     <Button
@@ -2427,41 +2527,50 @@ function CoachHomeContent({
                 />
               )}
 
-              <Grid columns={{ minWidth: 240, repeat: 'fit' }} gap={4}>
-                {/* T803 -- the "Participation" tile that stood here is GONE.
-                    T198 pointed it at `v_season_attendance_rate`, which the
-                    T124 analytics section below ALREADY renders as "Attendance
-                    rate" from its own independent load state -- one metric, two
-                    tiles, able to disagree on screen while one was still
-                    loading. The analytics tile is the survivor: it predates
-                    this one and its "Of active roster per session" secondary
-                    describes the view's actual denominator, which "Season to
-                    date" did not. Nothing replaces this slot; the grid is
-                    `repeat: 'fit'` and simply reflows to three. */}
-                <KpiCard label="Hours vs. team goal" value={`${hoursPercent}%`}>
-                  <ProgressBar
-                    label="Hours vs. team goal"
-                    isLabelHidden
-                    value={confirmedHours}
-                    // T202 -- a real goal; `: 1` invented one.
-                    max={goalHours}
-                    hasValueLabel
-                    formatValueLabel={(value, max) => `${value} / ${max} hrs`}
-                    style={COACH_HOME_PROGRESS_BAR_MAX_WIDTH_STYLE}
-                  />
-                  <HStack gap={2} wrap="wrap">
-                    {GOAL_MILESTONES.map((milestone) =>
-                      hoursPercent >= milestone ? (
-                        <Badge key={milestone} variant="neutral" label={`${milestone}% reached`} />
-                      ) : (
-                        <Text key={milestone} type="supporting" color="secondary">
-                          {milestone}%
-                        </Text>
-                      ),
-                    )}
-                  </HStack>
-                </KpiCard>
+              {/* GAM-438 (module doc #16(b)): "Hours vs. team goal" is now
+                  its own full-width panel (was one of three cards in the
+                  old `:2430` primary grid) -- `GOAL_MILESTONES`'s own
+                  25/50/75/100 badge-vs-text logic is unchanged, only
+                  relocated. `accent`: this is the one goal-related card in
+                  this row (module doc #16(d)). */}
+              <KpiCard label="Hours vs. team goal" value={`${hoursPercent}%`} accent>
+                <ProgressBar
+                  label="Hours vs. team goal"
+                  isLabelHidden
+                  value={confirmedHours}
+                  // T202 -- a real goal; `: 1` invented one.
+                  max={goalHours}
+                  hasValueLabel
+                  formatValueLabel={(value, max) => `${value} / ${max} hrs`}
+                  style={COACH_HOME_PROGRESS_BAR_MAX_WIDTH_STYLE}
+                />
+                <HStack gap={2} wrap="wrap">
+                  {GOAL_MILESTONES.map((milestone) =>
+                    hoursPercent >= milestone ? (
+                      <Badge key={milestone} variant="neutral" label={`${milestone}% reached`} />
+                    ) : (
+                      <Text key={milestone} type="supporting" color="secondary">
+                        {milestone}%
+                      </Text>
+                    ),
+                  )}
+                </HStack>
+              </KpiCard>
 
+              <Divider />
+
+              {/* T124 secondary stat tiles (UXD-07, module doc #13), now
+                joined by GAM-438 (module doc #16(b)): "Last meeting
+                attendance" and "Events in next 7 days" -- the other two
+                cards from the old primary grid -- move in here
+                unconditionally (they never depended on `dashboardState`
+                before and still do not), for 8 tiles total once
+                `dashboardData` is ready. The 6 analytics tiles below keep
+                their own independent DES-12 states, scoped to just this
+                section (module doc's own "independent load state" note
+                above) -- a slow/failed dashboard-analytics fetch never
+                blocks the two always-real tiles or the rest of the page. */}
+              <Grid columns={{ minWidth: 200, repeat: 'fit' }} gap={4}>
                 <KpiCard
                   label="Last meeting attendance"
                   value={attendanceRate !== null ? `${attendanceRate}%` : '—'}
@@ -2489,24 +2598,96 @@ function CoachHomeContent({
                     </Text>
                   }
                 />
-              </Grid>
 
-              <Divider />
-
-              {/* T124 secondary stat tiles (UXD-07, module doc #13). Own
-                DES-12 states, scoped to just this section (module doc's
-                own "independent load state" note above) -- a slow/failed
-                fetch here never blocks the primary KPI grid or Next up. */}
-              {dashboardState.status === 'loading' && (
-                <Grid columns={{ minWidth: 200, repeat: 'fit' }} gap={4}>
-                  {[0, 1, 2, 3, 4, 5].map((card) => (
+                {dashboardState.status === 'loading' &&
+                  [0, 1, 2, 3, 4, 5].map((card) => (
                     <VStack key={card} gap={2} padding={4}>
                       <Skeleton width={120} height={14} index={20 + card * 2} />
                       <Skeleton width={60} height={20} index={21 + card * 2} />
                     </VStack>
                   ))}
-                </Grid>
-              )}
+
+                {dashboardData && (
+                  <>
+                    <KpiCard
+                      label="Avg hours / active student"
+                      value={
+                        dashboardData.rosterStats
+                          ? `${dashboardData.rosterStats.avgHoursPerActiveStudent}h`
+                          : '—'
+                      }
+                      secondary={
+                        <Text type="supporting" color="secondary">
+                          Default goal {defaultGoalHours}h
+                        </Text>
+                      }
+                    />
+                    <KpiCard
+                      label="Students at goal"
+                      value={
+                        dashboardData.rosterStats
+                          ? String(dashboardData.rosterStats.studentsAtGoalCount)
+                          : '—'
+                      }
+                      secondary={
+                        <Text type="supporting" color="secondary">
+                          {dashboardData.rosterStats
+                            ? `of ${dashboardData.rosterStats.activeStudentCount} active`
+                            : 'No active roster yet'}
+                        </Text>
+                      }
+                    />
+                    <KpiCard
+                      label="Session days logged"
+                      value={
+                        dashboardData.sessionDays
+                          ? String(dashboardData.sessionDays.sessionDaysLogged)
+                          : '—'
+                      }
+                      secondary={
+                        <Text type="supporting" color="secondary">
+                          Completed only
+                        </Text>
+                      }
+                    />
+                    <KpiCard
+                      label="Attendance rate"
+                      value={
+                        dashboardData.attendanceRate
+                          ? `${dashboardData.attendanceRate.attendanceRatePct}%`
+                          : '—'
+                      }
+                      secondary={
+                        <Text type="supporting" color="secondary">
+                          Of active roster per session
+                        </Text>
+                      }
+                    />
+                    <KpiCard
+                      label="Upcoming commitment"
+                      value={
+                        dashboardData.upcomingCommittedHours
+                          ? `${dashboardData.upcomingCommittedHours.committedHours30d}h`
+                          : '0h'
+                      }
+                      secondary={
+                        <Text type="supporting" color="secondary">
+                          Planned in next 30 days
+                        </Text>
+                      }
+                    />
+                    <KpiCard
+                      label="Busiest day"
+                      value={busiestDay ? formatDayOfWeekLabel(busiestDay.dayOfWeek) : '—'}
+                      secondary={
+                        <Text type="supporting" color="secondary">
+                          By offered sessions
+                        </Text>
+                      }
+                    />
+                  </>
+                )}
+              </Grid>
               {dashboardState.status === 'error' && (
                 <Banner
                   status="error"
@@ -2516,86 +2697,6 @@ function CoachHomeContent({
                     <Button variant="ghost" label="Retry" onClick={dashboardState.retry} />
                   }
                 />
-              )}
-              {dashboardData && (
-                <Grid columns={{ minWidth: 200, repeat: 'fit' }} gap={4}>
-                  <KpiCard
-                    label="Avg hours / active student"
-                    value={
-                      dashboardData.rosterStats
-                        ? `${dashboardData.rosterStats.avgHoursPerActiveStudent}h`
-                        : '—'
-                    }
-                    secondary={
-                      <Text type="supporting" color="secondary">
-                        Default goal {defaultGoalHours}h
-                      </Text>
-                    }
-                  />
-                  <KpiCard
-                    label="Students at goal"
-                    value={
-                      dashboardData.rosterStats
-                        ? String(dashboardData.rosterStats.studentsAtGoalCount)
-                        : '—'
-                    }
-                    secondary={
-                      <Text type="supporting" color="secondary">
-                        {dashboardData.rosterStats
-                          ? `of ${dashboardData.rosterStats.activeStudentCount} active`
-                          : 'No active roster yet'}
-                      </Text>
-                    }
-                  />
-                  <KpiCard
-                    label="Session days logged"
-                    value={
-                      dashboardData.sessionDays
-                        ? String(dashboardData.sessionDays.sessionDaysLogged)
-                        : '—'
-                    }
-                    secondary={
-                      <Text type="supporting" color="secondary">
-                        Completed only
-                      </Text>
-                    }
-                  />
-                  <KpiCard
-                    label="Attendance rate"
-                    value={
-                      dashboardData.attendanceRate
-                        ? `${dashboardData.attendanceRate.attendanceRatePct}%`
-                        : '—'
-                    }
-                    secondary={
-                      <Text type="supporting" color="secondary">
-                        Of active roster per session
-                      </Text>
-                    }
-                  />
-                  <KpiCard
-                    label="Upcoming commitment"
-                    value={
-                      dashboardData.upcomingCommittedHours
-                        ? `${dashboardData.upcomingCommittedHours.committedHours30d}h`
-                        : '0h'
-                    }
-                    secondary={
-                      <Text type="supporting" color="secondary">
-                        Planned in next 30 days
-                      </Text>
-                    }
-                  />
-                  <KpiCard
-                    label="Busiest day"
-                    value={busiestDay ? formatDayOfWeekLabel(busiestDay.dayOfWeek) : '—'}
-                    secondary={
-                      <Text type="supporting" color="secondary">
-                        By offered sessions
-                      </Text>
-                    }
-                  />
-                </Grid>
               )}
 
               <Divider />
@@ -2615,66 +2716,73 @@ function CoachHomeContent({
                 meaningless; the `Divider`s above and below this `Grid`
                 (separating stacked siblings) are unchanged. */}
               <Grid columns={{ minWidth: COACH_HOME_PAIRED_MODULE_MIN_WIDTH, max: 2 }} gap={4}>
-                <VStack gap={3}>
-                  <Heading level={2} id={nextUpHeadingId}>
-                    Next up
-                  </Heading>
-                  <div role="group" aria-labelledby={nextUpHeadingId}>
-                    {nextUp.length === 0 ? (
-                      <EmptyState
-                        headingLevel={3}
-                        title="Nothing scheduled"
-                        description="Your team's next meetings, outreach events, and competitions will show up here."
-                      />
-                    ) : (
-                      <List hasDividers>
-                        {nextUp.map((row) => (
-                          <NextUpRowItem key={row.sessionId} row={row} />
-                        ))}
-                      </List>
-                    )}
-                  </div>
-                </VStack>
+                {/* GAM-438 (module doc #16(c)): each side wrapped in the
+                    existing `Card` primitive for a bordered-panel look --
+                    structure/contents below are otherwise unchanged. */}
+                <Card>
+                  <VStack gap={3}>
+                    <Heading level={2} id={nextUpHeadingId}>
+                      Next up
+                    </Heading>
+                    <div role="group" aria-labelledby={nextUpHeadingId}>
+                      {nextUp.length === 0 ? (
+                        <EmptyState
+                          headingLevel={3}
+                          title="Nothing scheduled"
+                          description="Your team's next meetings, outreach events, and competitions will show up here."
+                        />
+                      ) : (
+                        <List hasDividers>
+                          {nextUp.map((row) => (
+                            <NextUpRowItem key={row.sessionId} row={row} />
+                          ))}
+                        </List>
+                      )}
+                    </div>
+                  </VStack>
+                </Card>
 
                 {/* T124 activity feed (UXP-10, module doc #13(d)) -- replaces
                   the old team-scoped "Recent signups" section. Signup/drop/
                   checked-off entries with Self origin labels, "Show all". */}
-                <VStack gap={3}>
-                  <Heading level={2} id={activityFeedHeadingId}>
-                    Activity feed
-                  </Heading>
-                  <div role="group" aria-labelledby={activityFeedHeadingId}>
-                    {dashboardData === null ? (
-                      <EmptyState
-                        headingLevel={3}
-                        title="No activity yet"
-                        description="Signups, drops, and check-offs will show up here."
-                      />
-                    ) : visibleActivityFeedEntries.length === 0 ? (
-                      <EmptyState
-                        headingLevel={3}
-                        title="No activity yet"
-                        description="Signups, drops, and check-offs will show up here."
-                      />
-                    ) : (
-                      <VStack gap={3}>
-                        <List hasDividers>
-                          {visibleActivityFeedEntries.map((entry) => (
-                            <ActivityFeedRowItem key={entry.id} entry={entry} />
-                          ))}
-                        </List>
-                        {!showAllActivity &&
-                          activityFeedEntries.length > ACTIVITY_FEED_DEFAULT_LIMIT && (
-                            <Button
-                              label="Show all"
-                              variant="ghost"
-                              onClick={() => setShowAllActivity(true)}
-                            />
-                          )}
-                      </VStack>
-                    )}
-                  </div>
-                </VStack>
+                <Card>
+                  <VStack gap={3}>
+                    <Heading level={2} id={activityFeedHeadingId}>
+                      Activity feed
+                    </Heading>
+                    <div role="group" aria-labelledby={activityFeedHeadingId}>
+                      {dashboardData === null ? (
+                        <EmptyState
+                          headingLevel={3}
+                          title="No activity yet"
+                          description="Signups, drops, and check-offs will show up here."
+                        />
+                      ) : visibleActivityFeedEntries.length === 0 ? (
+                        <EmptyState
+                          headingLevel={3}
+                          title="No activity yet"
+                          description="Signups, drops, and check-offs will show up here."
+                        />
+                      ) : (
+                        <VStack gap={3}>
+                          <List hasDividers>
+                            {visibleActivityFeedEntries.map((entry) => (
+                              <ActivityFeedRowItem key={entry.id} entry={entry} />
+                            ))}
+                          </List>
+                          {!showAllActivity &&
+                            activityFeedEntries.length > ACTIVITY_FEED_DEFAULT_LIMIT && (
+                              <Button
+                                label="Show all"
+                                variant="ghost"
+                                onClick={() => setShowAllActivity(true)}
+                              />
+                            )}
+                        </VStack>
+                      )}
+                    </div>
+                  </VStack>
+                </Card>
               </Grid>
 
               <Divider />

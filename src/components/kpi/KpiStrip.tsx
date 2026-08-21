@@ -115,8 +115,30 @@
  *    hardcoded color anywhere in this file, grep-provable) -- same "no
  *    custom CSS" discipline every other component in this codebase
  *    follows.
+ *
+ * 7. GAM-438 -- presentation-only restructure to match the production
+ *    tracker's visual language (`CoachHome.tsx`'s own module doc #16 is the
+ *    fuller writeup this file's own worker packet points at; summarized
+ *    here since that file is not imported from). Every KPI tile gets a
+ *    subtle top-to-bottom background gradient over its normal border
+ *    (production's `.metric-card`); the "% toward season goal" tile ALSO
+ *    gets an accent-tinted border on top (production's `.accent-card`) --
+ *    the other three tiles stay at the plain gradient treatment, no accent.
+ *    Mechanism: `Card`'s own documented `style` prop (`Card.d.ts`), NOT
+ *    `xstyle`/`stylex.create()` -- **F-2** (`VOLT_UX_Craft_PRD_v3.md:55-60`,
+ *    binding, installed-source-verified) establishes `stylex.create()`
+ *    throws at runtime in this app (no StyleX plugin in `vite.config.ts`),
+ *    re-confirmed live for this task with a throwaway probe against the
+ *    real installed `@stylexjs/stylex` package. `style` is merged in AFTER
+ *    StyleX's own classes (`mergeProps.ts`), so it reliably wins with no
+ *    `!important` needed -- same mechanism `CoachHome.tsx`'s own module doc
+ *    #16(d), `OutreachList.tsx`/T131, and `GoalBar.tsx` already use for the
+ *    identical reason. `KPI_TILE_GRADIENT_STYLE`/`KPI_GOAL_ACCENT_STYLE`
+ *    below reference only this app's own existing `--color-background-*`/
+ *    `--color-accent-muted` custom properties (`theme.css:203-207`) --
+ *    never a hardcoded hex literal.
  */
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import {
   Banner,
   Button,
@@ -301,6 +323,7 @@ function KpiStripContent({
           label="% toward season goal"
           value={`${data.goalPct}%`}
           secondary={formatGoalTarget(data)}
+          accent
         />
       </Grid>
     </Section>
@@ -308,20 +331,41 @@ function KpiStripContent({
 }
 
 // ---------------------------------------------------------------------------
-// Tile + skeleton -- module doc #5.
+// Tile + skeleton -- module doc #5, styling per module doc #7 (F-2: `style`,
+// not `xstyle`).
 // ---------------------------------------------------------------------------
+
+/** Plain KPI-tile treatment -- module doc #7. Both stops are this app's own
+ * existing `--color-background-*` custom properties (`theme.css:203-205`) --
+ * never a hardcoded hex literal. */
+const KPI_TILE_GRADIENT_STYLE: CSSProperties = {
+  background:
+    'linear-gradient(180deg, var(--color-background-card), var(--color-background-muted))',
+};
+
+/** The "% toward season goal" tile only -- module doc #7. `--color-accent-
+ * muted` is already the accent pre-mixed to ~20-25% alpha (`theme.css:207`)
+ * -- used verbatim for both the border color and the gradient's accent
+ * stop, never a hand-copied hex. */
+const KPI_GOAL_ACCENT_STYLE: CSSProperties = {
+  background: 'linear-gradient(180deg, var(--color-accent-muted), var(--color-background-card))',
+  borderColor: 'var(--color-accent-muted)',
+};
 
 function KpiTile({
   label,
   value,
   secondary,
+  accent = false,
 }: {
   label: string;
   value: string;
   secondary: string;
+  /** GAM-438: the "% toward season goal" tile only (module doc #7). */
+  accent?: boolean;
 }): ReactNode {
   return (
-    <Card>
+    <Card style={accent ? KPI_GOAL_ACCENT_STYLE : KPI_TILE_GRADIENT_STYLE}>
       <VStack gap={1}>
         <Heading level={4}>{label}</Heading>
         <Heading level={2}>{value}</Heading>
