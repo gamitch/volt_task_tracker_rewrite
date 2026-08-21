@@ -40,3 +40,9 @@ holding that subagent.*
   only, with no `RequireRole`; `SeasonSettings.tsx` has three `RequireRole`
   wraps, not one; and `src/lib/supabase/loaders/seasons.test.ts` does not
   exist. Found by checking before submitting, which is the point of 19c.
+- **05:17Z — DISPATCHED `checker-premise` (opus pin, round 1 of a 2-round cap
+  under item 19a), `run_in_background: false`.** Target:
+  `docs/swarm/active/GAM-439-worker-packet.md`. Charter §0 — attack the
+  five-entry Least confident decisions list first.
+  *If this line is the last one in this file, the run died holding this
+  subagent.*
