@@ -80,3 +80,24 @@ before any worker was dispatched.
    after collapse), confirming those tests actually guard the icon prop
    rather than passing vacuously. Restored the file; tree confirmed clean
    against HEAD before continuing.
+
+7. **Live-browser accessibility check** · 2026-08-21 · installed Playwright
+   Chromium, started the `e2e-personas` harness (needed `sudo` for the
+   scratch-postgres data dir chown in this sandbox), wrote
+   `tests/e2e-personas/gam-437-sidenav-icons.spec.ts`, and confirmed against
+   the real production bundle (signed in as `admin@volt.test`) that all 7
+   side-nav items resolve by accessible name (`getByRole('link', { name })`)
+   both expanded and after clicking the nav's own collapse toggle. 1 passed.
+   Screenshots committed (`437-expanded.png`, `437-collapsed.png`) — visually
+   confirm 7 distinct icons, no overlap, 16px labels. One sandbox-only note:
+   `vite preview` binds `[::1]` not `127.0.0.1` here, worked around by
+   starting preview manually with `--host 127.0.0.1` before Playwright's
+   `reuseExistingServer` picked it up; no shared harness file touched. Tore
+   down the harness afterward (`stop.sh`, confirmed cluster + `.env.e2e`
+   removed).
+
+8. **PR finalized** · 2026-08-21 · gate-run re-run clean at final commit
+   `e105c03` (all 6 PASS, 2598/42 tests). PR body updated with real gate
+   output, the mutation-replay table, and the live-browser evidence; PR #219
+   moved out of draft (`gh pr ready 219`). Proceeding to move the Linear
+   issue to `In Review` with the close-out comment next.
