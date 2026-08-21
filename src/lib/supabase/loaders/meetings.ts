@@ -180,6 +180,43 @@
  * T510/T605), not a claim about where it lives today -- left as-is per
  * constitution item 30c rather than rewritten out from under the reasoning
  * it recorded.
+ *
+ * -----------------------------------------------------------------------
+ * GAM-446: a seventh query, `queryEventAttendance`, added to the SAME
+ * `Promise.all` batch inside `makeLoadCoachMeetingsData` (one batch, not a
+ * second round trip) -- against `v_event_attendance` (GAM-442's view,
+ * `supabase/migrations/20260821000000_meetings_event_attendance_view.sql`).
+ * `makeLoadCoachMeetingsData` does NOT construct `CoachMeetingRow[]` itself;
+ * `buildCoachMeetingRows` (`../../meetings/coachModel.ts`, untouched by this
+ * task) still does that, unmodified. This task instead merges the view's
+ * five per-event fields onto `buildCoachMeetingRows`' own RETURNED array,
+ * here, KEYED BY `eventId` -- never by array position, since the view's row
+ * order has no guaranteed relationship to that returned array's order.
+ *
+ * `held_ct` counts SESSIONS; every other column (`gradedMarksCt`,
+ * `excusedCt`, `attendedMarksCt`) counts MARKS -- the view's own catalog
+ * comment states this in capitals, and this merge does not conflate them
+ * either. `attendancePct` passes through NULL unchanged (never `?? 0`, never
+ * widened to a bare `number`) -- constitution item 3 / PRD DATA-01, the same
+ * discipline this file's own `mapParticipationDbRow` above already
+ * established for `participation_pct`.
+ *
+ * The real edge case here is NOT a missing view row (the view LEFT joins, so
+ * every `events.id` gets one) -- it is the inverse: `coachModel.ts`'s own
+ * `if (eventSessions.length === 0) continue` means a zero-session event
+ * never becomes a `CoachMeetingRow` at all, and only `type === 'meeting'`
+ * events become rows in the first place. Extra `v_event_attendance` rows
+ * with no matching `CoachMeetingRow` are simply unused. A row whose event id
+ * is somehow absent from the view keeps these five fields `undefined` --
+ * never a fabricated `0`.
+ *
+ * Cut from this ticket (gate findings, `docs/swarm/active/GAM-446-packet.md`
+ * revision 2): per-series roster size (no PRD authority, no working
+ * `student_teams` writer on `main` yet -- filed as GAM-471) and a second
+ * `listGuardianChildren` loader (`makeLoadLinkedStudents`/
+ * `loadLinkedStudents`, `loaders/checkin.ts`, already provides this shape --
+ * filed as GAM-472 for the pre-existing `lib -> pages` type-only edge it
+ * surfaced). Neither is built here.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
@@ -321,6 +358,25 @@ interface SeasonIdDbRow {
   id: string;
 }
 
+/** GAM-446 -- `v_event_attendance`'s (GAM-442) six real columns, one row per
+ * `events.id` (the view LEFT-joins, so a zero-session event still gets a
+ * row: `held_ct` 0, every mark count 0, `attendance_pct` NULL). Cited
+ * column-for-column against `supabase/migrations/
+ * 20260821000000_meetings_event_attendance_view.sql`'s own `create view`.
+ * `held_ct` counts SESSIONS; `graded_marks_ct`/`excused_ct`/
+ * `attended_marks_ct` count MARKS -- do not read one as implying the other
+ * (the view's own catalog comment, verbatim, in capitals). */
+interface EventAttendanceDbRow {
+  event_id: string;
+  held_ct: number;
+  graded_marks_ct: number;
+  excused_ct: number;
+  attended_marks_ct: number;
+  /** NULL, never a fabricated 0, when the T509/D014 explicit-marks
+   * denominator is 0 (held sessions with no marks, or every mark excused). */
+  attendance_pct: number | null;
+}
+
 interface CreatedEventDbRow {
   id: string;
 }
@@ -388,6 +444,21 @@ function mapParticipationDbRow(row: ParticipationDbRow) {
   };
 }
 
+/** GAM-446 -- passthrough only. `attendancePct` carries `row.attendance_pct`
+ * through UNCHANGED -- never `?? 0`, never `Number(x) || 0` -- same
+ * discipline `mapParticipationDbRow` above already established for
+ * `participation_pct` (constitution item 3 / PRD DATA-01). */
+function mapEventAttendanceDbRow(row: EventAttendanceDbRow) {
+  return {
+    eventId: row.event_id,
+    heldCt: row.held_ct,
+    gradedMarksCt: row.graded_marks_ct,
+    excusedCt: row.excused_ct,
+    attendedMarksCt: row.attended_marks_ct,
+    attendancePct: row.attendance_pct,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Query functions (Trap #1).
 // ---------------------------------------------------------------------------
@@ -443,6 +514,20 @@ async function queryRsvps(client: SupabaseClient): Promise<LoaderQueryResult<Rsv
 async function queryStudents(client: SupabaseClient): Promise<LoaderQueryResult<StudentDbRow[]>> {
   const result = await client.from('students').select('id, display_name');
   return { data: (result.data as StudentDbRow[] | null) ?? null, error: result.error };
+}
+
+/** GAM-446 -- coach view, the seventh query in `makeLoadCoachMeetingsData`'s
+ * existing batch (module doc above). `v_event_attendance` (GAM-442) has no
+ * per-row RLS to speak of beyond the plain `revoke all from anon` that view's
+ * own migration sets -- an authenticated coach/admin session reads it same as
+ * any other authenticated table/view in this file. */
+async function queryEventAttendance(
+  client: SupabaseClient,
+): Promise<LoaderQueryResult<EventAttendanceDbRow[]>> {
+  const result = await client
+    .from('v_event_attendance')
+    .select('event_id, held_ct, graded_marks_ct, excused_ct, attended_marks_ct, attendance_pct');
+  return { data: (result.data as EventAttendanceDbRow[] | null) ?? null, error: result.error };
 }
 
 /** Student/parent view -- explicit `student_id` filter, defense-in-depth on
@@ -895,7 +980,7 @@ export const saveMeetingSeries: OnSaveMeetingSeriesFn = makeSaveMeetingSeries();
 // ---------------------------------------------------------------------------
 
 /** Coach view real load (Trap #1; T122 module doc above item b adds
- * `rsvps`/`students`). */
+ * `rsvps`/`students`; GAM-446 module doc above adds `v_event_attendance`). */
 export function makeLoadCoachMeetingsData(
   getClient: () => SupabaseClient = getSupabaseClient,
 ): LoadCoachMeetingsDataFn {
@@ -905,25 +990,61 @@ export function makeLoadCoachMeetingsData(
   const loadAttendanceRows = createLoader<void, AttendanceDbRow[]>(queryAttendance, getClient);
   const loadRsvpRows = createLoader<void, RsvpDbRow[]>(queryRsvps, getClient);
   const loadStudentRows = createLoader<void, StudentDbRow[]>(queryStudents, getClient);
+  // GAM-446 -- the seventh query, same `createLoader` seam, same batch below.
+  const loadEventAttendanceRows = createLoader<void, EventAttendanceDbRow[]>(
+    queryEventAttendance,
+    getClient,
+  );
   return async (): Promise<CoachMeetingsData> => {
-    const [eventRows, sessionRows, teamRows, attendanceRows, rsvpRows, studentRows] =
-      await Promise.all([
-        loadEventRows(),
-        loadSessionRows(),
-        loadTeamRows(),
-        loadAttendanceRows(),
-        loadRsvpRows(),
-        loadStudentRows(),
-      ]);
+    const [
+      eventRows,
+      sessionRows,
+      teamRows,
+      attendanceRows,
+      rsvpRows,
+      studentRows,
+      eventAttendanceRows,
+    ] = await Promise.all([
+      loadEventRows(),
+      loadSessionRows(),
+      loadTeamRows(),
+      loadAttendanceRows(),
+      loadRsvpRows(),
+      loadStudentRows(),
+      loadEventAttendanceRows(),
+    ]);
+    const rows = buildCoachMeetingRows(
+      (eventRows ?? []).map(mapEventDbRow),
+      (sessionRows ?? []).map(mapSessionDbRow),
+      (teamRows ?? []).map(mapTeamDbRow),
+      (attendanceRows ?? []).map(mapAttendanceDbRow),
+      (rsvpRows ?? []).map(mapRsvpDbRow),
+      (studentRows ?? []).map(mapStudentDbRow),
+    );
+    // GAM-446 (module doc above) -- merge onto `buildCoachMeetingRows`' own
+    // RETURNED array, KEYED BY `eventId`, never by array position: the
+    // view's row order has no guaranteed relationship to `rows`' own order.
+    const eventAttendanceByEventId = new Map(
+      (eventAttendanceRows ?? [])
+        .map(mapEventAttendanceDbRow)
+        .map((eventAttendance) => [eventAttendance.eventId, eventAttendance] as const),
+    );
     return {
-      rows: buildCoachMeetingRows(
-        (eventRows ?? []).map(mapEventDbRow),
-        (sessionRows ?? []).map(mapSessionDbRow),
-        (teamRows ?? []).map(mapTeamDbRow),
-        (attendanceRows ?? []).map(mapAttendanceDbRow),
-        (rsvpRows ?? []).map(mapRsvpDbRow),
-        (studentRows ?? []).map(mapStudentDbRow),
-      ),
+      rows: rows.map((row) => {
+        const eventAttendance = eventAttendanceByEventId.get(row.eventId);
+        // No fabricated `0`/`null` for a row whose event id is somehow
+        // absent from the view (module doc above) -- these five fields
+        // simply stay `undefined` on that row.
+        if (eventAttendance === undefined) return row;
+        return {
+          ...row,
+          attendancePct: eventAttendance.attendancePct,
+          heldCt: eventAttendance.heldCt,
+          gradedMarksCt: eventAttendance.gradedMarksCt,
+          attendedMarksCt: eventAttendance.attendedMarksCt,
+          excusedCt: eventAttendance.excusedCt,
+        };
+      }),
       // T147 -- `teamRows` was already fetched (above, in this same
       // `Promise.all` batch) for `buildCoachMeetingRows`'s own per-row
       // team-scope label; it never left this function until now. No new
