@@ -1949,6 +1949,76 @@ describe('<CoachHome /> T129 UXC-01 -- exactly one heading per section, List/Emp
     const { resolvedText: goalResolvedEmpty } = resolveAriaLabelledbyTarget(GOAL_PROJECTION_TITLE);
     expect(goalResolvedEmpty).toBe(GOAL_PROJECTION_TITLE);
   });
+
+  // -------------------------------------------------------------------
+  // GAM-456: Hours by team / Goal projection / Top events are now each
+  // wrapped in the same `Card` primitive already used for Next up/Activity
+  // feed/Leaderboard. Nested in this describe block (not a sibling one) so
+  // it can genuinely reuse `resolveAriaLabelledbyTarget` above -- that
+  // helper is a `function` declaration local to this describe's own
+  // callback closure, not module-scoped, so only code nested inside this
+  // same `describe(...)` can call it directly.
+  // -------------------------------------------------------------------
+  describe('GAM-456 -- Hours by team / Goal projection / Top events are each panelled in a Card', () => {
+    const NEWLY_PANELLED_SECTION_TITLES = [
+      'Hours by team',
+      GOAL_PROJECTION_TITLE,
+      'Top events by student hours',
+    ] as const;
+
+    it('each newly-panelled section resolves its role="group" region to a genuine .astryx-card ancestor', async () => {
+      renderAsUser(COACH_USER, {
+        loadData: fixtureLoadData,
+        loadDashboardData: fixtureLoadDashboardData,
+        nowFn: () => FIXTURE_REFERENCE_NOW,
+      });
+      await flushMicrotasks();
+
+      for (const title of NEWLY_PANELLED_SECTION_TITLES) {
+        const { headingId } = resolveAriaLabelledbyTarget(title);
+        const labelledEl = container.querySelector(
+          `[role="group"][aria-labelledby="${headingId}"]`,
+        );
+        expect(labelledEl).not.toBeNull();
+        expect(labelledEl!.closest('.astryx-card')).not.toBeNull();
+      }
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GAM-456: the page header's H1 is restored to the approved 46px/800
+// treatment, and the eyebrow to an uppercase/800/accent-orange treatment.
+// jsdom loads no real stylesheet in this project's test setup (this file's
+// own Leaderboard-`Card` comment, `:2919-2922` in CoachHome.tsx, already
+// documents that), so real CSS/custom-property resolution can't be checked
+// here -- but React writes `style` props straight through as an inline
+// `style` attribute, which jsdom *does* expose via `element.style.*`, so
+// that's what these assertions read.
+// ---------------------------------------------------------------------------
+describe('<CoachHome /> GAM-456 -- header H1/eyebrow restored to the approved 46px/800 size/weight treatment', () => {
+  it('the H1 carries the 46px/800 inline style, and the eyebrow carries the uppercase/800 inline style plus accent color', async () => {
+    renderAsUser(COACH_USER, {
+      loadData: fixtureLoadData,
+      loadDashboardData: fixtureLoadDashboardData,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+
+    const heading = Array.from(container.querySelectorAll('h1')).find(
+      (h) => h.textContent === 'Coach dashboard',
+    );
+    expect(heading).toBeTruthy();
+    expect(heading!.style.fontSize).toBe('2.875rem');
+    expect(heading!.style.fontWeight).toBe('800');
+
+    const eyebrow = Array.from(container.querySelectorAll('*')).find(
+      (el) => el.children.length === 0 && el.textContent === 'Fixture Active Season',
+    );
+    expect(eyebrow).toBeTruthy();
+    expect((eyebrow as HTMLElement).style.textTransform).toBe('uppercase');
+    expect((eyebrow as HTMLElement).style.fontWeight).toBe('800');
+  });
 });
 
 // ---------------------------------------------------------------------------
