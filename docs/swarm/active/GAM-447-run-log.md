@@ -68,44 +68,44 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   the delta to the SAME `checker-premise` agent (its context is intact, so the
   round-2 re-check is a delta verification rather than a fresh audit).
   **If this line is the last one in this file, the run died holding that subagent.**
-- 23:20Z — **`checker-premise` round 2 FAILED without a verdict** — the agent
+- 22:58Z — **`checker-premise` round 2 FAILED without a verdict** — the agent
   terminated on `API Error: 529 Overloaded`, a server-side fault, after
   re-reading the revised packet but before emitting VERDICT. This is not a
   REVISE and not a DISPATCH; it is a *missing* gate round, and it is recorded as
   such rather than rounded up to a pass. Round 1's verdict stands as the last
   real one: REVISE, all eight findings applied.
-- 23:21Z — Deadline arithmetic, done rather than guessed: PR credential dies
+- 22:58Z — Deadline arithmetic, done rather than guessed: PR credential dies
   23:40:44Z (~19 min). `git push` survives it (long-lived PAT in the
   extraheader) and so do Linear writes (`LINEAR_API_KEY`); `gh pr edit` and
   `gh pr ready` do not. Updating the PR body on GitHub NOW, before the work is
   finished, so the PR is informative even if the credential dies mid-run.
-- 23:24Z — PR #232's description on GitHub updated from the artifact (declaration
+- 22:59Z — PR #232's description on GitHub updated from the artifact (declaration
   re-checked: `OK declaration closes GAM-447`). It now carries the three premise
   findings, the tier defence, the item-27 Partial scope call and the declared
   item-19a deviation. It stays a **draft** — the work is not verified yet, and a
   ready flag on unverified work would be a lie.
-- 23:25Z — **RE-DISPATCHED `checker-premise` (round 2, fresh agent, delta-scoped)**
+- 22:59Z — **RE-DISPATCHED `checker-premise` (round 2, fresh agent, delta-scoped)**
   after the 529. Blocking on it with `run_in_background: false`. **If this line
   is the last one in this file, the run died holding this subagent.**
-- 23:27Z — **Round-2 re-dispatch ALSO died on `529 Overloaded`**, this time before
+- 23:04Z — **Round-2 re-dispatch ALSO died on `529 Overloaded`**, this time before
   doing any work at all. Two independent 529s in seven minutes: the API is
   overloaded right now, and this is infrastructure, not the packet. Item 19's
   DISPATCH verdict is therefore **unobtainable on this run**, and I am not going
   to invent one. Trying the worker dispatch next — if that also 529s, the
   orchestrator implements directly (a declared item-26 deviation) or the run
   stops and hands off, whichever the clock allows.
-- 23:38Z — **`worker-implementer` VERDICT: work delivered**, commit
+- 23:13Z — **`worker-implementer` VERDICT: work delivered**, commit
   `8869ee1` — `SeriesCard.tsx` 44 → 442 lines, new `SeriesCard.test.tsx` 319
   lines / 21 tests. No other file touched; `SeriesCard.css` and
   `SeriesEditPanel.tsx` deliberately not created (packet §3b/§3c/§5). Worker's
   self-reported exit codes: tsc 0, scoped vitest 0, eslint 0, prettier 0 — **not
   yet independently replayed; that is the orchestrator's next act.** Named
   mutation to replay: `'—'` → `'0%'` in `formatAttendanceText`.
-- 23:39Z — PR credential expires 23:40:44Z. PR #232 stays a **draft**: the run
+- 23:14Z — PR credential expires 23:40:44Z. PR #232 stays a **draft**: the run
   cannot mark it ready after that, and marking it ready *before* the gates ran
   would have been a false claim. Its description already carries the premise
   findings and the declared item-19a deviation. Pushes continue to work.
-- 23:57Z — **Gates run independently by the orchestrator, on the committed tree
+- 23:20Z — **Gates run independently by the orchestrator, on the committed tree
   (`--require-clean`), and they agree with the worker's report.**
 
   ```
@@ -126,7 +126,7 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   exactly one file and 21 tests; nothing disappeared. The 380 eslint warnings
   are the repo's standing `react-refresh/only-export-components` class — `npx
   eslint` on the two changed files alone emits **zero**.
-- 00:12Z — **Three mutations replayed by the orchestrator, in a detached worktree
+- 23:21Z — **Three mutations replayed by the orchestrator, in a detached worktree
   (item 23 — never the shared tree), each reverted and re-verified green.**
 
   | Mutation (`SeriesCard.tsx`) | Result |
@@ -139,13 +139,13 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   orchestrator's, chosen to attack the two claims a green suite is least likely
   to actually guard — the design's fixed-height promise and the contract a
   sibling ticket codes against. All three reverted cleanly; worktrees removed.
-- 00:14Z — **DISPATCHED `checker-reviewer`** on the actual diff. Item 26 does not
+- 23:21Z — **DISPATCHED `checker-reviewer`** on the actual diff. Item 26 does not
   require a checker round at STANDARD — this one is added deliberately because
   the item-19 premise gate never returned a DISPATCH verdict (two 529s), so an
   independent read of the artifact is the closest available substitute for the
   round that could not run. Blocking on it. **If this line is the last one in
   this file, the run died holding this subagent.**
-- 00:22Z — **`checker-reviewer` VERDICT: PASS**, highest severity MINOR — no
+- 23:27Z — **`checker-reviewer` VERDICT: PASS**, highest severity MINOR — no
   BLOCKER, no MAJOR. It confirmed the four orchestrator claims it could cheaply
   reach, confirmed no forbidden file was touched, and confirmed DATA-01 is clean
   (no division, multiplication or rounding anywhere in the component). It also
@@ -160,11 +160,11 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   selected ring is untested; MINOR-4 `aria-current` on an unnamed `role=generic`
   div likely announces nothing; MINOR-5 the exported function's JSDoc still says
   "Stub"; plus five NITs.
-- 00:23Z — **RE-DISPATCHED the same `worker-implementer`** (context intact) to fix
+- 23:27Z — **RE-DISPATCHED the same `worker-implementer`** (context intact) to fix
   the cheap MINORs and NITs in place rather than file five follow-up rows for
   work that is inside its own Allowed Files. Blocking. **If this line is the last
   one in this file, the run died holding this subagent.**
-- 00:36Z — **Fix round delivered**, commit `52362d3`: all 11 checker items applied,
+- 23:36Z — **Fix round delivered**, commit `52362d3`: all 11 checker items applied,
   `SeriesCard.tsx` 442 → 470 lines, tests 21 → 28. One **disclosed behavior
   change**, and it is the one thing on this branch a reader should look at
   twice: the worker could not pin the title clamp at `maxLines={1}` because
@@ -174,10 +174,10 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   height is fixed unconditionally either way, so this changes how much of a long
   title shows, not whether the card grows — but it is a behavior change made to
   make a guard testable, and it is disclosed rather than buried.
-- 00:37Z — **Gates re-run on `52362d3`, clean tree — all six PASS**: tsc 0, vite
+- 23:38Z — **Gates re-run on `52362d3`, clean tree — all six PASS**: tsc 0, vite
   build 0, format:check 0, eslint 0 errors / 380 standing warnings, full vitest
   109 files / **2661** tests vs the measured 2633 baseline (+28), scoped 28/28.
-- 00:38Z — **Two more mutations replayed** on the fix commit, isolated worktree,
+- 23:38Z — **Two more mutations replayed** on the fix commit, isolated worktree,
   both reverted:
 
   | Mutation | Result |
@@ -187,7 +187,7 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
 
   Five mutations total across the two commits, five reddened. The two guards the
   checker specifically called unpinned are now pinned, and I watched both fail.
-- 00:47Z — **Item-20 follow-ups filed**, to `Backlog` carrying `tier/unreviewed`
+- 23:40Z — **Item-20 follow-ups filed**, to `Backlog` carrying `tier/unreviewed`
   (never straight to `Todo` — promotion is the owner's signal, GAM-382):
   - **GAM-473** — the card's missing location / canceled count / hours / season
     span, framed as the decision it actually is (does the card carry supporting
@@ -203,3 +203,17 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   count, which additionally has a `student_teams` writer problem), **GAM-452**
   (the assembly that gives this component its first render site) and **GAM-460**
   (graded marks beside attendance %).
+- 23:42Z — **Timestamp correction, kept rather than quietly fixed.** Every entry
+  from 22:58Z onward originally carried a *guessed* clock time, and the guesses
+  drifted up to 45 minutes ahead of reality — the last four entries claimed
+  `00:xx` while the commits they describe are stamped `23:36`–`23:40`. They have
+  been rewritten to their own commit times (`git log --date=format:'%H:%M'`).
+  The `pr-body` skill warns about exactly this — "three runs in one session wrote
+  timestamps that disagreed with their own commit times" — and this run made it
+  four. The lesson is the cheap one: read the clock, do not estimate it.
+- 23:42Z — **PR credential confirmed dead by measurement, not by assumption.**
+  `gh pr edit 232` at 23:41:45Z → `HTTP 401: Bad credentials`, exactly 61 seconds
+  after the `exp` decoded at minute 1. `git push` in the same command succeeded.
+  PR #232 therefore stays a **draft** with a description written at 22:59Z;
+  `docs/swarm/active/GAM-447-pr-body.md` on this branch is the finished body and
+  says so in its own first paragraph. A human pastes it and clears the draft flag.
