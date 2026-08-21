@@ -306,3 +306,68 @@ State inherited and verified by this run, not assumed:
   worker, and this one also carries the load revision 3's decision put on it:
   it re-grades the criteria I transcribed without a gate round 3. **If this
   line is the last one in this file, the run died holding this subagent.**
+
+- **12:49Z — `checker-reviewer` returned: VERDICT PASS.** Subagent completed,
+  result in hand, nothing left in flight. Worked in its own worktree
+  `/tmp/gam443-check` (item 23), removed it, shared tree clean — verified.
+
+  **2 MINOR, 4 NIT — no BLOCKER, no MAJOR.** Under the constitution's decision
+  rules a MINOR passes **with a follow-up task**, so both are filed below.
+
+  It inspected the artifact rather than the summary, and re-measured
+  independently:
+  - **Boundary clean.** Exactly the four Allowed Files, +436/−204. It ran an
+    explicit sabotage check and confirmed `docs/swarm/**` was touched only by
+    my own run-log commits, never by `b7e9b1d`.
+  - **Move fidelity proved, not assumed.** A comment-stripped diff of the moved
+    region against `19070df`: 73 code lines old, 73 new, **exactly three
+    differences — the three permitted `export` keywords**. No silent behaviour
+    edit inside the "move", which is the defect this whole ticket exists to
+    prevent.
+  - **`buildScheduleChips` brute-forced against the spec.** It wrote its own
+    reference implementation from prescription 4's prose and diffed the two
+    over **356,209 legal inputs: 0 mismatches**, including every
+    `endMinutes: 1440` case. That is a far stronger result than the ten
+    prescribed cases, and it is what closes MAJOR-2 properly.
+  - **Both mutation counts reproduced a third time** — 2 and 10, named tests
+    matching, from an agent with no stake in the number.
+  - Gates re-run: `tsc` 0, `vite build` 0, `format:check` 0, eslint **0 errors**
+    / 380 warnings, full **2608 / 103 files**, scoped **151**.
+  - **All six doc-comment repairs verified true of the code beneath them**,
+    including the corrected `dates.ts` sentence — it re-read `dates.ts:41–42`
+    and confirmed the `[R3]` replacement text is accurate about the other
+    module. `MeetingsList.tsx`'s doc now correctly says "All three".
+  - It ruled on all three of the worker's reported discrepancies: grep count
+    **worker right, packet wrong**; three scoped `gate-run` calls **acceptable**
+    (`--scope` really is a single positional); eslint 380 **genuinely
+    pre-existing** — it measured 380 at the parent commit too, so the stale
+    number is `gate-run`'s documented 377.
+
+  It also disclosed one of its own errors rather than hiding it: a first
+  gate-6 call scoped only `format.test.ts` against the 141 baseline and printed
+  a FAIL, which it identified as its own scoping mistake and re-ran correctly.
+
+  **MINOR-1 — `endMinutes: 1440` with an AM start collapses to one meridiem**
+  (`Sat 12–12 AM`, `Sun 11:59–12 AM`; 720 legal inputs). **Faithful to the
+  packet** — revision 3 writes `Sat 12–12 AM` as correct — so it is my defect,
+  not the worker's, and the implementation was not free to differ. But it is
+  the same ambiguous-chip class the `RangeError` rationale exists to prevent,
+  and GAM-441 freezes this function next. Filed for decision before the freeze.
+  **MAJOR-2 fixed the `10 PM–12 AM` case and left its mirror image standing;
+  worth recording as the lesson, because that is twice now that this value has
+  been the one the spec got wrong.**
+
+  **MINOR-2 — the `RangeError` messages and validation order are unguarded.**
+  All three tests assert `toThrow(RangeError)` only, so a mutation collapsing
+  the field-naming messages stays green. The packet mandated message-free
+  assertion for the `startMinutes: 1440` case *only*; the other two are
+  assertable. Filed.
+
+  NIT ×4: a wrong tense in `format.ts:12–16` (reads as though `OutreachList`'s
+  copies were removed here — they were not); the packet's own "expect three
+  grep hits" miscount; `gate-run`'s stale 377; and `buildScheduleChips` having
+  no caller yet — which the checker correctly ruled is **not** an item-27
+  finding, since it is an internal seam with no user-visible surface, and the
+  surfaces this task does touch still render real loader data through the moved
+  formatters (the two mutation replays being the proof the live path resolves
+  through `format.ts`).
