@@ -134,7 +134,6 @@ test.describe('GAM-456 coach dashboard panel consistency', () => {
         })),
       };
     });
-    // eslint-disable-next-line no-console -- printed for the run report, not app code.
     console.log('[GAM-456] scroll-container measurement', measured);
 
     // Two `.astryx-layout-content` elements exist on this route (module doc
@@ -193,7 +192,6 @@ test.describe('GAM-456 coach dashboard panel consistency', () => {
       heading.evaluate((el) => getComputedStyle(el).fontSize),
       heading.evaluate((el) => getComputedStyle(el).fontWeight),
     ]);
-    // eslint-disable-next-line no-console
     console.log('[GAM-456] H1 computed style', { rootFontSize, fontSize, fontWeight });
 
     // `COACH_HOME_TITLE_STYLE.fontSize` is `2.875rem`, which is 46px ONLY if
@@ -227,7 +225,6 @@ test.describe('GAM-456 coach dashboard panel consistency', () => {
       eyebrow.evaluate((el) => getComputedStyle(el).fontWeight),
       eyebrow.evaluate((el) => getComputedStyle(el).color),
     ]);
-    // eslint-disable-next-line no-console
     console.log('[GAM-456] eyebrow computed style', {
       eyebrowText,
       textTransform,
@@ -327,7 +324,6 @@ test.describe('GAM-456 coach dashboard panel consistency', () => {
     // test reports what actually renders rather than forcing the card to
     // appear.
     const seasonSetupCount = await page.getByText('Season setup', { exact: true }).count();
-    // eslint-disable-next-line no-console
     console.log('[GAM-456] admin "Season setup" match count under current seed', seasonSetupCount);
 
     await page.screenshot({
