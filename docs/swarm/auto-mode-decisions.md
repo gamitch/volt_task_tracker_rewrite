@@ -4294,3 +4294,75 @@ exemption, and the rework costs more than the entries do.
 - **The progress-bar accent.** `theme.css` pins `.astryx-progressbar.accent` to `#0074e2`
   independently of `--color-accent`, so the goal bar renders blue today and will keep rendering
   blue under an orange theme unless that pin is changed deliberately.
+
+## 2026-08-21 — George approves the `/meetings` card redesign, and rules on six details
+
+Recorded by the GAM-441 run. The design session that produced these is the same day as
+the brand-accent/`lucide-react` session recorded above, but a separate subject: the
+approved design canvas is attached to GAM-441, and eleven sibling tickets
+(GAM-442…452, label `meetings-redesign`) build against it.
+
+The binding text is the **dated deviation blockquote above MTG-01** in
+`docs/swarm/VOLT_Portal_PRD.md` (MTG-01a…h), plus the §7.1 route row and the
+scoped supersession pointers on UXC-02/UXC-07 in `VOLT_UX_Craft_PRD_v3.md`. This
+entry is the decision record; **the PRD is the authority** (item 1). Where the two
+ever disagree, the PRD wins and this entry is the bug.
+
+### The rulings
+
+1. **Tap-to-cycle attendance chip is authorized** — with binding accessibility
+   requirements, not as a preference. Real `<button>`; accessible name = student
+   name + current status; state change announced via `aria-live`; ≥44px target.
+   The point of writing it down: `checker-accessibility` must grade against
+   *this*, and must not fail a compliant chip on the grounds that a
+   `SegmentedControl` would have been a more familiar control. MTG-13 already
+   makes attendance editable after completion, so this changes presentation only —
+   it grants no new edit authority to anyone.
+2. **Relative-date chips ("Today", "in 3 days") are BEH-08 wayfinding, not
+   item-17 countdown mechanics.** They describe a date the user already navigated
+   to. **Item 17 is not relaxed by one inch** — no streaks, no scarcity, no
+   loss-aversion framing, no re-engagement hooks, and nothing that manufactures
+   urgency about a *missed* session. If a chip ever starts counting *down* to
+   create pressure rather than *stating* when something is, it has crossed the
+   line this ruling draws.
+3. **Cross-series overlap gets badges only — no page-level banner.** Two series
+   meeting at the same time is intentional on this team (FLL Team and FLL–Library
+   both meet Thursdays 4–6 PM all season). A banner would nag about a deliberate
+   arrangement every single visit. Badges go on the series card, the session row
+   and the agenda item. Touching intervals (4–6 PM then 6–8 PM) are **not** an
+   overlap.
+4. **Series identity color is assigned deterministically from a curated palette,
+   keyed on the event id.** No DB column, no picker. A color is a rendering
+   detail; making it data would mean a migration, an editor, and a way for a coach
+   to pick an inaccessible contrast pair.
+5. **Rail↔card deep-link is in-memory focus state.** URL parameters are a possible
+   follow-up and are deliberately not required now.
+6. **A series with no scheduled sessions remaining lands under "Finished".**
+
+### What is NOT settled by these rulings
+
+- **The curated palette itself.** Ruling 4 fixes the *mechanism* (deterministic,
+  keyed on event id) and not the hues. GAM-444 pre-declares eight
+  `--color-series-N` slots in `src/theme/volt.ts`; the values, and their contrast
+  behaviour in both themes, are still open. Note the interaction with the same-day
+  brand-accent ruling above: once the accent is orange, a series hue near orange
+  will read as "selected" rather than as an identity — the same trap D020 names for
+  the competition badge.
+- **The two reference figures.** GAM-441 required the canvas's "Coach — Meetings"
+  and "Student & Parent — Meetings" artboards to be committed as the binding craft
+  standard. **They are not in this commit** — the canvas is a claude.ai artifact
+  and the dispatched run could not reach its contents (SPA shell; `/api/artifacts`
+  403). The run declined to re-draw them rather than manufacture an approved-looking
+  standard, and filed the export as **GAM-453**. **Until GAM-453 lands there is no
+  figure to grade meetings craft against** — the `meetings-design` skill says so at
+  its top rather than pointing at a file that is not there. The skill itself is
+  **GAM-454**: this run could not write under `.claude/**`, so it is preserved as a
+  verified applyable patch (`git apply --check` exit 0) rather than a live file.
+  *(Correction, same run: an earlier draft of this entry said the export had been
+  filed as its own row before any row existed. The premise gate queried Linear,
+  found nothing, and graded it MAJOR — item 20's own failure shape, committed by the
+  entry citing item 20. GAM-453 and GAM-454 were filed in response.)*
+- **Whether MTG-01's superseded text should eventually be struck rather than
+  amended.** House style is additive amendment (item 1's precedence chain depends
+  on the trail), so MTG-01's original text is intact and will stay intact unless
+  the owner rules otherwise.
