@@ -72,7 +72,7 @@ taken from the issue text (item 30c / AGENTS.md orientation step 6):
 | MTG-01 at ~:294 specifies `Section` "Upcoming"/"Past" + per-session `Item` rows | `VOLT_Portal_PRD.md:294`, exact | **holds** |
 | §7.1 `/meetings` row at ~:389 lists `Section, Item, Badge` | `:389` — <code>\| `/meetings` \| all \| List page \| `Section`, `Item`, `Badge` \| MTG-01, MTG-14 \|</code> | **holds** |
 | Edit-chip dated-blockquote amendment precedent at ~:286 | blockquote spans `:287–292`, owner-attributed, dated 2026-07-28 | **holds** (off by one line) |
-| `docs/swarm/figures/ux-craft/` exists; `old-*.webp` are the prior standard | 71 figures; 8 `old-*.webp` present | **holds** |
+| `docs/swarm/figures/ux-craft/` exists; `old-*.webp` are the prior standard | 70 figures; 8 `old-*.webp` present (run log first said 71 — corrected per gate NIT-2) | **holds** |
 | No `meetings-design` skill exists | `.claude/skills/` has 11 skills, none named `meetings-design` | **holds** |
 | MTG-13 keeps attendance editable post-completion | `:310`, explicit, plus a 2026-08-03 owner ruling | **holds** |
 | BEH-08 is date-rendering wayfinding | `:252` | **holds** |
@@ -101,7 +101,7 @@ Re-drawing them would manufacture a **binding craft standard the owner never
 approved**, which eleven sibling tickets and every `checker-accessibility` round
 would then be graded against — strictly worse than having no figure, because it
 launders an agent's guess into the authority position. Deliverable 3 is therefore
-**declined, not attempted**, and filed as its own row under item 20. Deliverables
+**declined, not attempted**. (Round 1 of the gate caught that this sentence originally claimed the row was already filed when it was not — it is now **GAM-453**.) Deliverables
 1, 2 and 4 are unaffected and ship in full.
 
 ### Finding B — UXC-02/UXC-07 are in a different PRD, and it is not in Allowed Files

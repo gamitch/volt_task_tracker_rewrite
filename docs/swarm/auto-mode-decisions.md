@@ -4353,9 +4353,15 @@ ever disagree, the PRD wins and this entry is the bug.
   standard. **They are not in this commit** — the canvas is a claude.ai artifact
   and the dispatched run could not reach its contents (SPA shell; `/api/artifacts`
   403). The run declined to re-draw them rather than manufacture an approved-looking
-  standard, and filed the export as its own row. **Until that row lands, there is no
-  figure to grade meetings craft against** — `.claude/skills/meetings-design` says
-  so at its top rather than pointing at a file that is not there.
+  standard, and filed the export as **GAM-453**. **Until GAM-453 lands there is no
+  figure to grade meetings craft against** — the `meetings-design` skill says so at
+  its top rather than pointing at a file that is not there. The skill itself is
+  **GAM-454**: this run could not write under `.claude/**`, so it is preserved as a
+  verified applyable patch (`git apply --check` exit 0) rather than a live file.
+  *(Correction, same run: an earlier draft of this entry said the export had been
+  filed as its own row before any row existed. The premise gate queried Linear,
+  found nothing, and graded it MAJOR — item 20's own failure shape, committed by the
+  entry citing item 20. GAM-453 and GAM-454 were filed in response.)*
 - **Whether MTG-01's superseded text should eventually be struck rather than
   amended.** House style is additive amendment (item 1's precedence chain depends
   on the trail), so MTG-01's original text is intact and will stay intact unless

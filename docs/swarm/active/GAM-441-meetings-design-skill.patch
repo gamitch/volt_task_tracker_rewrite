@@ -2,10 +2,11 @@ From: claude[bot] <noreply@anthropic.com>
 Subject: [PATCH] GAM-441: author the meetings-design skill
 
 Preserved as an applyable patch because this dispatched run cannot write under
-.claude/**. Apply with:  git apply docs/swarm/active/GAM-441-meetings-design-skill.patch
+.claude/**. Tracked by GAM-454. Apply with:
+  git apply docs/swarm/active/GAM-441-meetings-design-skill.patch
 ---
- .claude/skills/meetings-design/SKILL.md | 159 ++++++++++
- 1 file changed, 159 insertions(+)
+ .claude/skills/meetings-design/SKILL.md | 180 ++++++++++
+ 1 file changed, 180 insertions(+)
  create mode 100644 .claude/skills/meetings-design/SKILL.md
 
 diff --git a/.claude/skills/meetings-design/SKILL.md b/.claude/skills/meetings-design/SKILL.md
@@ -13,7 +14,7 @@ new file mode 100644
 index 0000000..1111111
 --- /dev/null
 +++ b/.claude/skills/meetings-design/SKILL.md
-@@ -0,0 +1,159 @@
+@@ -0,0 +1,180 @@
 +---
 +name: meetings-design
 +description: The shared design contract for the /meetings card redesign — series palette, schedule-chip format, "Today" labeling, overlap badges, DES-05 status colors, the tap-to-cycle a11y contract, and the frozen type names every parallel ticket codes against. Use before writing or reviewing any code under src/pages/meetings/** or src/lib/meetings/**, and before grading meetings work as a checker. Also use whenever you are about to invent a formatter, a color, or a props shape that a sibling ticket has already frozen.
@@ -56,10 +57,10 @@ index 0000000..1111111
 +| What | Where it lives | Frozen by |
 +| -- | -- | -- |
 +| `formatWeekdayDate`, `formatTimeRangeWithDuration`, `formatDuration`, `formatHoursLabel`, `buildRecurrenceChips`, `buildDateRangeLabel` | `src/lib/meetings/format.ts` | GAM-443 |
-+| `buildScheduleChips(rules)` | `src/lib/meetings/format.ts` | GAM-443 |
++| `buildScheduleChips(rules)` | `src/lib/meetings/format.ts` | GAM-443 (output); **input shape frozen by GAM-444** in `types.ts`) |
 +| `SeriesCardModel`, `MeetingsFocusRequest`, `OverlapIndex` | `src/lib/meetings/types.ts` | GAM-444 |
 +| `CoachMeetingRow`, `CoachMeetingSessionDetail`, `CoachMeetingsData`, `StudentMeetingsData`, `StudentMeetingHistoryRow`, `StudentParticipationMetric`, `CurrentViewerIdentity` | `src/lib/meetings/types.ts` | GAM-444 |
-+| `buildOverlapIndex` | `src/lib/meetings/overlap.ts` | GAM-450 |
++| `buildOverlapIndex` | `src/lib/meetings/overlap.ts` | GAM-450 freezes the *behaviour*; **the name is frozen here** — GAM-450 calls it only "the index builder" |
 +| `--color-series-1…8` | `src/theme/volt.ts` | GAM-444 |
 +
 +`MeetingsFocusRequest` is exactly `{ eventId: string; sessionId?: string; monthKey?: string }`.
@@ -87,10 +88,20 @@ index 0000000..1111111
 +
 +**They are not countdowns, and constitution item 17 is not relaxed.** No streaks,
 +no scarcity, no loss-aversion framing, no re-engagement hooks, nothing that
-+manufactures urgency about a session already missed. The test: if a chip's wording
-+would still make sense to a volunteer who simply has not looked at the page in a
-+week, it is wayfinding. If it is trying to make them feel something about that, it
-+is not — and users here are minors and volunteers.
++manufactures urgency about a session already missed. Users here are minors and
++volunteers.
++
++Item 17 is BLOCKER-graded, so the test has to be mechanical rather than a matter of
++taste. **A chip is compliant when all five hold:**
++
++1. computed **once at render** from a Chicago calendar date;
++2. **no timer, interval or re-render tick** driving it;
++3. **no unit finer than a day** — never hours, never minutes, never seconds;
++4. **never rendered on a past or missed session**;
++5. wording states when a thing **is**, never what was lost.
++
++BEH-04 is the precedent and it is already settled practice: a neutral computed
++count `Badge`, never error/red, never urgency copy.
 +
 +BEH-08 also requires dates to carry weekday names (`Sat, Jul 25`) and schedules to
 +show computed counts and durations.
@@ -170,6 +181,17 @@ index 0000000..1111111
 +- **Astryx props come only from `docs/swarm/astryx-api.md`** (item 2). A prop that
 +  is not in that file is presumed hallucinated → MAJOR. Styling escalation follows
 +  DES-21: component → theme token → `xstyle` → custom CSS.
++- **`ConsistencyStrip` is NOT file-disjoint — check before you touch it.** It and
++  its types (`ConsistencyStripData`, `ConsistencySession`,
++  `ConsistencyAttendanceRecord`, `ConsistencyStripEntry`) are exported from
++  `src/pages/meetings/StudentMeetingView.tsx` and imported by
++  `src/pages/home/ParentHome.tsx:402`, `src/lib/supabase/loaders/checkin.ts:210`
++  and `MeetingsList.tsx:602`. BEH-06 requires the strip to survive the redesign —
++  it **is** the student attendance summary. Absorbing or deleting it breaks two
++  modules outside this label group.
++- **Exactly one participation bar** in the student view. T180 deliberately deleted
++  the host's duplicate and `MeetingsList.test.tsx:2021` pins it. Adding a second is
++  a regression, not a feature.
 +- **First name + last initial** on any surface showing other students (item 6).
 +- **No internal jargon in user-facing copy** (UXC-10, BLOCKER) — no `T037`, no
 +  `GAM-nnn`, no `SeriesCardModel` leaking into a label.

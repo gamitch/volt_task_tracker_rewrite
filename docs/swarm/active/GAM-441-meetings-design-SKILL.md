@@ -40,10 +40,10 @@ ended up existing twice (GAM-443's whole reason for existing). Import:
 | What | Where it lives | Frozen by |
 | -- | -- | -- |
 | `formatWeekdayDate`, `formatTimeRangeWithDuration`, `formatDuration`, `formatHoursLabel`, `buildRecurrenceChips`, `buildDateRangeLabel` | `src/lib/meetings/format.ts` | GAM-443 |
-| `buildScheduleChips(rules)` | `src/lib/meetings/format.ts` | GAM-443 |
+| `buildScheduleChips(rules)` | `src/lib/meetings/format.ts` | GAM-443 (output); **input shape frozen by GAM-444** in `types.ts`) |
 | `SeriesCardModel`, `MeetingsFocusRequest`, `OverlapIndex` | `src/lib/meetings/types.ts` | GAM-444 |
 | `CoachMeetingRow`, `CoachMeetingSessionDetail`, `CoachMeetingsData`, `StudentMeetingsData`, `StudentMeetingHistoryRow`, `StudentParticipationMetric`, `CurrentViewerIdentity` | `src/lib/meetings/types.ts` | GAM-444 |
-| `buildOverlapIndex` | `src/lib/meetings/overlap.ts` | GAM-450 |
+| `buildOverlapIndex` | `src/lib/meetings/overlap.ts` | GAM-450 freezes the *behaviour*; **the name is frozen here** — GAM-450 calls it only "the index builder" |
 | `--color-series-1…8` | `src/theme/volt.ts` | GAM-444 |
 
 `MeetingsFocusRequest` is exactly `{ eventId: string; sessionId?: string; monthKey?: string }`.
@@ -71,10 +71,20 @@ Relative-date chips are **BEH-08 wayfinding**: `Today`, `Tomorrow`, `in 3 days`,
 
 **They are not countdowns, and constitution item 17 is not relaxed.** No streaks,
 no scarcity, no loss-aversion framing, no re-engagement hooks, nothing that
-manufactures urgency about a session already missed. The test: if a chip's wording
-would still make sense to a volunteer who simply has not looked at the page in a
-week, it is wayfinding. If it is trying to make them feel something about that, it
-is not — and users here are minors and volunteers.
+manufactures urgency about a session already missed. Users here are minors and
+volunteers.
+
+Item 17 is BLOCKER-graded, so the test has to be mechanical rather than a matter of
+taste. **A chip is compliant when all five hold:**
+
+1. computed **once at render** from a Chicago calendar date;
+2. **no timer, interval or re-render tick** driving it;
+3. **no unit finer than a day** — never hours, never minutes, never seconds;
+4. **never rendered on a past or missed session**;
+5. wording states when a thing **is**, never what was lost.
+
+BEH-04 is the precedent and it is already settled practice: a neutral computed
+count `Badge`, never error/red, never urgency copy.
 
 BEH-08 also requires dates to carry weekday names (`Sat, Jul 25`) and schedules to
 show computed counts and durations.
@@ -154,6 +164,17 @@ not outrank a later QR scan.
 - **Astryx props come only from `docs/swarm/astryx-api.md`** (item 2). A prop that
   is not in that file is presumed hallucinated → MAJOR. Styling escalation follows
   DES-21: component → theme token → `xstyle` → custom CSS.
+- **`ConsistencyStrip` is NOT file-disjoint — check before you touch it.** It and
+  its types (`ConsistencyStripData`, `ConsistencySession`,
+  `ConsistencyAttendanceRecord`, `ConsistencyStripEntry`) are exported from
+  `src/pages/meetings/StudentMeetingView.tsx` and imported by
+  `src/pages/home/ParentHome.tsx:402`, `src/lib/supabase/loaders/checkin.ts:210`
+  and `MeetingsList.tsx:602`. BEH-06 requires the strip to survive the redesign —
+  it **is** the student attendance summary. Absorbing or deleting it breaks two
+  modules outside this label group.
+- **Exactly one participation bar** in the student view. T180 deliberately deleted
+  the host's duplicate and `MeetingsList.test.tsx:2021` pins it. Adding a second is
+  a regression, not a feature.
 - **First name + last initial** on any surface showing other students (item 6).
 - **No internal jargon in user-facing copy** (UXC-10, BLOCKER) — no `T037`, no
   `GAM-nnn`, no `SeriesCardModel` leaking into a label.

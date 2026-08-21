@@ -307,7 +307,10 @@ export const voltTheme = defineTheme({
 >   **attendance %** across completed sessions; and a **next-session line**
 >   ("Next: Tue, Aug 26 · 6–8 PM", or the finished state). Cards are grouped by an
 >   **Active / Finished** `TabList`; a series with no scheduled sessions remaining
->   lands under **Finished**.
+>   lands under **Finished**. Per DES-08, start from the installed Astryx
+>   **`Card Grid`** template ("browsable grid … with tabs and filters") and adapt
+>   it — do not hand-build the grid. The attendance % is **DATA-01 passthrough**
+>   from the metric view (null → "—"), never computed in TypeScript.
 > - **MTG-01b Schedule drill-out.** Selecting a card opens a **month-tab schedule
 >   panel** listing that series' sessions for the selected month, with per-session
 >   status and the same edit/cancel affordances MTG-01's row expander carried. The
@@ -316,9 +319,43 @@ export const voltTheme = defineTheme({
 >   for the next meeting plus their own attendance summary and history, replacing
 >   the history table MTG-14 describes. Parents switch between linked students.
 >   Read-only, exactly as MTG-14 requires.
+>   - **BEH-06 survives inside the attendance summary and is not weakened.** The
+>     summary **is** the last-5 completed-meeting `StatusDot` consistency strip
+>     with the DES-05 mapping, and it carries MTG-14's **participation %**. No
+>     streaks, no counters, and excused students must never look like failures.
+>     Both percentages here and MTG-01a's attendance % are **DATA-01 passthrough
+>     from the metric views** (null → "—"), never re-derived in TypeScript.
+>   - **⚠️ THIS REVERSES PASSED WORK — disclosed as UXC-08 and UXC-04 require.**
+>     Parents today see **every** linked child's strip at once;
+>     `src/pages/meetings/StudentMeetingView.test.tsx:949-971` is green and pins
+>     that deliberately ("never assuming a single child"). MTG-01c's child
+>     switcher shows **one child at a time**, so that assertion is amended by this
+>     deviation. It also amends the student heading outline pinned at
+>     `src/pages/meetings/MeetingsList.test.tsx:2120`.
+>     **T180's single-participation-bar invariant is NOT relaxed** — 
+>     `MeetingsList.test.tsx:2021` asserts exactly one participation bar renders,
+>     T180 deliberately deleted the host's duplicate, and the redesigned view must
+>     still render exactly one. `ConsistencyStrip` and its types are exported from
+>     `StudentMeetingView.tsx` and imported by `src/pages/home/ParentHome.tsx:402`
+>     and `src/lib/supabase/loaders/checkin.ts:210` — check those call sites before
+>     absorbing or deleting it.
 > - **MTG-01d Right-rail calendar.** A month `Calendar` with a per-day agenda sits
 >   beside the cards. Rail↔card selection is **in-memory focus state**; URL
 >   parameters are a possible follow-up and are deliberately not required now.
+>   **This scopes rail↔card focus only — NAV-08's `/meetings/:sessionId` deep
+>   links and Copy link are unaffected and still required.**
+>   - **The Astryx `Calendar` is used as-is** for month navigation and day
+>     selection (`focusDate` / `onFocusDateChange` / `value`). Measured against the
+>     installed typings: it exposes **no `children`, no `renderDay`, and no per-day
+>     content or decoration slot**, and `astryx-api.md` documents only
+>     `data-selected` / `data-today` / `data-disabled` / `data-in-range` on
+>     `astryx-calendar-day`. **So series colour lives on the agenda items, not on
+>     the calendar day cells.** Any per-day marking is a DES-21 step-4 escalation
+>     and is **not authorized here** — raise it rather than reaching for an
+>     undocumented attribute, which item 2 presumes hallucinated → MAJOR.
+>   - The `Grouped Table` template's resizable detail panel (already used by
+>     `/roster` and `/reports` in §7) is the in-repo precedent for the rail split —
+>     start there rather than hand-building a splitter.
 > - **MTG-01e Series identity color.** Each series gets a color assigned
 >   **deterministically from a curated palette, keyed on the event id**. There is
 >   **no database column and no user-facing picker** — a color is a rendering
@@ -335,11 +372,25 @@ export const voltTheme = defineTheme({
 >   name + current status**; each state change is announced via `aria-live`; and
 >   the target is **≥44px**. `checker-accessibility` grades against *this ruling*
 >   — not against a preference for a `SegmentedControl` or any other control.
+>   **These four requirements are ADDITIVE and are NOT exhaustive.** This ruling
+>   narrows nothing: **DES-17, NFR-07 and constitution item 15 apply in full**,
+>   including DES-17's direct-set roll-call keys (`1`–`4` set Present / Late /
+>   Excused / Absent on the focused row), which a cycling control must not remove —
+>   forward-only traversal with no reverse is a keyboard-path failure, and item 15
+>   makes that a BLOCKER. The narrow thing this ruling settles is that a *compliant*
+>   chip may not be failed merely for being an unconventional control.
+>   **Cycle order is Present → Late → Excused → Absent → (unset)**, `Shift`-activation
+>   reverses, and **MTG-12's coach/admin-only restriction on `excused` is
+>   unchanged** — a student-facing surface must skip that stop.
 > - **MTG-01h Relative-date chips** ("Today", "in 3 days") are **BEH-08
 >   wayfinding, not constitution item-17 countdown mechanics.** They state a fact
 >   about a date the user already chose to look at; they create no deadline
 >   pressure, no scarcity and no re-engagement hook. Item 17 is unrelaxed —
 >   nothing here authorizes a countdown, a streak, or loss-aversion framing.
+>
+> **The route row amended for this deviation is the §7 screen inventory table**
+> (GAM-441 and its siblings call it "§7.1"; §7.1 is a later subsection — worth
+> knowing so eleven packets do not repeat the mislabel).
 >
 > **UXC-02 and UXC-07 (`docs/swarm/VOLT_UX_Craft_PRD_v3.md:77,:82`) are superseded
 > for `/meetings` only** — a card is not a row, so the `List`→`Table` migration and
@@ -365,7 +416,7 @@ export const voltTheme = defineTheme({
 - **MTG-12** Only coaches/admins may set `excused`.
 - **MTG-13 End meeting:** button → `AlertDialog` summary ("14 present · 2 late · 1 excused · 1 absent") → sets session `completed`, fills `absent` for roster members with no attendance row, sets `check_out_at = end_time` for open check-ins. Completed sessions feed MET-01/02. Attendance remains editable by coaches after completion — ~~(audit-logged)~~ **not audit-logged, deliberately** (owner ruling 2026-08-03; see DATA-02). Correcting attendance after a meeting has ended is a normal workflow for this team, not a fraud signal. Attribution is `attendance.recorded_by` + `attendance.updated_at` on the row.
 - **MTG-14 Student/parent meeting views:** `/meetings` for students = their own history (status per session) + participation %; parents see the same per linked student. Read-only.
-  - **⚠️ Presentation superseded 2026-08-21 by MTG-01c** (the dated deviation above MTG-01). The history *table* is replaced by a hero card for the next meeting plus an attendance summary and history list; parents switch between linked students. **Read-only is unchanged**, and so is every datum listed here.
+  - **⚠️ Presentation superseded 2026-08-21 by MTG-01c** (the dated deviation above MTG-01). The history *table* is replaced by a hero card for the next meeting plus an attendance summary and history list. **Read-only is unchanged**, and both data points named here — per-session status and participation % — survive. **One thing does change beyond presentation:** a parent now sees **one linked student at a time** via a switcher, where today all linked children render simultaneously. That reversal, and the green test pinning it, are disclosed in MTG-01c.
 
 ### 6.4 Outreach & volunteer hours
 
@@ -443,7 +494,7 @@ export const voltTheme = defineTheme({
 | `/login` | public | `Basic Login` | `TextInput type="email/password"`, `Button` | AUTH-02 |
 | `/accept-invite` | invited | Login Card pattern | — | AUTH-03 |
 | `/` | all | `Analytics Dashboard` (coach) / custom stacks | `Card`, `ProgressBar`, `List` | HOME-01…04 |
-| `/meetings` | all | Card page (2026-08-21 deviation; was: List page) | `Card`, `TabList`, `Calendar`, `Badge`, `ProgressBar` | MTG-01 as amended by MTG-01a…h, MTG-14 |
+| `/meetings` | all | `Card Grid` (2026-08-21 deviation; was: List page) | `Card`, `TabList`, `Calendar`, `Badge`, `ProgressBar` | MTG-01 as amended by MTG-01a…h, MTG-14 |
 | `/meetings/live/:sessionId` | coach/admin | custom 2-pane | `SegmentedControl`, `StatusDot`, QR | MTG-05…13 |
 | `/kiosk/:sessionId` | coach/admin | fullscreen | QR, tally | MTG-07 |
 | `/checkin` | student | fullscreen result | Bolt (DES-01) | MTG-08/09 |
