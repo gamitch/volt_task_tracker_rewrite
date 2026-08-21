@@ -266,3 +266,52 @@ Three staged commits, pushed as each lands, per packet §7.
 **If this line is the last one in this file, the run died holding this subagent** —
 check the branch for Stage A/B/C commits before assuming nothing landed, because
 the worker commits as it goes and its work may have outlived this log.
+
+## 2026-08-21T21:38Z — worker returned; existence and gates verified independently
+
+Three stage commits exist on the branch and on the remote — verified, not taken
+from the report (item 21): **827069b** Stage A, **269731b** Stage B, **6213afd**
+Stage C. `git ls-remote` confirms `6213afd` is the remote head. Tree clean.
+
+**Six gates, run by me on the committed SHA with `--require-clean`:**
+
+```
+GATE RUN — 6213afd on claude/gam-444-split-meetingslist — tree clean
+  1 tsc                        exit 0  PASS
+  2 vite build                 exit 0  PASS
+  3 format:check               exit 0  PASS
+  4 eslint                     exit 0  PASS       0 errors, 380 warnings
+  5 vitest (full)              exit 0  PASS       108 files / 2623 tests  baseline 2623 (+0)
+  6 vitest src/pages/meetings  exit 0  PASS       10 files / 347 tests
+VERDICT: PASS — all six gates exit 0
+```
+
+Scoped run over both packet directories (`src/pages/meetings src/lib/meetings`):
+**374 tests / 13 files**, against the packet's baseline of 374 / 9 — test count
+identical, four new files.
+
+**Criterion 2 verified independently by name, not by count.** I re-ran the
+merge-base suite in a throwaway worktree and diffed `assertionResults[].fullName`
+sets: **106 baseline names, 106 present after the split, 0 missing, 0 renamed.**
+This is the check that catches a silently deleted test; the count alone cannot,
+because Stage A legitimately adds test files.
+
+Criterion 1: `MeetingsList.tsx` is **193 lines** (≤200) and still carries
+`export default MeetingsList`, which `router.tsx:153` needs. Criterion 6: no
+forbidden path in `git diff --name-only bdfafcf..HEAD`; the only
+`src/lib/supabase/**` path touched is `loaders/meetings.ts`, which §3 carves out.
+
+## 2026-08-21T21:44Z — item-20 follow-up filed: **GAM-466**
+
+https://linear.app/gamitch/issue/GAM-466 — the deferred `--color-series-1…8`
+tokens, filed to `Backlog` with `tier/unreviewed` (per the pr-body skill: a row
+created directly in `Todo` is never dispatched, and promotion is the owner's
+signal). Written through the `linear-task-writing` skill under item 30.
+
+**It carries a second obligation this run could not discharge.** §8b assigned the
+`.claude/skills/meetings-design/SKILL.md` repair to me — its table row 31 still
+promises tokens GAM-444 does not ship. **My attempt to edit it was refused by
+this run's permission boundary** (`.claude/**` is not writable here), so the
+correction is handed over on GAM-466 rather than done. This is the same shape as
+`AGENTS.md` wall 1: an undeliverable half, named in the PR body rather than
+buried. The stale `SKILL.md:156` citation is folded into the same row.
