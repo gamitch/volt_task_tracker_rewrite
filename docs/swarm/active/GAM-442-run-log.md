@@ -294,3 +294,36 @@ on the same grounds.
   orchestrator, recorded below.
 
   No dispute filed. Worker did not self-certify. `checker-reviewer` next.
+
+- **11:44Z — orchestrator's own independent verification of the worker's work
+  (item 21: existence is verified, not assumed).**
+  `git diff --name-only main...HEAD` returns exactly the three §2 source files
+  plus this run's three orchestrator-owned `docs/swarm/active/` artifacts —
+  **no existing migration, no `src/**`, no `.github/workflows/**`.**
+  `git cat-file -p HEAD:supabase/migrations/20260821000000_…sql | wc -l` → 234,
+  so the change is in the **committed blob** and not merely in the worktree.
+  `git ls-tree` confirms the runner is mode `100755`. I also read the migration
+  in full and checked it against §4 by hand: `count(distinct es.id)` for
+  `held_ct`, `count(a.id)` everywhere else, `count(*)` absent from the view
+  body, `es.status='completed'` in the JOIN condition rather than a WHERE (so a
+  left join cannot drop the event row), and the `case … then null` branch with
+  no `greatest(...,1)` floor.
+
+- **11:46Z — PR body filled and pushed to PR #222 while the credential is
+  alive**, deliberately *before* the checker rather than after. Wall 3's real
+  variable is when the credential is *called*, and the checker round could run
+  past `12:09:33Z`. Doing it in this order means a credential death can cost at
+  most the draft flag, never the evidence.
+  `check.mjs` → `OK declaration closes GAM-442`.
+
+- **11:47Z — `checker-reviewer` DISPATCHED**, `model: "opus"` (item 18: it is
+  grading metric-view SQL and must be able to out-reason the worker),
+  `run_in_background: false`, orchestrator blocking on the result and not
+  ending its turn.
+
+  **If this line is the last one in this file, run 2 died holding this
+  subagent.** Unlike run 1's death, the work itself is safe: the migration is
+  committed at `fc202ef`/`8d84b05`, pushed, and PR #222 already carries the
+  full evidence body. What would be missing is only the independent grade, and
+  a resuming run should dispatch `checker-reviewer` against §4/§6 of the packet
+  and then close out — it must **not** re-run the worker.
