@@ -1,4 +1,15 @@
-# GAM-442 — worker packet (HEAVY) — **revision 2**
+# GAM-442 — worker packet (HEAVY) — **revision 3, GATED, dispatch-ready**
+
+> **Round 2 verdict, and why this is dispatchable.** The gate re-stood a cluster
+> and confirmed **both round-1 BLOCKERs closed by measurement** — a view written
+> to §4/§4.1 gives `held_ct = 2` where the fan-out gave 5, and criterion (a2)
+> goes **red** under mutant 3 while (a), (b1), (b2) and (c) all stay green. It
+> then found two new MAJORs in §6(f), which revision 2 had introduced, plus
+> three MINORs and a NIT — every one a prescribed text swap needing **no new
+> measurement**. Revision 3 applies all of them verbatim. The gate stated
+> explicitly that no round-3 gate is required; the item 19a two-round cap is
+> spent and not breached.
+
 
 > **Revision 2, after `checker-premise` round 1 returned REVISE.** The gate ran
 > a real PostgreSQL 16.15 cluster, wrote four candidate versions of this view,
@@ -37,6 +48,13 @@ deleted.
 **Forbidden:** every existing migration (item 10 — editing an applied migration
 is a BLOCKER), all of `src/**`, all of `docs/**`, `.claude/**`,
 `.github/workflows/**`.
+
+**Three files is a real constraint and §6(f) pushes on it.** That criterion
+needs a fixture load and two snapshots at three points in the runner's loop;
+the in-repo precedent (T503) splits those into six files. **Inline them in
+`run_gam442_event_attendance.sh`** (heredoc or `psql -c`) to stay inside these
+three. If you conclude that is genuinely not workable, **say so in your report
+and stop — do not add a fourth file silently.**
 
 > **Deviation from the issue text, stated deliberately.** GAM-442 says "Allowed
 > files: exactly one new file". This packet widens that to three because the
@@ -120,6 +138,14 @@ Two correct shapes; take either:
   count**, or
 - pre-aggregate held sessions in their own CTE over `event_sessions` alone and
   join that to the marks aggregate.
+
+**The spellings in §4's table are the shape-1 answer.** If you take shape 2,
+`count(*)` over a CTE that touches `event_sessions` alone (or `attendance`
+alone) is correct, and the "never `count(*)`" rule below does not apply — that
+rule is about `count(*)` **over the left-joined row set**, where the
+null-extended row counts as a phantom mark. Both shapes were measured
+byte-identical by the gate. **State in your header comment which shape you
+took**, so the checker grades §4 by meaning rather than by token.
 
 **Follow `v_event_student_hours` (`20260723000001_dashboard_views.sql:269-291`)
 as the structural precedent.** It is this same `events → event_sessions
@@ -278,9 +304,9 @@ Item 26's tier test is *"can a mistake here … lie to a user about their own
 data"*; this is that, which is a second independent confirmation of the HEAVY
 call.
 
-**The denominator does not change here.** D014 owns it, it is an owner ruling,
-and changing it in this migration would move an 8.4-adjacent formula and *would*
-owe a dispute-log entry (§5.1). **What this task does instead is discharge
+**The denominator does not change here.** Changing it would move MET-01's
+denominator, which D014 owns by owner ruling, and would owe a dispute-log entry
+under §5.1's test. **What this task does instead is discharge
 D014's own stated mitigation at the new grain:** `graded_marks_ct` and
 `attended_marks_ct` are exposed as first-class columns precisely so the
 consuming card can show the counts beside the percentage, and the view's
@@ -365,9 +391,12 @@ and not a string comparison.
 
 **(b3) The inflation case, reported as a Known Risk rather than a pass.** Seed
 an event whose held-session marks are **all `present`** with no absences
-recorded, on a roster materially larger than the number of marks. Assert
-`attendance_pct = 100.0` **and** that `graded_marks_ct` is well below
-`held_ct × roster size`. This is §5.3 — it is not a bug in your SQL and you must
+recorded, on a roster materially larger than the number of marks. Assert the
+**exact hand-computed numbers**, not a vague inequality: with a 5-student roster
+and 20 held sessions marked `present` for only 2 students each night,
+`held_ct = 20`, `graded_marks_ct = 40`, `attendance_pct = 100.0`, against **100
+roster-turns**. State all four numbers. (Those are the gate's measured values;
+reuse them.) This is §5.3 — it is not a bug in your SQL and you must
 not "fix" it; it is D014's inverted failure mode arriving at event grain, and
 the proof exists so the number and its mitigation are on the record together.
 Report it under a heading that says Known Risk, not under the passing criteria.
@@ -412,17 +441,40 @@ not to claim a write path existed.
 **(f) Nothing else moved — and the diff must be non-empty to mean anything.**
 Snapshot `v_student_hours`, `v_student_participation`, `v_team_participation`
 and `v_season_attendance_rate` **before** applying the new migration and
-**after**, and diff. Split the migration loop — `start.sh --skip-last 1` already
-exists for this; applying everything at once cannot show what your migration
+**after**, and diff. Applying everything at once cannot show what your migration
 changed.
+
+Split the migration loop **inside your own runner**: hold your migration back
+until after the before-snapshot, exactly as
+`supabase/tests/run_t503_widen_rsvp_read.sh:50-61` does (`"==> holding back
+migration (applied after the BEFORE snapshot)"`). **Do not use `start.sh
+--skip-last 1`** — that flag lives on the script §6.0(i) says will not run here.
 
 **Seed first.** Measured on a migrations-only cluster, all four of those views
 return **0 rows**, so revision 1's criterion diffed four empty result sets.
-Before the before-snapshot, seed the (a) fixture **plus at least one
-`student_teams` row per fixture student and one `counts_volunteer_hours = true`
-outreach event**. State each view's row count in your report. **A snapshot where
-any of the four returns 0 rows on both sides is not a pass — it is an unseeded
-fixture, and you must say so rather than record it as green.**
+
+Before the before-snapshot, seed the (a) fixture **plus**: one `student_teams`
+row per fixture student (`joined_on` set, `left_on` null); and one
+`type = 'outreach'`, `counts_volunteer_hours = true` event carrying **one
+`completed` session with at least one `present` or `late` attendance mark**.
+That last clause is load-bearing — `v_student_hours`
+(`20260804000000_volunteer_hours_outreach_only.sql:44-59`) filters on all three
+of `es.status = 'completed'`, `e.counts_volunteer_hours and e.type = 'outreach'`,
+and `a.status in ('present','late')`, so an outreach event with no completed
+session and no marks leaves it at 0 rows and the rule below fails you for the
+fixture's sake rather than the migration's. Measured: the recipe without that
+clause yields `v_student_hours 0 | v_student_participation 3 |
+v_team_participation 1 | v_season_attendance_rate 1`; with it, `1 | 3 | 1 | 1`.
+
+State each view's row count in your report. **A snapshot where any of the four
+returns 0 rows on both sides is not a pass — it is an unseeded fixture, and you
+must say so rather than record it as green.**
+
+**Load the (a) fixture once.** It touches only `seasons` / `teams` / `students`
+/ `events` / `event_sessions` / `attendance`, all of which exist from
+`20260717000000`, so it loads cleanly before your migration and needs no
+re-seed after it. Seeding it a second time will hit `attendance`'s
+`unique (session_id, student_id)`.
 
 On `v_student_hours` specifically: byte-identity is guaranteed *by construction*
 for a `create view`-only migration, so treat it as a cheap confirmation that you
@@ -437,10 +489,12 @@ and report the real red output and exit code for each:
      fail. (Gate verified this is genuinely red: E2 reports `0.0`, not NULL.)
    - drop the `es.status = 'completed'` restriction → proof (a) must fail.
      (Gate verified: E1 reports `83.3`, not `75.0`.)
-   - **replace `count(distinct es.id)` with `count(es.id)` → proof (a2) must
-     fail.** This is the §4.1 fan-out. If (a2) stays green under this mutation,
-     your (a2) assertion is not testing what it claims and the whole BLOCKER-1
-     fix is unguarded.
+   - **Reintroduce the fan-out → proof (a2) must fail.** In shape 1, replace
+     `count(distinct es.id)` with `count(es.id)`; in shape 2, drop the
+     held-sessions CTE and count sessions off the joined row set. Either way
+     (a2) must go red. The gate verified this mutation leaves **(a), (b1), (b2)
+     and (c) all green** — so if (a2) also stays green, your (a2) assertion is
+     not testing what it claims and the whole BLOCKER-1 fix is unguarded.
 
    Restore, re-run green. **Commit before mutating** (item 26's fast-tier rule,
    which cost T323 its fix).

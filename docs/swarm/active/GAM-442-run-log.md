@@ -194,3 +194,22 @@ PR credential (`ghs_`) decoded at minute 1: `iat 2026-08-21T05:02:29Z`,
   remaining fix is a verbatim text swap needing no new measurement, and that no
   re-gate is required. Item 19a's cap is not at risk: applying prescribed edits
   is not a loop.
+
+- **05:52Z — packet revision 3 written and GATED.** All of NEW-1…NEW-5 and the
+  NIT applied verbatim as the gate prescribed them. §6(f) now names the
+  `completed`-session-with-a-`present`-mark clause `v_student_hours` actually
+  requires, and splits the migration loop inside the runner following
+  `run_t503_widen_rsvp_read.sh:50-61` instead of the unusable
+  `start.sh --skip-last 1`. §2 gained the inline-or-stop sentence. §4.1 now
+  states that "never `count(*)`" is scoped to the left-joined row set so the
+  permitted CTE shape is not graded non-compliant. (b3) asserts four exact
+  numbers instead of "well below". §5.3's "8.4-adjacent" replaced.
+
+- **05:53Z — `worker-implementer` DISPATCHED**, `model: "opus"` per item 18
+  (two triggers: a file under `supabase/migrations/`, and a SQL view containing
+  metric math), `run_in_background: false`, orchestrator blocking on the result.
+
+  **If this line is the last one in this file, the run died holding this
+  subagent.** The packet is complete and gated at revision 3; nothing under
+  `supabase/` was written. Resume by dispatching a worker against
+  `docs/swarm/active/GAM-442-worker-packet.md` — it needs no further gating.
