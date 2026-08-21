@@ -110,8 +110,97 @@ bumping a worker because a topic sounds sensitive.
 
 ## Verification
 
-_Gate block, mutation-replay and the `e2e-personas` read-back are pasted below
-before the draft flag is cleared._
+All of the following was produced by `checker-reviewer`, which ran the commands
+itself rather than quoting the worker. Verdict: **PASS**, no BLOCKER, no MAJOR,
+no MINOR — four NITs, logged below.
+
+### Six gates
+
+```
+GATE RUN - 7318ae0 on claude/gam-439-inline-season-goal-editor - tree clean
+
+  1 tsc                     exit 0  PASS
+  2 vite build              exit 0  PASS
+  3 format:check            exit 0  PASS
+  4 eslint                  exit 0  PASS       0 errors, 380 warnings
+  5 vitest (full)           exit 0  PASS       103 files / 2609 tests
+  6 vitest src/pages/home/  exit 0  PASS       4 files / 236 tests
+
+VERDICT: PASS - all six gates exit 0
+```
+
+Baseline measured independently at the parent commit `c6561ea`:
+**102 files / 2598 tests, exit 0**, and eslint **380 warnings**. So the suite
+went 2598 → 2609 (+11: 8 CoachHome, 3 seasons) with **no test dropped**, and
+**zero new eslint warnings**. A green suite that lost tests is not green, so
+that comparison is the point of running the baseline.
+
+### Mutation-replay — four mutants, each in the checker's own worktree (item 23)
+
+A passing test nobody has watched fail is not evidence. Each was committed
+first, mutated, reverted, and the tree re-verified.
+
+```
+[A2: .update({ ..., name: 'x' })]           3 passed  -> exit 1, 1 failed   REDDENED
+  AssertionError: expected "spy" to be called with arguments: [ { default_goal_hours: 120 } ]
+[D5: delete the retained-loading branch]  109 passed  -> exit 1, 1 failed   REDDENED
+  expected '...' to contain 'Season goal saved'
+[A4: widen user.role === 'admin']         109 passed  -> exit 1, 1 failed   REDDENED
+  expected '...' not to contain 'Default season goal'
+[A1: stub the default seam]               109 passed  -> exit 1, 1 failed   REDDENED
+  expected '...' to contain "Couldn't save the season goal"
+```
+
+The first is the mutant the packet named. The other three were the checker's
+own: they prove the retention, the admin gate and the real-loader default are
+each actually guarded, not merely covered.
+
+### `e2e-personas` — the read-back the issue asked for
+
+Real Chromium against real PostgreSQL carrying this repo's migrations and RLS.
+The checker wrote its own spec rather than replaying the worker's.
+
+```
+✓ A3: admin saves a new goal; only default_goal_hours changes (3.6s)
+✓ A3b: keyboard-only path saves (Enter in the input commits)   (2.4s)
+✓ A4: a coach sees no season-goal editor on the dashboard      (2.6s)
+3 passed (9.4s)
+
+✓ 768px: editor row does not overflow  (horizontal overflow px: 0)
+```
+
+A3 read `id, name, starts_on, ends_on, default_goal_hours` **before** the save,
+saved through the real UI, polled the row to the new value, then asserted
+`name`, `starts_on` and `ends_on` **byte-identical**. That is the assertion the
+issue insisted on: *"a test that only asserts `default_goal_hours` would pass
+while the bug ships."* The row was restored afterwards.
+
+Item 27 was checked as a connection, not a render: the seam's default resolves
+to the real `makeUpdateSeasonGoal()` over `getSupabaseClient`, and the live save
+moved the KPI denominator 520h → 548h, so `refresh()` reached every
+`useActiveSeason()` consumer.
+
+### Accessibility (item 15), checked rather than assumed
+
+`NumberInput` renders a real `<label htmlFor>` with `aria-required`;
+Playwright's `getByLabel('Default season goal')` resolves it. The keyboard-only
+path writes the database (A3b). The error Banner is `role="alert"` and the
+success Banner `role="status"`, so both outcomes are announced.
+
+### NITs, logged and not filed
+
+1. The success Banner persists while the admin edits the value again, so
+   "Season goal saved" can sit beside an unsaved number.
+2. Save uses the default `secondary` variant while it is the row's primary
+   action.
+3. The input is seeded at mount only, so an externally-changed
+   `defaultGoalHours` would not resync it — unreachable today, since this
+   control is the only thing that triggers the refresh.
+4. Focus lands on `<body>` while the button is disabled in flight; the
+   `role="alert"`/`role="status"` banners still announce the outcome.
+
+None is a deferred *defect*, so item 20 does not require a follow-up row for
+them; they belong on a future dashboard-polish row if the owner wants them.
 
 ## Run record
 
