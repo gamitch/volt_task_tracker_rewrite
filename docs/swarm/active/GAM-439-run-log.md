@@ -241,3 +241,46 @@ holding that subagent.*
   quote the worker's figures.
   *If this line is the last one in this file, the run died holding this
   subagent.*
+- **17:08Z — `checker-reviewer` VERDICT: PASS.** No BLOCKER, no MAJOR, no MINOR;
+  four NITs, logged not filed. **A1-A9 all pass.** It did not read and opine —
+  it ran things:
+  - **Six gates, its own run**, `--require-clean` at `7318ae0`: tsc 0, build 0,
+    format:check 0, eslint 0 (0 errors / 380 warnings), full vitest 0
+    (103 files / 2609 tests), scoped `src/pages/home/` 0 (4 files / 236 tests).
+    It then measured the **baseline itself** in a worktree at the parent
+    `c6561ea` — 102 files / 2598 tests, eslint 380 warnings — so the +11 is a
+    real addition with **no test dropped** and **no new warning**. That
+    comparison is what makes gate 5's green mean something.
+  - **Four mutation-replays, its own worktree** (item 23), all RED: the
+    packet's `name:'x'` A2 mutant, plus three of its own — deleting D5's
+    retained-loading branch, widening the admin gate, and stubbing the seam's
+    default. So the retention, the role gate and the real-loader default are
+    each *guarded*, not merely covered. It replayed rather than trusting the
+    worker's transcript, which is the whole point.
+  - **`e2e-personas` A3 — the read-back the issue insisted on — run by the
+    checker against real Postgres with this repo's migrations and RLS**, using
+    a spec it wrote itself. It read `id, name, starts_on, ends_on,
+    default_goal_hours` before the save, saved through the real UI, polled the
+    row to the new value, and asserted `name`, `starts_on`, `ends_on`
+    **byte-identical**, then restored the row. Also a keyboard-only Enter path
+    (writes the DB) and a coach persona seeing no control. **This is the
+    criterion the issue said a weaker test would pass while the bug ships, and
+    it is now measured rather than argued.**
+  - **Item 27 checked as a connection, not a render:** the seam's default
+    resolves to the real `makeUpdateSeasonGoal()` over `getSupabaseClient`, and
+    the live save moved the KPI denominator 520h → 548h, proving `refresh()`
+    reached every `useActiveSeason()` consumer. **Passed, not Partial.**
+  - **Item 15 checked in a browser:** real `<label htmlFor>` + `aria-required`,
+    keyboard-only path commits, error Banner `role="alert"` and success Banner
+    `role="status"`.
+  - **A8 verified the strong way:** `CoachHome.test.tsx` took exactly one
+    additive hunk at EOF, so the first-mount skeleton tests are *untouched*,
+    not merely still green. Both D5 branches call one `renderContent` helper and
+    return `<CoachHomeContent>` at the same position, with `key={season.id}`.
+  - Sabotage check clean: the worker's single commit is exactly the four
+    Allowed Files; both its worktrees were removed and the shared tree ends
+    clean.
+- **17:09Z — PR #221 body finalized** with the checker's verbatim gate block,
+  the four mutants, the `e2e-personas` output and the four NITs, then
+  `gh pr edit`. `check.mjs` → `OK declaration closes GAM-439`, exit 0. Done
+  with **9 minutes** of the `ghs_` credential left.
