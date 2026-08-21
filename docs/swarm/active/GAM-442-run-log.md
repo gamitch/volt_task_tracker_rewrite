@@ -136,3 +136,22 @@ PR credential (`ghs_`) decoded at minute 1: `iat 2026-08-21T05:02:29Z`,
   Round 2 of 2 (item 19a cap) now: revising the packet against all six
   prioritized revisions. A third REVISE escalates to the owner rather than
   looping.
+
+- **05:38Z — packet revision 2 written**, all six prioritized revisions applied:
+  §4.1 added (the fan-out, with the gate's measured output and
+  `v_event_student_hours` named as the shape to copy); §5.3 added (D014's
+  inverted failure mode carried forward, with the 100.0% measurement); §6.0
+  added (the three harness facts — `start.sh` non-root failure, the T509 loop,
+  and T205's `alter default privileges` line without which (d) is unpassable and
+  (e) vacuous); criteria (a2) and (b3) added; (d)(e)(f) rewritten; a third
+  mutant added to (g); §8 rewritten with the gate's verdict on each of the five
+  original decisions plus three fresh doubts; MINOR citation fixes folded in.
+
+- **05:39Z — `checker-premise` round 2 DISPATCHED**, `run_in_background: false`,
+  orchestrator blocking. Same agent context continued via `SendMessage` so it
+  grades its own findings rather than re-deriving them from scratch.
+
+  **If this line is the last one in this file, the run died holding this
+  subagent** — revision 2 of the packet was never gated and no worker was ever
+  dispatched. `supabase/` is still untouched. Resume by re-gating
+  `docs/swarm/active/GAM-442-worker-packet.md` at revision 2.

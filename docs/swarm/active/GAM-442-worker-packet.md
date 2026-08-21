@@ -1,4 +1,14 @@
-# GAM-442 — worker packet (HEAVY)
+# GAM-442 — worker packet (HEAVY) — **revision 2**
+
+> **Revision 2, after `checker-premise` round 1 returned REVISE.** The gate ran
+> a real PostgreSQL 16.15 cluster, wrote four candidate versions of this view,
+> and ran every criterion below against them. It found two BLOCKERs — a fan-out
+> that corrupts `held_ct` while leaving `attendance_pct` correct (§4), and a
+> declared doubt that was aimed at the wrong risk (§5.2/§8) — plus three
+> criteria that passed for the wrong reason (§6 d/e/f). All are fixed below.
+> **Every claim in this revision that says "measured" was measured by the gate
+> in a live cluster, not read.** Round 2 of the item 19a two-round cap.
+
 
 **Issue:** <https://linear.app/gamitch/issue/GAM-442>
 **Branch:** `claude/gam-442-event-attendance-view` · draft PR #222
@@ -46,8 +56,8 @@ written (item 19c). Citations are current.
 
 | Claim | Status |
 | -- | -- |
-| No view aggregates attendance per event; `v_event_attendance` does not exist anywhere in `supabase/` or `src/` | **TRUE** (grep, 0 hits; 16 existing `v_*` views enumerated, none per-event) |
-| `attendance.status` is `check (status in ('present','late','excused','absent'))`, `unique (session_id, student_id)` | **TRUE** — `20260717000000_scheduling_attendance.sql:79-93` |
+| No view aggregates **attendance** per event; `v_event_attendance` does not exist anywhere in `supabase/` or `src/` | **TRUE** (grep, 0 hits). **Corrected by the gate:** the original wording said "none per-event", which is overstated — `v_event_student_hours` (`20260723000001_dashboard_views.sql:269-291`) *is* per-`events.id`, it just aggregates hours rather than attendance. That view is now this packet's structural precedent; see §4. |
+| `attendance.status` is `check (status in ('present','late','excused','absent'))`, `unique (session_id, student_id)` | **TRUE** — `20260717000000_scheduling_attendance.sql:82-95` (the original citation `:79-93` was off by ~3 lines; corrected by the gate) |
 | `event_sessions.status` is `check (status in ('scheduled','completed','canceled'))`, `event_id` FK `on delete cascade` | **TRUE** — same file, `:53-63` |
 | `events.type` is `check (type in ('meeting','outreach','competition'))`; `team_ids uuid[]` nullable; `counts_participation boolean not null` | **TRUE** — same file, `:33-48` |
 | The explicit-marks denominator convention is `count(*) - count(*) filter (where status='excused')`, returning **NULL** (not 0) when that is zero | **TRUE** — `20260806000000_met01_explicit_marks.sql:117-130`, and its `:38-61` states the rule and why the T509 row's literal phrasing would double-subtract |
@@ -78,11 +88,56 @@ to meetings would make the view useless to a later outreach surface for no gain)
 | Column | Meaning |
 | -- | -- |
 | `event_id` | `events.id` — the grain. One row per event, always. |
-| `held_ct` | count of that event's `event_sessions` with `status = 'completed'`. Counts **sessions**, not marks. |
-| `graded_marks_ct` | count of `attendance` rows on those held sessions — every explicit mark, including excused. |
-| `excused_ct` | of those, the ones with `status = 'excused'`. |
-| `attended_marks_ct` | of those, the ones with `status in ('present','late')`. MET-05: late **is** present for every metric. |
+| `held_ct` | **`count(distinct es.id)`** — that event's `event_sessions` with `status = 'completed'`. Counts **sessions**, not marks. Read the fan-out warning below before writing this. |
+| `graded_marks_ct` | **`count(a.id)`** — `attendance` rows on those held sessions. Every explicit mark, including excused. |
+| `excused_ct` | **`count(a.id) filter (where a.status = 'excused')`**. |
+| `attended_marks_ct` | **`count(a.id) filter (where a.status in ('present','late'))`**. MET-05: late **is** present for every metric. |
 | `attendance_pct` | `round(100.0 * attended_marks_ct / (graded_marks_ct - excused_ct), 1)`, or **NULL** when that denominator is `0`. |
+
+### 4.1 The fan-out — BLOCKER-1, measured, read this before writing a line of SQL
+
+The obvious single chain `events left join event_sessions (completed) left join
+attendance` **multiplies held sessions by marks**: a held session carrying *n*
+marks appears *n* times, so a bare `count(es.id)` counts that session *n* times.
+The gate built exactly that view and measured it on the §6(a) fixture:
+
+```
+  ev  | held_ct | graded_marks_ct | excused_ct | attended_marks_ct | attendance_pct
+------+---------+-----------------+------------+-------------------+----------------
+ 0001 |       5 |               5 |          1 |                 3 |           75.0   <-- held_ct 5, truth is 2
+ 0003 |       2 |               2 |          2 |                 0 |                  <-- held_ct 2, truth is 1
+```
+
+**`attendance_pct` is correct in that output.** The percentage divides two
+counts that fan out by the same factor, so the error cancels and the view looks
+right. `held_ct` does not cancel, and `held_ct` is user-visible — it is the
+"across 21 held" half of the card's own headline in §1. Every acceptance
+criterion in revision 1 passed against this corrupted view.
+
+Two correct shapes; take either:
+
+- `count(distinct es.id)` for `held_ct` **and `count(a.id)` for every mark
+  count**, or
+- pre-aggregate held sessions in their own CTE over `event_sessions` alone and
+  join that to the marks aggregate.
+
+**Follow `v_event_student_hours` (`20260723000001_dashboard_views.sql:269-291`)
+as the structural precedent.** It is this same `events → event_sessions
+(completed) → attendance` join at `events.id` grain and already uses
+`count(distinct …)` for exactly this reason. Its one divergence from what you
+need is that it uses inner joins, so zero-session events vanish — which is the
+one thing §4 already tells you to change.
+
+**Never `count(*)`.** In a left join the null-extended row counts as 1, so
+`count(*)` reports one phantom mark for an event with no marks at all. Measured:
+
+```
+ 0002 |       1 |               1 |          0 |                 0 |            0.0   <-- fabricated 0, §4 forbids it
+ 0004 |       0 |               1 |          0 |                 0 |            0.0   <-- fabricated 0, and this event has no sessions
+```
+
+That is the NULL-never-zero rule below being violated by the aggregate's
+spelling rather than by its logic.
 
 Hard rules on this contract:
 
@@ -98,28 +153,53 @@ Hard rules on this contract:
 - **No student-level filtering.** Do **not** join `students`, `student_teams`,
   or filter on `s.is_active` / `st.left_on` / `e.counts_participation`. See §5.2
   — this is the packet's most consequential decision and it is deliberate.
-- Column types: the `*_ct` columns are whatever `count(*)` returns (`bigint`);
-  `attendance_pct` is `numeric` from `round(..., 1)`. Do not cast them to
-  narrower types.
+- Column types: the `*_ct` columns are `bigint` — that is the type `count()`
+  returns, **not an instruction to write `count(*)`** (see §4.1).
+  `attendance_pct` is `numeric` from `round(..., 1)`. Do not cast them narrower.
 
 Also required in the migration file:
 
 - `comment on view public.v_event_attendance is '…'` carrying: the grain, the
   explicit-marks denominator rule, the NULL-not-zero rule, that `held_ct` counts
-  sessions while every other count counts marks, and the owner-executes /
+  sessions while every other count counts marks, the owner-executes /
   `security_invoker`-is-off fact in the shape
-  `20260805000000_dashboard_views_comment_corrections.sql` uses.
+  `20260805000000_dashboard_views_comment_corrections.sql` uses, **and D014's
+  inverted-failure-mode warning** — including the sentence, in substance: *"a
+  consumer that renders `attendance_pct` without also rendering
+  `graded_marks_ct` reintroduces D014's known regression"* (§5.2).
 - `comment on column public.v_event_attendance.held_ct` and
-  `…​.graded_marks_ct`, because those two are the pair a reader will confuse.
+  `…​.graded_marks_ct`, because those two are the pair a reader will confuse —
+  and §4.1 is the reason one of them is easy to get silently wrong.
 - `revoke all on public.v_event_attendance from anon;` — grounded in **PRD 8.3**
   ("no `anon` access except the `ics` and `checkin` Edge Functions"), which is
-  normative text, and following T205's measured finding
-  (`20260803000001_revoke_anon_leaderboard_students.sql:18-35`) that `revoke
-  select` alone is insufficient because Supabase's stock default privileges
-  grant `all`. **Verify in the cluster that this is needed and that it works**
-  (§6 proof (e)); if the scratch harness shows the grant never existed, say so
-  and keep the statement anyway — it is idempotent and it is what production
-  needs.
+  normative text.
+
+  **Two corrections the gate measured, both of which change what you write in
+  the header comment:**
+
+  1. **T205's rationale does not transfer.** `20260803000001:18-35` chose
+     `revoke all` over `revoke select` because a plain `revoke select` left the
+     `anon` DELETE privilege intact on an updatable view. `v_event_attendance`
+     is an **aggregate** view and therefore not auto-updatable —
+     `information_schema.views.is_updatable = 'NO'`, measured, against
+     `v_leaderboard_students`'s `YES`. So there is no write path here. The
+     statement stays (it is idempotent, `revoke all` is still the right
+     spelling, and PRD 8.3 is normative), but do **not** repeat T205's DELETE
+     argument as if it applied.
+  2. **This is not a security finding and must not be written as one.** What is
+     being withheld is event ids and integer counts — no PII. Constitution
+     item 25 says verbatim *"Item 4 covers tables; do not extend it to views"*
+     and warns against manufacturing a security-class finding out of an
+     extension of a rule.
+
+  **Cite GAM-389 and state the disposition.** The cross-view question — five
+  existing student-hours views answer unauthenticated requests while the one
+  view T205 revoked does not — is already filed as **GAM-389**
+  (`docs/swarm/linear-export.md:95`), and its title says the correct posture is
+  *undecided*. Your header comment must say, in substance: *"GAM-442 ships this
+  revoke because PRD 8.3 is normative text. It does not resolve GAM-389, which
+  owns the inconsistent posture across the other views, and it is not a
+  precedent for that decision."*
 - A header comment in the house style: what, why, what was measured, what was
   deliberately **not** done (the two divergences in §3).
 
@@ -162,19 +242,103 @@ that, for three reasons:
    denominator is *the marks that exist*. Filtering which marks are allowed to
    exist reintroduces an eligibility judgement through the back door.
 
-**What would make this wrong:** if the SeriesCard ticket in the
-`meetings-redesign` group intends this percentage to be MET-01-consistent — i.e.
-a coach expects the event percentages to roll up to the season participation
-figure. They will not, and cannot, under this decision. The premise gate must
-say whether that mismatch is acceptable. It is disclosed here rather than
-discovered later.
+**MET-01 rollup consistency is *not* the risk here, and revision 1 was wrong to
+name it as one.** The gate settled it: `CoachHome.tsx:1168-1173` already ships a
+deliberately divergent ratio carrying an in-code comment that says so — *"A NEW,
+disclosed, distinct ratio (module doc #4) -- deliberately NOT MET-01/02's
+excused-exclusion formula"*. Per-surface divergent ratios are established house
+practice, not a defect.
+
+### 5.3 The real risk, carried forward from D014 — BLOCKER-2
+
+**This view can report 100% for an event most of the roster skipped**, and the
+mechanism is one D014 already recorded rather than one this task invents.
+
+`20260806000000_met01_explicit_marks.sql:24-30` states that T508 made "no
+attendance row" the **normal** shape for an unmarked student — absences are
+written only when a coach explicitly opts in. The explicit-marks denominator
+then counts only marks that exist. So **forgetting to mark someone inflates the
+percentage.** That file states the consequence verbatim at `:107-112`:
+
+> this INVERTS the failure mode. Forgetting to mark a student now INFLATES
+> participation … RPT-02's visible marked/present/late/excused counts are the
+> mitigation. **If RPT-02 ever stops showing them, D014 must be revisited.**
+
+The gate measured it at event grain: a 5-student roster across 20 held sessions
+where the coach marked only the two students who turned up each night reports
+
+```
+  ev  | held_ct | graded_marks_ct | excused_ct | attended_marks_ct | attendance_pct
+ 0005 |      20 |              40 |          0 |                40 |          100.0
+```
+
+100 expected student-turns, 40 marks, **`attendance_pct = 100.0`**. A coach
+reads "Attendance 100% across 20 held" for an event 60% of the roster skipped.
+Item 26's tier test is *"can a mistake here … lie to a user about their own
+data"*; this is that, which is a second independent confirmation of the HEAVY
+call.
+
+**The denominator does not change here.** D014 owns it, it is an owner ruling,
+and changing it in this migration would move an 8.4-adjacent formula and *would*
+owe a dispute-log entry (§5.1). **What this task does instead is discharge
+D014's own stated mitigation at the new grain:** `graded_marks_ct` and
+`attended_marks_ct` are exposed as first-class columns precisely so the
+consuming card can show the counts beside the percentage, and the view's
+`comment on view` carries the warning so the next reader meets it (§4).
+
+**What would still make this wrong:** if the SeriesCard consumer renders
+`attendance_pct` alone. That is a real, disclosed, accepted risk of this design
+and the reason proof (b3) exists. It is not resolvable inside a migration — the
+mitigation is a column plus a comment, and the consuming ticket has to honour
+it. Say so in the PR body rather than letting it be discovered on screen.
 
 ## 6. Acceptance criteria — every one measured in a real cluster
 
-Use the `scratch-postgres` skill. **Mandatory**, per the issue. The runner you
-write models `supabase/tests/run_t509_explicit_marks.sh` — same scratch-DB
-lifecycle, same platform stub, same "apply every migration unchanged" loop, same
-`SKIPPED_MIGRATIONS` list. Fixtures use **fabricated names** (item 6).
+Use the `scratch-postgres` skill. **Mandatory**, per the issue. Fixtures use
+**fabricated names** (item 6).
+
+### 6.0 The harness — three things the gate measured that will otherwise cost you a round
+
+**(i) `start.sh` does not run in this container.** It aborts as a non-root user:
+`chown: changing ownership of '/tmp/scratch-pg-…': Operation not permitted` —
+its `su postgres` design assumes root, and this runner is uid 1001. Run `initdb`
+and `pg_ctl` **directly as your own user**; `initdb` only refuses *root*, so it
+is happy here. **This is not a blocked task and must not be reported as one.**
+
+**(ii) Model the migration loop on `run_t509_explicit_marks.sh`** — same
+scratch-DB lifecycle, same platform stub, same "apply every migration unchanged"
+loop, same `SKIPPED_MIGRATIONS` list (`20260719000000_cron.sql`,
+`20260720000001_avatar_storage.sql`).
+
+**(iii) But that runner alone makes proofs (d) and (e) worthless, so add the
+default-privilege simulation.** `run_t509_explicit_marks.sh` does not reproduce
+Supabase's stock default privileges. Measured in that bare shape: `relacl` is
+`<NULL: owner-only default>` on **every** view, `has_table_privilege('anon', …,
+'select')` is already `f` before any revoke, and `authenticated` — the coach —
+is **denied on every view in the schema, including the existing ones**:
+
+```
+NOTICE:  coach SELECT on new view: DENIED (permission denied for view v_ea_fixed)
+NOTICE:  coach SELECT on v_student_participation: DENIED (permission denied for view v_student_participation)
+```
+
+So proof (e) would pass for the wrong reason and proof (d) could not pass at
+all. Prepend `run_t205_anon_grant.sh:26-30`'s incantation, **before** the
+migration loop (it must run before the view is created or it does not apply to
+it):
+
+```sql
+alter default privileges in schema public
+  grant all on tables to anon, authenticated, service_role;
+```
+
+**`calendar_feed_platform_stub.sql` creates only `anon` and `authenticated`, not
+`service_role`.** Create it in your runner (`create role service_role nologin;`)
+or drop it from the grant list. **`run_t205_anon_grant.sh` is red on `main`
+today for exactly this reason** — `ERROR: role "service_role" does not exist`,
+exit 1. That is a pre-existing defect, it is **not yours to fix in this task**,
+and it is not evidence your own work is broken. Note it in your report; the
+orchestrator files it under item 20.
 
 Each proof below must appear in your completion report as the SQL **and** its
 real output. Not a description of the output.
@@ -187,41 +351,97 @@ hand-computed expected value before showing the query, then show the view
 agreeing with it. The `late` mark must be visibly counted as attended (MET-05)
 and the `excused` mark visibly removed from the denominator.
 
+**(a2) `held_ct` is sessions, not marks — the criterion revision 1 lacked.**
+On the (a) fixture assert `held_ct = 2` and `graded_marks_ct = 5`. Then assert
+`held_ct = 1` on an event with **one** held session carrying **two or more**
+marks. Without (a2) the fan-out in §4.1 ships: the gate measured all four of
+revision 1's criteria passing against a view reporting `held_ct = 5` for an
+event with 2 held sessions.
+
 **(b) NULL, twice.** An event with held sessions and **zero** marks →
 `attendance_pct IS NULL`. An event whose **every** mark is `excused` →
 `attendance_pct IS NULL`. Neither may be `0.0`. Assert `IS NULL`, not `= NULL`
 and not a string comparison.
+
+**(b3) The inflation case, reported as a Known Risk rather than a pass.** Seed
+an event whose held-session marks are **all `present`** with no absences
+recorded, on a roster materially larger than the number of marks. Assert
+`attendance_pct = 100.0` **and** that `graded_marks_ct` is well below
+`held_ct × roster size`. This is §5.3 — it is not a bug in your SQL and you must
+not "fix" it; it is D014's inverted failure mode arriving at event grain, and
+the proof exists so the number and its mitigation are on the record together.
+Report it under a heading that says Known Risk, not under the passing criteria.
 
 **(c) Zero-session event.** An event with no sessions at all still produces a
 row: `held_ct = 0`, `attendance_pct IS NULL`. Assert the row **count is 1** for
 that `event_id` — this is the `left join` proof and a plain `select` that
 returns nothing would pass a careless check.
 
-**(d) Coach read under RLS, and the weaker case.** A coach-role session
-`SELECT`s the view successfully. Then re-run the ownership question the way the
-skill's "Does the result generalise?" section requires: if your proof depends on
-the object owner being a superuser, re-run it with a `NOSUPERUSER NOBYPASSRLS`
-owner and report which case actually holds. Do not generalise silently.
+**(d) Coach read, and the weaker ownership case.** With §6.0(iii)'s default
+privileges in place, a coach-role (`authenticated`) session `SELECT`s the view
+successfully. **Without them this proof is unpassable** — measured, every view
+in the schema denies `authenticated`, because no migration grants it.
 
-**(e) `anon` grant.** Show the privilege state on the new view before and after
-the `revoke` (`has_table_privilege('anon', …)` or the `information_schema`
-route T205's assertions use). Report honestly if the scratch harness does not
-reproduce Supabase's stock default privileges — that is a finding, not a
-failure.
+Then the generalisation question the skill's "Does the result generalise?"
+section requires: re-run with the view owned by a `NOSUPERUSER NOBYPASSRLS`
+role. **Grant that owner base-table access first.** Measured: without the grant
+the run errors `42501 permission denied for table events` — a *harness* cause,
+not an RLS one, and a report that reads it as RLS proves nothing. What you are
+confirming is the fact recorded at
+`20260805000000_dashboard_views_comment_corrections.sql:41-49`: no view here
+sets `security_invoker`, so the view executes as its owner and does **not**
+apply the querying session's RLS to base tables. Report which case actually
+holds; do not generalise silently.
 
-**(f) Nothing else moved.** Snapshot `v_student_hours`, `v_student_participation`,
-`v_team_participation` and `v_season_attendance_rate` output **before** applying
-the new migration and **after**, and diff. Split the migration loop as the skill
-requires — applying everything at once cannot show what this migration changed.
-`v_student_hours` must be **byte-identical**: meetings contribute **zero**
-volunteer hours (`20260804000000_volunteer_hours_outreach_only.sql`) and that
-must remain true.
+**(e) `anon` grant.** With §6.0(iii)'s simulation in place, report
+`pg_class.relacl` **and** `has_table_privilege('anon', …)` before and after the
+`revoke`, and run the `revoke select`-only counterfactual alongside `revoke
+all`. Measured shape to expect:
+
+```
+ BEFORE revoke            | sel t | del t | anon=arwdDxt
+ AFTER revoke SELECT only | sel f | del t | anon=awdDxt
+ AFTER revoke ALL         | sel f | del f | (anon absent)
+```
+
+Note in your report that the surviving DELETE in the middle row is what T205 was
+about and that it is **not** a live concern here — this view is `is_updatable =
+'NO'` (§4). The counterfactual is run to show the statement does what it says,
+not to claim a write path existed.
+
+**(f) Nothing else moved — and the diff must be non-empty to mean anything.**
+Snapshot `v_student_hours`, `v_student_participation`, `v_team_participation`
+and `v_season_attendance_rate` **before** applying the new migration and
+**after**, and diff. Split the migration loop — `start.sh --skip-last 1` already
+exists for this; applying everything at once cannot show what your migration
+changed.
+
+**Seed first.** Measured on a migrations-only cluster, all four of those views
+return **0 rows**, so revision 1's criterion diffed four empty result sets.
+Before the before-snapshot, seed the (a) fixture **plus at least one
+`student_teams` row per fixture student and one `counts_volunteer_hours = true`
+outreach event**. State each view's row count in your report. **A snapshot where
+any of the four returns 0 rows on both sides is not a pass — it is an unseeded
+fixture, and you must say so rather than record it as green.**
+
+On `v_student_hours` specifically: byte-identity is guaranteed *by construction*
+for a `create view`-only migration, so treat it as a cheap confirmation that you
+did not accidentally touch it, not as an independent behavioural proof. The
+property it protects is real and must stay true — meetings contribute **zero**
+volunteer hours (`20260804000000_volunteer_hours_outreach_only.sql`).
 
 **(g) A mutation proof, per item 26.** Commit the migration first, then break it
-in your own worktree and watch the assertions go red. Run **two** mutations, and
-report the real red output and exit code for each:
-   - replace the NULL branch with `greatest(denominator, 1)` → proof (b) must fail.
+in your own worktree and watch the assertions go red. Run **three** mutations,
+and report the real red output and exit code for each:
+   - replace the NULL branch with `greatest(denominator, 1)` → proof (b) must
+     fail. (Gate verified this is genuinely red: E2 reports `0.0`, not NULL.)
    - drop the `es.status = 'completed'` restriction → proof (a) must fail.
+     (Gate verified: E1 reports `83.3`, not `75.0`.)
+   - **replace `count(distinct es.id)` with `count(es.id)` → proof (a2) must
+     fail.** This is the §4.1 fan-out. If (a2) stays green under this mutation,
+     your (a2) assertion is not testing what it claims and the whole BLOCKER-1
+     fix is unguarded.
+
    Restore, re-run green. **Commit before mutating** (item 26's fast-tier rule,
    which cost T323 its fix).
 
@@ -234,40 +454,71 @@ Your completion report must state **the commit SHA** your work landed in
 survives. List every file you touched. If you touched anything outside §2, say
 so plainly; do not tidy it away.
 
+**Your completion report is returned as text to the orchestrator — do not write
+it to a file under `docs/`,** which §2 forbids you.
+
 You do **not** certify your own work. A separate `checker-reviewer` grades this
 against §4 and §6.
 
-## 8. Least confident decisions (item 19d)
+## 8. Least confident decisions (item 19d) — after round 1
 
-Attack these first.
+Round 1's five are recorded below with the gate's verdict on each. **Four were
+upheld** (one with its justification corrected) and **one was overturned and
+re-declared**, which is the list doing its job.
 
-1. **That no dispute-log entry and no `gate/human` is required (§5.1).** Wrong
-   if `boss-arbiter`'s "8.4 formula moves / 8.3 grant moves" rule was meant to
-   describe *sufficient* conditions rather than the *complete* test, or if
-   creating any new metric view is itself an item-3 event regardless of whether
-   the PRD defines the metric. If wrong, this task is owner-gated and no SQL
-   should be written today.
-2. **That the view must not filter by `counts_participation`, student activity,
-   or team scope (§5.2).** Wrong if the SeriesCard consumer expects these
-   percentages to be consistent with MET-01 season participation. They are not,
-   by construction. A gate that reads the `meetings-redesign` sibling issues can
-   settle this; I have not read them.
-3. **That an event with zero held sessions should produce a row rather than be
-   absent (§4).** Wrong if the loader ticket intends `no row` to mean "nothing
-   to show" — T509 deliberately made "no marks" mean *no row at all* for
-   `v_student_participation`, and this packet takes the opposite convention one
-   level up. Both are defensible; they are inconsistent with each other, and I
-   chose the one that lets the card render "0 held" instead of failing a join.
-4. **That `revoke all … from anon` belongs in this migration (§4).** Wrong if
-   the prevailing pattern is deliberate — 15 of the 16 existing views carry no
-   revoke at all, and only T205's leaderboard view (which exposes names) got
-   one. Item 25 explicitly warns against manufacturing a security finding by
-   extending a rule. I am relying on PRD 8.3's `anon` sentence being normative
-   text rather than on extending item 4. If the gate judges this out of scope,
-   the statement comes out and becomes an item-20 follow-up covering **all**
-   views, not just this one.
-5. **That widening Allowed Files to three (§2) is correct** rather than a packet
-   quietly enlarging its own scope. Wrong if the issue's "exactly one new file"
-   was a deliberate boundary the owner set. Both extra files are test-only and
-   new; the alternative is proofs that exist only in a transcript that is not
-   saved when a run is cancelled.
+1. **No dispute-log entry and no `gate/human` is required (§5.1).**
+   **UPHELD.** The gate checked the actual PRD and dispute-log text: PRD 8.2
+   (`:563-567`) defines MET-01…05 at student/team/season grain only, 8.4's
+   normative block (`:635-683`) contains three views and none is per-event, and
+   the 8.3 matrix row `| events / sessions | full | … |` (`:577`) is unchanged.
+   Crucially it found that `boss-arbiter` at `dispute-log.md:1873-1878` states
+   *why* its rule is a complete test rather than a sufficient-condition list:
+   writing an entry where none is owed *"would falsely enlarge item 3."* SQL may
+   be written today.
+
+2. **No filtering by `counts_participation`, student activity, or team scope
+   (§5.2).** **OVERTURNED AS DECLARED — the decision stands, the stated doubt
+   was the wrong one.** MET-01 rollup consistency is not the live risk;
+   `CoachHome.tsx:1168-1173` already ships a deliberately divergent ratio with a
+   comment saying so. **Re-declared: the real exposure is unmarked-absence
+   inflation (§5.3)** — measured at 100.0% for an event 60% of the roster
+   skipped. Wrong if a consumer renders `attendance_pct` without
+   `graded_marks_ct`; the mitigation is a column, a view comment, and proof
+   (b3), and it cannot be enforced from inside a migration.
+
+3. **A zero-held-session event gets a row rather than being absent (§4).**
+   **UPHELD**, and the worry was misplaced: `v_student_participation`'s "no row"
+   is the absence of a *student* that exists elsewhere, whereas here the event
+   *is* the grain and the card must be able to render "0 held". Measured:
+   `held_ct = 0`, `pct NULL`, row count 1.
+
+4. **`revoke all … from anon` belongs in this migration (§4).** **UPHELD, with
+   the justification corrected.** T205's DELETE-path rationale does **not**
+   transfer — this view is `is_updatable = 'NO'` (measured). The statement stays
+   on PRD 8.3's normative text alone, it is not a security finding (item 25:
+   *"Item 4 covers tables; do not extend it to views"*), and it does not resolve
+   **GAM-389**, which owns the cross-view posture question and is cited in §4.
+
+5. **Widening Allowed Files to three (§2).** **UPHELD.** Both files are new and
+   test-only; the skill's own "Leave nothing behind" rule mandates
+   `supabase/tests/`, and `run_t509_explicit_marks.sh:8-12` records shipping
+   assertions without a runner as T509's own defect.
+
+### 8.1 What is still least confident, going into dispatch
+
+1. **Decision 2's re-declared risk is disclosed, not eliminated.** The view can
+   honestly report 100% for a badly-marked event. Nothing in this migration can
+   prevent that; only the consuming card can. If the SeriesCard ticket ships a
+   bare percentage, D014's condition (`…met01_explicit_marks.sql:107-112`) is
+   breached at a new surface and D014 must be revisited. **Flag this in your
+   completion report** so the orchestrator carries it into the PR body and, if
+   needed, an item-20 follow-up against the consuming ticket.
+2. **Two harness defects on `main` are load-bearing for your proofs and are not
+   yours to fix**: `run_t205_anon_grant.sh` is red
+   (`ERROR: role "service_role" does not exist`, exit 1) and `scratch-postgres`'s
+   `start.sh` cannot run as non-root here. Both are worked around in §6.0.
+   Report them; do not repair them inside this task's Allowed Files.
+3. **`held_ct`'s correctness now rests entirely on criterion (a2) and its
+   mutant.** Revision 1 had four criteria that all passed against a view with a
+   corrupted `held_ct`. If (a2) is written loosely, the same hole reopens and
+   nothing downstream will catch it.
