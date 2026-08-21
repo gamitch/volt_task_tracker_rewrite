@@ -356,3 +356,28 @@ Both NITs graded acceptable: the `useLoadState`/`BadgeVariant` duplication is th
 repo's established per-page convention (17+ files already do it), and
 `ChildSwitcherOption` was correctly declared locally with a disclosure rather than
 smuggled into `types.ts` as an unratified "frozen" type.
+
+## 2026-08-21T22:07Z — close-out. Issue moved to `In Review`, read-back confirmed.
+
+- Follow-ups filed before finalizing the PR body, both to `Backlog` with
+  `tier/unreviewed`: **GAM-466** (deferred palette tokens + the SKILL.md
+  correction this run could not make) and **GAM-470** (checker-reviewer's three
+  MINORs).
+- PR body finalized on the branch and passing the declaration check
+  (`OK  declaration closes GAM-444`, exit 0).
+- **Wall 3 hit exactly as documented, and only the half it was supposed to.**
+  The `ghs_` App token expired at `20:17:16Z`; `gh pr edit 230` and
+  `gh pr ready 230` both returned `HTTP 401: Bad credentials`. **PR #230 is
+  still a draft carrying its minute-5 skeleton body.** `git push` kept working
+  throughout on the long-lived PAT extraheader, so every commit and the
+  finalized body are on the remote. The recovery is one paste of
+  `docs/swarm/active/GAM-444-pr-body.md` into #230, then clear the draft flag —
+  which is the entire reason the pr-body skill requires writing the artifact
+  before attempting the API call.
+- Linear close-out comment posted with the six-gate block and both follow-up
+  ids; issue moved `In Progress → In Review` and **read back as `In Review`**.
+  Not `Done` — the merge closes it, not the agent (item 28e).
+
+**Run complete.** Nothing was left in flight: every subagent was dispatched with
+`run_in_background: false` and every dispatch line above has a matching verdict
+line below it.
