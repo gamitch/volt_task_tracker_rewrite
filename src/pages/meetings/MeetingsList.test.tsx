@@ -179,6 +179,12 @@ describe('loadCoachMeetingsData (T096 real load)', () => {
       if (table === 'attendance') return { select: attendanceSelectSpy };
       if (table === 'rsvps') return { select: rsvpsSelectSpy };
       if (table === 'students') return { select: studentsSelectSpy };
+      // GAM-446 -- the seventh query this loader now runs
+      // (`makeLoadCoachMeetingsData`, `loaders/meetings.ts`). Empty result;
+      // this file's own dedicated coverage of the merge itself lives in
+      // `loaders/meetings.test.ts`, not here.
+      if (table === 'v_event_attendance')
+        return { select: vi.fn().mockResolvedValue({ data: [], error: null }) };
       throw new Error(`unexpected table: ${table}`);
     });
     const client = { from: fromSpy } as unknown as SupabaseClient;
