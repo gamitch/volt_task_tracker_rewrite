@@ -140,20 +140,24 @@
  *    in that migration).
  *
  * -----------------------------------------------------------------------
- * 5. BEH-08 date/duration rendering -- reused convention, not reinvented,
- *    but REIMPLEMENTED rather than imported.
+ * 5. BEH-08 date/duration rendering -- reused convention, now IMPORTED, not
+ *    reinvented or reimplemented.
  *
- * `formatWeekdayDate`/`formatTimeRangeWithDuration` below are a verbatim
- * reproduction of `MeetingsList.tsx`'s own same-named helpers (weekday name
- * + computed duration, "6:00-8:00 PM - 2h" per PRD line 237's worked
- * example, en-dash/middle-dot separators, meridiem-dedup via
- * `splitMeridiem`) -- NOT imported, because `src/pages/meetings/**` and
- * `src/pages/outreach/**` are both this task's Forbidden Files (read-only
- * reference only), the same posture `OutreachList.tsx`'s own module doc #NFR
- * section already took for the identical reason ("Independently
- * reimplemented here (not imported) -- `MeetingsList.tsx` is not in this
- * task's Allowed Files"). Both `Intl.DateTimeFormat` instances stay pinned
- * to `timeZone: 'America/Chicago'` per NFR-09, matching both sibling files.
+ * `formatWeekdayDate`/`formatTimeRangeWithDuration`/`parseDateOnly`/
+ * `CHICAGO_TIME_ZONE` (weekday name + computed duration, "6:00-8:00 PM - 2h"
+ * per PRD line 237's worked example, en-dash/middle-dot separators,
+ * meridiem-dedup via `splitMeridiem`) are now imported from
+ * `src/lib/meetings/format.ts` (GAM-443) and re-exported below so this
+ * file's own existing test (`CalendarPage.test.tsx:48-49`) and any other
+ * importer keep working unchanged. They were previously reimplemented here
+ * verbatim, because at the time `src/pages/meetings/**` was a Forbidden File
+ * for the task that wrote this file (the same posture `OutreachList.tsx`'s
+ * own module doc #NFR section took, for the identical reason); that
+ * constraint does not apply to GAM-443, which moved the shared logic to
+ * `src/lib/meetings/format.ts` instead. All `Intl.DateTimeFormat` instances
+ * -- both the ones imported from `format.ts` and `CHICAGO_DATE_ONLY_FORMATTER`/
+ * `MONTH_YEAR_FORMATTER` below, which stay local to this file -- remain
+ * pinned to `timeZone: 'America/Chicago'` per NFR-09.
  * `todayIsoChicago`/`CHICAGO_DATE_ONLY_FORMATTER` (the `en-CA`-locale
  * `YYYY-MM-DD` trick) mirrors the identical technique
  * `src/emails/templates/weekly-digest.tsx`'s `formatDateOnlyInChicago`
@@ -296,6 +300,17 @@ import { Link as RouterLink } from 'react-router-dom';
 import { useActiveSeason } from '../../app/SeasonProvider';
 import { routePaths } from '../../app/router';
 import { EVENT_TYPE_BADGE, EVENT_TYPE_ORDER } from '../../lib/eventTypeBadge';
+// GAM-443: the date/duration formatters this file used to reimplement itself
+// (module doc #5) now live in `src/lib/meetings/format.ts`, a shared home
+// also imported by `MeetingsList.tsx`. Imported here for this file's own
+// use; `formatWeekdayDate`/`formatTimeRangeWithDuration` are re-exported
+// below so `CalendarPage.test.tsx:48-49` keeps working unchanged.
+import {
+  CHICAGO_TIME_ZONE,
+  formatTimeRangeWithDuration,
+  formatWeekdayDate,
+  parseDateOnly,
+} from '../../lib/meetings/format';
 import {
   loadCalendarSessions,
   type CalendarEventRow,
@@ -328,15 +343,6 @@ export interface EnrichedCalendarSession {
 // ---------------------------------------------------------------------------
 // Pure functions -- exported for direct testing.
 // ---------------------------------------------------------------------------
-
-/** `session_date` ('YYYY-MM-DD') -> a real calendar date, parsed without a
- * local-timezone day-shift (BEH-08 needs the literal stored date). Verbatim
- * reproduction of `MeetingsList.tsx`/`OutreachList.tsx`'s own helper --
- * module doc #5. */
-function parseDateOnly(isoDate: string): Date {
-  const [year, month, day] = isoDate.split('-').map(Number);
-  return new Date(Date.UTC(year, month - 1, day, 12)); // noon UTC avoids DST edge cases
-}
 
 /** Joins every session to its parent event; drops any session whose event id
  * doesn't resolve (defensive, mirrors the sibling files' identical join). */
@@ -398,31 +404,20 @@ export function filterByType(
 }
 
 // ---------------------------------------------------------------------------
-// BEH-08 / NFR-09 date + duration formatting -- module doc #5. Verbatim
-// reproduction of `MeetingsList.tsx`'s own same-named helpers, NOT imported
-// (that file is a Forbidden File for this task).
+// BEH-08 / NFR-09 date + duration formatting -- module doc #5.
+// `formatWeekdayDate`/`formatTimeRangeWithDuration`/`parseDateOnly`/
+// `CHICAGO_TIME_ZONE` are imported from `src/lib/meetings/format.ts`
+// (GAM-443, above); `CHICAGO_DATE_ONLY_FORMATTER`/`MONTH_YEAR_FORMATTER`/
+// `todayIsoChicago`/`monthLabel` below are calendar-specific and stay local.
 // ---------------------------------------------------------------------------
 
-const CHICAGO_TIME_ZONE = 'America/Chicago';
+export { formatTimeRangeWithDuration, formatWeekdayDate };
 
 const CHICAGO_DATE_ONLY_FORMATTER = new Intl.DateTimeFormat('en-CA', {
   timeZone: CHICAGO_TIME_ZONE,
   year: 'numeric',
   month: '2-digit',
   day: '2-digit',
-});
-
-const WEEKDAY_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
-  weekday: 'short',
-  month: 'short',
-  day: 'numeric',
-  timeZone: CHICAGO_TIME_ZONE,
-});
-
-const CLOCK_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
-  hour: 'numeric',
-  minute: '2-digit',
-  timeZone: CHICAGO_TIME_ZONE,
 });
 
 const MONTH_YEAR_FORMATTER = new Intl.DateTimeFormat('en-US', {
@@ -436,44 +431,6 @@ const MONTH_YEAR_FORMATTER = new Intl.DateTimeFormat('en-US', {
  * `formatDateOnlyInChicago` already established (module doc #5). */
 export function todayIsoChicago(): string {
   return CHICAGO_DATE_ONLY_FORMATTER.format(new Date());
-}
-
-/** e.g. "Sat, Jul 25" (BEH-08). */
-export function formatWeekdayDate(sessionDate: string): string {
-  return WEEKDAY_DATE_FORMATTER.format(parseDateOnly(sessionDate));
-}
-
-/** e.g. "2h", "1h 30m", "45m" (BEH-08's computed-duration requirement). */
-function formatDuration(startsAt: string, endsAt: string): string {
-  const totalMinutes = Math.round(
-    (new Date(endsAt).getTime() - new Date(startsAt).getTime()) / 60000,
-  );
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours === 0) return `${minutes}m`;
-  if (minutes === 0) return `${hours}h`;
-  return `${hours}h ${minutes}m`;
-}
-
-/** Splits a formatted "6:00 PM"-shaped string into its numeric time and
- * trailing meridiem, so `formatTimeRangeWithDuration` below can drop a
- * duplicate meridiem off the start time (PRD line 237's own worked example,
- * "6:00-8:00 PM"). */
-function splitMeridiem(formatted: string): { time: string; meridiem: string | null } {
-  const match = /^(.*?)\s?([AP]M)$/i.exec(formatted);
-  return match ? { time: match[1], meridiem: match[2] } : { time: formatted, meridiem: null };
-}
-
-/** e.g. "6:00-8:00 PM · 2h" (PRD BEH-08's own worked example, en-dash
- * separator, middle-dot before the duration -- module doc #9). */
-export function formatTimeRangeWithDuration(startsAt: string, endsAt: string): string {
-  const startFormatted = CLOCK_TIME_FORMATTER.format(new Date(startsAt));
-  const endFormatted = CLOCK_TIME_FORMATTER.format(new Date(endsAt));
-  const start = splitMeridiem(startFormatted);
-  const end = splitMeridiem(endFormatted);
-  const startText =
-    start.meridiem !== null && start.meridiem === end.meridiem ? start.time : startFormatted;
-  return `${startText}–${endFormatted} · ${formatDuration(startsAt, endsAt)}`;
 }
 
 function monthLabel(year: number, month: number): string {

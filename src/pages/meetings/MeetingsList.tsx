@@ -97,11 +97,15 @@
  * `formatWeekdayDate` (session_date -> "Sat, Jul 25") and
  * `formatTimeRangeWithDuration` (starts_at/ends_at -> "6:00-8:00 PM - 2h",
  * PRD line 237's own worked example) are the ONLY date-formatting functions
- * in this file, used for every Upcoming and Past row in both views -- no row
- * anywhere renders a bare ISO string or an un-computed start/end pair.
- * Both `Intl.DateTimeFormat` instances are pinned to `timeZone:
- * 'America/Chicago'` per NFR-09 ("Timestamps stored UTC, displayed
- * America/Chicago"), not the viewer's local browser timezone.
+ * used for every Upcoming and Past row in both views -- no row anywhere
+ * renders a bare ISO string or an un-computed start/end pair. GAM-443 moved
+ * both of them, and the rest of this file's own date/duration formatters,
+ * to `src/lib/meetings/format.ts` (a shared home now also imported by
+ * `CalendarPage.tsx`); this file re-exports them so this doc's own claim
+ * (and every existing importer) stays true. All three `Intl.DateTimeFormat`
+ * instances that back them are pinned to `timeZone: 'America/Chicago'` per
+ * NFR-09 ("Timestamps stored UTC, displayed America/Chicago"), not the
+ * viewer's local browser timezone.
  *
  * -----------------------------------------------------------------------
  * 5. `guards.tsx` `Role` vocabulary gap (same recurring gap `RosterShell.tsx`/
@@ -388,8 +392,9 @@
  *        `status`, `attendanceSummary`), plus three NEW per-session facts
  *        this task adds: `durationHours` (plain `endsAt - startsAt`
  *        arithmetic -- the same subtraction `formatDuration` already did,
- *        factored into one shared `computeDurationMinutes` helper so there
- *        is exactly one duration formula in this file, not two),
+ *        factored into one shared `computeDurationMinutes` helper (now in
+ *        `src/lib/meetings/format.ts`, GAM-443) so there is exactly one
+ *        duration formula, not two),
  *        `expectedCt` (a real RSVP `status === 'going'` COUNT for that
  *        session -- a plain filter+length, the same class of computation
  *        `PastAttendanceSummary` already does per module doc #3, never a
@@ -405,8 +410,9 @@
  *        single-session event since a chip adds nothing for a one-off
  *        meeting -- the date range line covers that case alone);
  *        `buildDateRangeLabel` reuses `formatWeekdayDate` verbatim (BEH-08,
- *        module doc #4 -- still the ONLY weekday-date formatter in this
- *        file); "planned hours" sums EVERY non-canceled session's own
+ *        module doc #4 -- still the ONLY weekday-date formatter, now shared
+ *        via `src/lib/meetings/format.ts`, GAM-443); "planned hours" sums
+ *        EVERY non-canceled session's own
  *        `durationHours`, "logged hours" sums only COMPLETED sessions' --
  *        both are plain scheduled-DURATION sums, never a re-derivation of
  *        `v_student_hours`'/`v_student_participation`'s own hours/percentage
@@ -600,6 +606,19 @@ import {
 // export-signature-change file for this task; only its own comment text
 // changes, never its exports.
 import { StudentMeetingView } from './StudentMeetingView';
+// GAM-443: the date/duration formatters this file used to define itself
+// (module doc #4) now live in `src/lib/meetings/format.ts`, a shared home
+// also imported by `CalendarPage.tsx`. Imported here for this file's own
+// use; re-exported below (module doc #4) so `MeetingsList.test.tsx` and any
+// other importer of this page module keep working unchanged.
+import {
+  buildDateRangeLabel,
+  buildRecurrenceChips,
+  formatHoursLabel,
+  formatTimeRangeWithDuration,
+  formatWeekdayDate,
+  sessionDurationHours,
+} from '../../lib/meetings/format';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of real columns. See module doc #1/#3.
@@ -1271,126 +1290,20 @@ export async function defaultLoadStudentMeetingsData(
 }
 
 // ---------------------------------------------------------------------------
-// BEH-08 / NFR-09 date + duration formatting -- module doc #4. The ONLY
-// date-formatting functions in this file.
+// BEH-08 / NFR-09 date + duration formatting -- module doc #4. GAM-443 moved
+// these to `src/lib/meetings/format.ts` (a shared home also imported by
+// `CalendarPage.tsx`); re-exported here so `MeetingsList.test.tsx` and any
+// other importer of this page module keep working unchanged.
 // ---------------------------------------------------------------------------
 
-const CHICAGO_TIME_ZONE = 'America/Chicago';
-
-const WEEKDAY_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
-  weekday: 'short',
-  month: 'short',
-  day: 'numeric',
-  timeZone: CHICAGO_TIME_ZONE,
-});
-
-const CLOCK_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
-  hour: 'numeric',
-  minute: '2-digit',
-  timeZone: CHICAGO_TIME_ZONE,
-});
-
-/** T122 (module doc #10b) -- UXD-02's own "MON (18) · THU (18)" worked
- * example needs a bare weekday abbreviation, upper-cased below. */
-const WEEKDAY_ABBR_FORMATTER = new Intl.DateTimeFormat('en-US', {
-  weekday: 'short',
-  timeZone: CHICAGO_TIME_ZONE,
-});
-
-/** `session_date` ('YYYY-MM-DD') -> a real calendar date, parsed without a
- * local-timezone day-shift (BEH-08 needs the literal stored date). */
-function parseDateOnly(isoDate: string): Date {
-  const [year, month, day] = isoDate.split('-').map(Number);
-  return new Date(Date.UTC(year, month - 1, day, 12)); // noon UTC avoids DST edge cases
-}
-
-/** e.g. "Sat, Jul 25" (BEH-08). */
-export function formatWeekdayDate(sessionDate: string): string {
-  return WEEKDAY_DATE_FORMATTER.format(parseDateOnly(sessionDate));
-}
-
-/** T122 (module doc #10a/#10b) -- the ONE shared duration-in-minutes
- * computation `formatDuration` (unchanged worked output) and
- * `sessionDurationHours` (new) both build on, so there is exactly one
- * duration formula in this file, not two. */
-function computeDurationMinutes(startsAt: string, endsAt: string): number {
-  return Math.round((new Date(endsAt).getTime() - new Date(startsAt).getTime()) / 60000);
-}
-
-/** e.g. "2h", "1h 30m", "45m" (BEH-08's computed-duration requirement). */
-export function formatDuration(startsAt: string, endsAt: string): string {
-  const totalMinutes = computeDurationMinutes(startsAt, endsAt);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours === 0) return `${minutes}m`;
-  if (minutes === 0) return `${hours}h`;
-  return `${hours}h ${minutes}m`;
-}
-
-/** T122 (module doc #10a) -- a session's scheduled duration as a plain
- * number of hours (`CoachMeetingSessionDetail.durationHours`), built on the
- * SAME `computeDurationMinutes` `formatDuration` uses above -- never a
- * second duration formula. */
-function sessionDurationHours(startsAt: string, endsAt: string): number {
-  return computeDurationMinutes(startsAt, endsAt) / 60;
-}
-
-/** e.g. "2h", "1.5h", "0h" -- plain number formatting, not a metric. */
-export function formatHoursLabel(hours: number): string {
-  const rounded = Math.round(hours * 10) / 10;
-  return Number.isInteger(rounded) ? `${rounded}h` : `${rounded.toFixed(1)}h`;
-}
-
-/** T122 (module doc #10b) -- UXD-02's own worked example: `["MON (18)",
- * "THU (18)"]`, grouped by weekday in first-seen order, from this event's
- * real `session_date` values (plain counting, not a metric-view formula).
- * Empty for a single-session event -- `buildDateRangeLabel` below covers
- * that case alone; a one-entry chip ("SAT (1)") would add nothing. */
-export function buildRecurrenceChips(sessions: readonly { sessionDate: string }[]): string[] {
-  if (sessions.length <= 1) return [];
-  const countByWeekday = new Map<string, number>();
-  const order: string[] = [];
-  for (const session of sessions) {
-    const weekday = WEEKDAY_ABBR_FORMATTER.format(parseDateOnly(session.sessionDate)).toUpperCase();
-    if (!countByWeekday.has(weekday)) order.push(weekday);
-    countByWeekday.set(weekday, (countByWeekday.get(weekday) ?? 0) + 1);
-  }
-  return order.map((weekday) => `${weekday} (${countByWeekday.get(weekday)})`);
-}
-
-/** T122 (module doc #10b) -- e.g. "Sat, Jul 25" (single session) or
- * "Sat, Jul 25 – Thu, Aug 13" (multi-session), reusing `formatWeekdayDate`
- * verbatim (BEH-08, module doc #4 -- still the ONLY weekday-date formatter
- * in this file). */
-export function buildDateRangeLabel(sessions: readonly { sessionDate: string }[]): string {
-  if (sessions.length === 0) return '';
-  const sorted = sessions.slice().sort((a, b) => a.sessionDate.localeCompare(b.sessionDate));
-  const first = formatWeekdayDate(sorted[0].sessionDate);
-  if (sorted.length === 1) return first;
-  const last = formatWeekdayDate(sorted[sorted.length - 1].sessionDate);
-  return `${first} – ${last}`;
-}
-
-/** Splits a formatted "6:00 PM"-shaped string into its numeric time and
- * trailing meridiem, so `formatTimeRangeWithDuration` below can drop a
- * duplicate meridiem off the start time (PRD line 237's own worked example,
- * "6:00-8:00 PM", never fabricated -- `Intl.DateTimeFormat` alone produces
- * "6:00 PM-8:00 PM", with the meridiem repeated on every instant). */
-function splitMeridiem(formatted: string): { time: string; meridiem: string | null } {
-  const match = /^(.*?)\s?([AP]M)$/i.exec(formatted);
-  return match ? { time: match[1], meridiem: match[2] } : { time: formatted, meridiem: null };
-}
-
-/** e.g. "6:00-8:00 PM - 2h" (PRD BEH-08's own worked example, en-dash separators). */
-export function formatTimeRangeWithDuration(startsAt: string, endsAt: string): string {
-  const startFormatted = CLOCK_TIME_FORMATTER.format(new Date(startsAt));
-  const endFormatted = CLOCK_TIME_FORMATTER.format(new Date(endsAt));
-  const start = splitMeridiem(startFormatted);
-  const end = splitMeridiem(endFormatted);
-  const startText =
-    start.meridiem !== null && start.meridiem === end.meridiem ? start.time : startFormatted;
-  return `${startText}–${endFormatted} · ${formatDuration(startsAt, endsAt)}`;
-}
+export {
+  buildDateRangeLabel,
+  buildRecurrenceChips,
+  formatDuration,
+  formatHoursLabel,
+  formatTimeRangeWithDuration,
+  formatWeekdayDate,
+} from '../../lib/meetings/format';
 
 function formatPastAttendanceSummary(summary: PastAttendanceSummary): string {
   // Mirrors MTG-13's own literal worked example format ("14 present - 2
