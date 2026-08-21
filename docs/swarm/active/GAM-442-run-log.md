@@ -77,3 +77,62 @@ PR credential (`ghs_`) decoded at minute 1: `iat 2026-08-21T05:02:29Z`,
   subagent** — the packet was never gated, no worker was ever dispatched, and
   nothing under `supabase/` was written. Resume by re-running the premise gate
   against `docs/swarm/active/GAM-442-worker-packet.md`.
+
+- **05:27Z — `checker-premise` round 1 VERDICT: `REVISE`.** Returned, waited on,
+  read. It stood up PostgreSQL 16.15 in its own worktree, applied all 25
+  migrations, **wrote four candidate versions of the view**, and ran every §6
+  criterion against them. Two BLOCKERs, three MAJORs, three MINORs, one NIT.
+
+  **BLOCKER-1 — the packet walked the worker into a fan-out, and none of its own
+  acceptance criteria would have caught it.** §4 defined `held_ct` as completed
+  sessions and `graded_marks_ct` as marks on those sessions, then mandated
+  `left join`s from `events`. In the single join chain a held session with *n*
+  marks appears *n* times, so `held_ct` counts sessions once per mark. Measured
+  on the §6(a) fixture: `held_ct = 5` where the truth is 2, and `2` where the
+  truth is 1. `attendance_pct` stays **correct**, so nothing looks wrong — and
+  `held_ct` is the "across 21 held" half of the card's own headline. All four
+  of §6's criteria passed on the corrupted view. Prescribed fix:
+  `count(distinct es.id)` + `count(a.id)` (never `count(*)`), following
+  `v_event_student_hours` (`20260723000001_dashboard_views.sql:269-291`), which
+  is the same join and already solves this — plus a new criterion (a2) and a
+  third mutant that asserts it.
+
+  **BLOCKER-2 — §8 declared the wrong doubt.** Decision 2 worried about MET-01
+  rollup consistency; the gate found that is *not* the live risk
+  (`CoachHome.tsx:1168-1170` already ships a deliberately divergent ratio with a
+  comment saying so — divergence is house practice). The real risk is the
+  inverted failure mode **D014 itself records**: since T508, "no attendance row"
+  is the *normal* shape for an unmarked student, so forgetting to mark someone
+  **inflates** the percentage. Measured: 5-student roster, 20 held sessions,
+  coach marks only the 2 who turned up each night → `attendance_pct = 100.0`.
+  That is item 26's own tier test ("lie to a user about their own data") landing
+  on this task. D014's stated mitigation is that the counts stay visible, and
+  `20260806000000_met01_explicit_marks.sql:107-112` says verbatim that if they
+  stop being shown, D014 must be revisited.
+
+  Three MAJORs, all "this criterion passes for the wrong reason": §6(e) is
+  vacuous and §6(d) is *unpassable* in the harness §6 prescribed (measured —
+  `authenticated` is denied on **every** view in a bare scratch cluster, and
+  `anon` has no privilege to revoke, so the runner must prepend T205's
+  `alter default privileges` line); §6(f) diffs four empty result sets on an
+  unseeded cluster; §8-4's fallback is already filed as **GAM-389** and shipping
+  the revoke pre-empts it in one direction.
+
+  Gate also found `run_t205_anon_grant.sh` is **red on `main` today**
+  (`ERROR: role "service_role" does not exist`) and that the `scratch-postgres`
+  skill's `start.sh` **cannot run in this container** (non-root `chown` refusal)
+  — both pre-existing, neither caused here, both needed by the worker.
+
+  Decisions 1, 3, 5 upheld; 4 upheld with a corrected justification (the view is
+  `is_updatable = NO`, so T205's DELETE rationale does not transfer, and item 25
+  forbids writing this up as a security finding); 2 overturned and re-declared.
+  **No `gate/human` required for the SQL itself** — the one question that could
+  have stopped work today is settled: PRD 8.2 defines no per-event metric, so no
+  8.4 formula moves and no dispute-log entry is owed.
+
+  Cluster stopped, data directory deleted, worktree removed — confirmed by the
+  gate and by an empty `git status` in the shared tree.
+
+  Round 2 of 2 (item 19a cap) now: revising the packet against all six
+  prioritized revisions. A third REVISE escalates to the owner rather than
+  looping.
