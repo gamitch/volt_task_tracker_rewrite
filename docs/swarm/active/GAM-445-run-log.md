@@ -237,3 +237,52 @@ the next reader has to infer.
   `run_in_background: false`; opus pin self-applying.
   **If this line is the last one in this file, the run died holding this
   subagent.**
+
+> **Timestamp correction.** The `HH:MMZ` prefixes above were written from my own
+> running estimate and drifted ahead of the real clock — the entries marked
+> 21:08Z and 21:10Z actually happened around 20:45Z. Commit times in
+> `git log` are authoritative; these prefixes are not. Recorded rather than
+> quietly rewritten, because the `pr-body` skill notes three runs in one session
+> whose written timestamps disagreed with their own commit times, and silently
+> fixing mine would delete the evidence that it happens.
+
+- **20:54Z (real) — `checker-reviewer` RETURNED: PASS.** 106K tokens, 63 tool
+  uses, ~18 min. Two MINOR findings, four NIT, **no BLOCKER and no MAJOR.**
+
+  **This checker ran rather than read, and that is what makes the verdict worth
+  something.** It re-ran all six gates itself and got figures matching the
+  worker's exactly. It then ran three of its own mutations in the shared tree
+  and reverted them, and the results are the real evidence that the two
+  load-bearing criteria are traps rather than decorations:
+  - `isValid`'s ternary → `&&`-combined: **exit 1, exactly 1 failure — the AC8
+    test.** So criterion 8 genuinely discriminates the correct build from the
+    bricked one the packet was rewritten to prevent.
+  - `showPerDayRows` loses its `!isEditMode` gate: **exit 1, exactly one
+    failure — the AC7 test.** The edit-mode data-corruption path found in gate
+    round 1 is now guarded by a test that fails when the guard is removed.
+  - per-day generator reuses row 1's time: exit 1, 2 failures.
+  It also proved `buildEditDesiredFutureSessions` untouched by **md5 of the
+  function body** at both SHAs (identical), and ran the e2e itself against a real
+  seeded PostgreSQL cluster: `6 passed (22.1s)`.
+
+  **It independently re-measured the worker's most self-serving claim** — that
+  the sub-44px tap target is pre-existing rather than a regression — in one
+  browser session at 375px, and got byte-identical geometry for the unmodified
+  shared pair and the new rows (181×20 input, 223×32 wrapper). The claim
+  survives. No horizontal overflow in either state.
+
+  **Item 27: Passed, not Partial.** The checker followed the data on the real
+  path — coach signs in, fills per-weekday times, clicks Create, and the distinct
+  UTC pairs are read back out of Postgres by a query independent of the UI.
+
+  **MINOR-1** (blocking the undraft): §8's Linear follow-up is still unfiled, and
+  it is mine to file. **MINOR-2**: the ≥44px target in §3.7 is unmet — real, not
+  a regression, and unfixable inside Allowed Files.
+- **20:57Z (real) — WALL 3 ARRIVED, exactly as `AGENTS.md` describes.**
+  `gh pr view 231` → **`HTTP 401: Bad credentials`**. The `ghs_` token expired at
+  20:17:31Z as its own payload said it would at minute 1. `git push` still works
+  (the long-lived `github_pat_` extraheader), so nothing is lost — but **PR #231
+  cannot be undrafted or have its body edited from this run.**
+  This is why it was opened as a draft at minute 6 rather than at the end: the
+  work is on the branch and the PR exists. What remains is one paste and one
+  click by the owner or a scoped session.
