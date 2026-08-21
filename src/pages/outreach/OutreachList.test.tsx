@@ -1621,8 +1621,17 @@ describe('<OutreachList /> coach view', () => {
     expect(container.querySelectorAll('[role="progressbar"]').length).toBe(1);
     // The confirmed/planned/goal numbers still render as tiles too (T121's
     // fix to this part is unchanged -- the bar is additive, not a replacement).
-    expect(container.textContent).toContain('9 hrs confirmed');
+    expect(container.textContent).toContain('9 hrs signed up');
     expect(container.textContent).toContain('7 hrs planned');
+    // GAM-196 §3.2: the explanatory line disclosing which figure is which.
+    expect(container.textContent).toContain('From outreach sign-ups, not attendance.');
+    // GAM-196 mutation guard: the standalone tile label. `textContent`
+    // concatenates the label and its value with no separator, so this only
+    // passes if the LABEL itself (not just the value string) reads "Signed
+    // up" -- catches a revert of the label alone back to "Confirmed", which
+    // the two assertions above cannot (they match "9 hrs signed up" as a
+    // substring regardless of what precedes it).
+    expect(container.textContent).toContain('Signed up9 hrs signed up');
   });
 
   it('BEH-01: the team goal bar fires milestone toasts once confirmed hours cross them (first render only)', async () => {
@@ -1641,10 +1650,10 @@ describe('<OutreachList /> coach view', () => {
     await flushMicrotasks();
 
     expect(container.textContent).toContain(
-      'Team season goal: reached 25% of the season goal (confirmed hours).',
+      'Team season goal: reached 25% of the season goal (signed-up hours).',
     );
     expect(container.textContent).toContain(
-      'Team season goal: reached 50% of the season goal (confirmed hours).',
+      'Team season goal: reached 50% of the season goal (signed-up hours).',
     );
     // 9 confirmed / 15 goal = 60% -- 75% and 100% must NOT show as reached.
     expect(container.textContent).not.toContain('75% reached');
@@ -1812,7 +1821,7 @@ describe('<OutreachList /> student/parent view', () => {
     await flushMicrotasks();
 
     expect(container.textContent).toContain('Your season goal');
-    expect(container.textContent).toContain('3 hrs confirmed');
+    expect(container.textContent).toContain('3 hrs signed up');
     expect(container.textContent).toContain('0 hrs planned');
     expect(container.textContent).toContain('1 awaiting your RSVP');
     expect(container.textContent).toContain("You RSVP'd: Going"); // past session-food-bank-past
@@ -1864,7 +1873,7 @@ describe('<OutreachList /> student/parent view', () => {
     await flushMicrotasks();
 
     expect(container.textContent).toContain('2 awaiting your RSVP');
-    expect(container.textContent).toContain('0 hrs confirmed');
+    expect(container.textContent).toContain('0 hrs signed up');
     expect(container.textContent).toContain('0 hrs planned');
     expect(container.textContent).not.toContain("You RSVP'd:");
   });
@@ -1908,7 +1917,7 @@ describe('<OutreachList /> student/parent view', () => {
 
     // session-food-bank-upcoming is `scheduled` (3h) -- a fresh "going" RSVP
     // on it adds to PLANNED hours only, never to confirmed (BEH-02).
-    expect(container.textContent).toContain('3 hrs confirmed'); // unchanged
+    expect(container.textContent).toContain('3 hrs signed up'); // unchanged
     expect(container.textContent).toContain('3 hrs planned'); // was 0, now 3
     expect(container.textContent).toContain('0 awaiting your RSVP'); // was 1, now answered
     expect(fakeOnRsvpChange).toHaveBeenCalledTimes(1);
@@ -1928,7 +1937,7 @@ describe('<OutreachList /> student/parent view', () => {
     await flushMicrotasks();
     // Viewer: 3 confirmed / 12 goal = exactly 25%.
     expect(container.textContent).toContain(
-      'Your season goal: reached 25% of the season goal (confirmed hours).',
+      'Your season goal: reached 25% of the season goal (signed-up hours).',
     );
 
     freshContainer();
@@ -2256,7 +2265,7 @@ describe('<OutreachList /> T170: viewerStudentId resolved for real', () => {
 
     // Confirmed/planned hours (computeStudentHours) and the unanswered-RSVP
     // count (getUnansweredRsvpCount) -- both driven by `viewerStudentId`.
-    expect(container.textContent).toContain('2 hrs confirmed');
+    expect(container.textContent).toContain('2 hrs signed up');
     expect(container.textContent).toContain('3 hrs planned');
     expect(container.textContent).toContain('1 awaiting your RSVP');
 
@@ -2265,7 +2274,7 @@ describe('<OutreachList /> T170: viewerStudentId resolved for real', () => {
     // figures baked into this string are the observable proxy for it).
     const bar = container.querySelector('[role="progressbar"]');
     expect(bar).toBeTruthy();
-    expect(bar?.getAttribute('aria-valuetext')).toBe('2 of 20 hours confirmed; 3 more planned');
+    expect(bar?.getAttribute('aria-valuetext')).toBe('2 of 20 hours signed up; 3 more planned');
   });
 
   /**
@@ -2291,13 +2300,13 @@ describe('<OutreachList /> T170: viewerStudentId resolved for real', () => {
     });
     await flushMicrotasks();
 
-    expect(container.textContent).toContain('2 hrs confirmed');
+    expect(container.textContent).toContain('2 hrs signed up');
     expect(container.textContent).toContain('3 hrs planned');
     expect(container.textContent).toContain('1 awaiting your RSVP');
 
     const bar = container.querySelector('[role="progressbar"]');
     expect(bar).toBeTruthy();
-    expect(bar?.getAttribute('aria-valuetext')).toBe('2 of 20 hours confirmed; 3 more planned');
+    expect(bar?.getAttribute('aria-valuetext')).toBe('2 of 20 hours signed up; 3 more planned');
   });
 
   describe('criterion 2: explicit viewerStudentId bypasses resolveStudentId entirely, paired', () => {
@@ -2312,7 +2321,7 @@ describe('<OutreachList /> T170: viewerStudentId resolved for real', () => {
 
       expect(resolveStudentId).not.toHaveBeenCalled();
       // (b) -- distinguishable content, not just "did not error."
-      expect(container.textContent).toContain('2 hrs confirmed');
+      expect(container.textContent).toContain('2 hrs signed up');
     });
 
     it('vacuity probe: a broken resolveStudentId does not affect the explicit-prop render, but DOES break a separate no-explicit-prop render', async () => {
@@ -2328,7 +2337,7 @@ describe('<OutreachList /> T170: viewerStudentId resolved for real', () => {
         resolveStudentId: brokenResolveStudentId,
       });
       await flushMicrotasks();
-      expect(container.textContent).toContain('2 hrs confirmed');
+      expect(container.textContent).toContain('2 hrs signed up');
       expect(container.textContent).not.toContain("Couldn't find your student record");
 
       // Separate render, no explicit prop -- must go RED under the same

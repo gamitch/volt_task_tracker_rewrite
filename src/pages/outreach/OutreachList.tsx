@@ -714,10 +714,14 @@
  *
  * `computeStudentHours` itself is unchanged (byte-identical, constitution
  * item 3) -- it now simply receives the real id as its argument. Its own
- * RSVP-based "confirmed hours" formula is a disclosed heuristic that
- * legitimately disagrees with the attendance-backed `v_student_hours` a
- * student might see elsewhere in the app; that pre-existing formula
- * divergence is tracked separately as T188, not reconciled here.
+ * RSVP-based "confirmed hours" formula legitimately disagrees with the
+ * attendance-backed `v_student_hours` a student might see elsewhere in the
+ * app; that pre-existing formula divergence is tracked as GAM-196. Per the
+ * owner's option-A decision on that issue, this page now names the RSVP
+ * figure "signed up" rather than "confirmed" instead of changing the
+ * arithmetic -- a labelling reconciliation, not a numeric one. The
+ * underlying spec deviation (this page's hours are RSVP-derived where PRD
+ * OUT-05/MET-04 specify attendance) is filed separately as GAM-431.
  *
  * -----------------------------------------------------------------------
  * 16. T193: the student/parent view's RSVP `SegmentedControl` (module doc
@@ -1376,6 +1380,13 @@ export function sessionHours(session: OutreachSessionRow): number {
  * `scheduled` -> planned; anything else (a `maybe`/`declined` RSVP, no RSVP
  * at all, or a `canceled` session) contributes to neither. Never returns a
  * combined number.
+ *
+ * GAM-196: the user-visible name for `confirmedHours` on `/outreach` is
+ * "signed up", not "confirmed" -- "confirmed" is reserved app-wide for the
+ * attendance-backed `v_student_hours`. Contrast
+ * `src/pages/reports/HoursTab.tsx:743`, which carries the parallel milestone
+ * string "reached N% of the season hours goal (confirmed hours)" over
+ * genuinely attendance-backed data.
  */
 export function computeStudentHours(
   studentId: string,
@@ -2004,7 +2015,7 @@ function useMilestoneToasts(
       ...prev,
       ...newlyCrossed.map((milestone) => ({
         id: `${goalBarId}-${milestone}`,
-        message: `${label}: reached ${milestone}% of the season goal (confirmed hours).`,
+        message: `${label}: reached ${milestone}% of the season goal (signed-up hours).`,
       })),
     ]);
   }, [seasonId, goalBarId, label, confirmedHours, goalHours]);
@@ -2143,16 +2154,16 @@ function GoalProgressBar({
       <GoalBar
         confirmedPct={percent}
         plannedPct={plannedPct}
-        valueText={`${confirmedHours} of ${goalHours} hours confirmed; ${plannedHours} more planned`}
+        valueText={`${confirmedHours} of ${goalHours} hours signed up; ${plannedHours} more planned`}
         labelledBy={headingId}
       />
       <HStack gap={5} wrap="wrap">
         <VStack gap={0}>
           <Text type="label" color="secondary">
-            Confirmed
+            Signed up
           </Text>
           <Text type="body" weight="semibold" hasTabularNumbers>
-            {confirmedHours} hrs confirmed
+            {confirmedHours} hrs signed up
           </Text>
         </VStack>
         <VStack gap={0}>
@@ -2180,6 +2191,10 @@ function GoalProgressBar({
           </Text>
         </VStack>
       </HStack>
+      <Text type="supporting" color="secondary">
+        From outreach sign-ups, not attendance. Confirmed hours from attendance appear on the home
+        page and in reports.
+      </Text>
       <HStack justify="between" wrap="wrap" gap={2}>
         {GOAL_MILESTONES.map((milestone) =>
           percent >= milestone ? (
