@@ -120,6 +120,38 @@ export interface CoachMeetingRow {
   teamIds?: readonly string[] | null;
   /** T510 -- optional, same reasoning as `teamIds` above. */
   description?: string;
+  /**
+   * GAM-446 -- `v_event_attendance.attendance_pct` (GAM-442), merged onto
+   * this row by `loaders/meetings.ts`'s `makeLoadCoachMeetingsData`, keyed by
+   * `eventId`. `number | null`, never widened to a bare `number`: NULL is
+   * "—", NEVER a fabricated `0` (constitution item 3 / PRD DATA-01 -- same
+   * discipline `SeriesCardModel.attendancePct` above already documents).
+   * Optional only because it is additive over every pre-existing
+   * `CoachMeetingRow` literal in this file's own test file; a row this
+   * loader actually merges onto always sets it (to a real number or `null`,
+   * never leaves it `undefined`).
+   */
+  attendancePct?: number | null;
+  /** GAM-446 -- `v_event_attendance.held_ct`. Counts SESSIONS held, not
+   * marks -- do not read this as a mark count (see `gradedMarksCt` below). */
+  heldCt?: number;
+  /**
+   * GAM-446 -- `v_event_attendance.graded_marks_ct`. **Mandatory whenever
+   * `attendancePct` is rendered, not optional value-wise**: the view's own
+   * catalog comment states in capitals that "A CONSUMER THAT RENDERS
+   * attendance_pct WITHOUT ALSO RENDERING graded_marks_ct REINTRODUCES
+   * D014's KNOWN REGRESSION" -- since T508 an unmarked student normally has
+   * no attendance row, so forgetting to mark someone INFLATES the
+   * percentage (measured 100% for an event 60% of the roster skipped). This
+   * field is the mitigation; a card rendering `attendancePct` must render
+   * this too.
+   */
+  gradedMarksCt?: number;
+  /** GAM-446 -- `v_event_attendance.attended_marks_ct` (MET-05: `late`
+   * counts as attended). */
+  attendedMarksCt?: number;
+  /** GAM-446 -- `v_event_attendance.excused_ct`. */
+  excusedCt?: number;
 }
 
 export interface CoachMeetingsData {
