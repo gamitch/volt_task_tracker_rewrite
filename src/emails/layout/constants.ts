@@ -36,14 +36,23 @@ export const MANAGE_PREFERENCES_URL = `${SITE_URL}${MANAGE_PREFERENCES_PATH}`;
 
 // `src/theme/volt.ts` (read-only reference -- NOT imported here; see
 // `renderEmailLayout.ts` for why) defines:
-//   color.accent: '#5B2EE5'
-//   tokens['--color-accent']: ['#5B2EE5' (light), '#9B7BFF' (dark)]
-//   tokens['--color-on-accent']: ['#FFFFFF' (light), '#00008D' (dark)]
+//   tokens['--color-accent']: ['#A8560A' (light), '#f79a4a' (dark)]
+//   tokens['--color-on-accent']: ['#FFFFFF' (light), '#081310' (dark)]
 // Email HTML cannot load the Astryx `<Theme>` provider or consume CSS
 // custom properties reliably across email clients, so these are
 // re-declared here as literal hex values. If `src/theme/volt.ts` ever
 // changes its accent tokens, these must be updated by hand to match.
-export const ACCENT_LIGHT = '#5B2EE5';
-export const ACCENT_DARK = '#9B7BFF';
+//
+// D020 (GAM-436) is the accent change these now track: Volt Violet
+// (`#5B2EE5`/`#9B7BFF`, on-accent `#FFFFFF`/`#00008D`) became Tracker Orange.
+// Updated here under this file's own stated invariant, not as scope creep --
+// left alone, every VOLT email would keep rendering a violet brand accent
+// while the app it links into is orange.
+//
+// `volt.ts`'s `color.accent` SEED deliberately stays `#5B2EE5` and is no longer
+// mirrored here: it drives only the neutral ramp, never the accent surfaces
+// this file reproduces. See that file's own note for the measurement.
+export const ACCENT_LIGHT = '#A8560A';
+export const ACCENT_DARK = '#f79a4a';
 export const ON_ACCENT_LIGHT = '#FFFFFF';
-export const ON_ACCENT_DARK = '#00008D';
+export const ON_ACCENT_DARK = '#081310';
