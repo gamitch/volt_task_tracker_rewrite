@@ -139,3 +139,9 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   orchestrator's, chosen to attack the two claims a green suite is least likely
   to actually guard — the design's fixed-height promise and the contract a
   sibling ticket codes against. All three reverted cleanly; worktrees removed.
+- 00:14Z — **DISPATCHED `checker-reviewer`** on the actual diff. Item 26 does not
+  require a checker round at STANDARD — this one is added deliberately because
+  the item-19 premise gate never returned a DISPATCH verdict (two 529s), so an
+  independent read of the artifact is the closest available substitute for the
+  round that could not run. Blocking on it. **If this line is the last one in
+  this file, the run died holding this subagent.**
