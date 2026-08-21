@@ -20,3 +20,10 @@ holding that subagent.*
 - **05:01Z — PR credential deadline measured.** `GH_TOKEN` is a `ghs_` JWT,
   `iat 2026-08-21T05:00:41Z`, `exp 2026-08-21T06:00:41Z`. 59 minutes to call
   `gh pr create`. Draft PR opens next, before any implementation work (wall 3).
+- **05:04Z — draft PR opened: <https://github.com/gamitch/volt_task_tracker_rewrite/pull/221>**,
+  ~4 minutes into the run, with ~56 minutes of PR credential left. Body artifact
+  is `docs/swarm/active/GAM-439-pr-body.md`, validated by
+  `.claude/skills/pr-body/scripts/check.mjs` (exit 0, `OK declaration closes
+  GAM-439`).
+- **05:05Z — reading the real code to verify the issue's citations before
+  writing the packet** (item 19c: verify your own citations before submitting).
