@@ -284,3 +284,16 @@ holding that subagent.*
   the four mutants, the `e2e-personas` output and the four NITs, then
   `gh pr edit`. `check.mjs` → `OK declaration closes GAM-439`, exit 0. Done
   with **9 minutes** of the `ghs_` credential left.
+- **17:10Z — GAM-439 moved `In Progress → In Review`** (item 28e — never
+  `Done`; the merge closes it, not the author), read back as `In Review`.
+  Close-out comment posted and read back by id, prefixed
+  `**Run log · claude (Opus 5, dispatched run) · close-out · 2026-08-21**` so it
+  cannot be mistaken for an owner instruction. It carries the six-gate block
+  with exit codes, the PR link, the three verifications the issue demanded, the
+  disclosed failed-refresh transition, and the one product question only the
+  owner can answer (D3: admin-only, or should coaches have it too?). **No item-20
+  follow-up row is owed** — the four findings are NITs, not deferred defects.
+- **17:10Z — run complete.** Three transitions commented on the issue and no
+  more, per AGENTS.md. Final state: PR #221 open and non-draft, branch
+  `claude/gam-439-inline-season-goal-editor` at the commit below, working tree
+  clean, no worktrees left behind, issue in `In Review`.
