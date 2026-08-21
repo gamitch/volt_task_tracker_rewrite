@@ -1,10 +1,23 @@
 # GAM-445 task packet — per-weekday times in weekly-mode meeting scheduling
 
-Tier: **HEAVY** (item 26). Round 2 of the item 19a two-round gate cap.
-Round 1 returned **REVISE (BLOCKER)**; all twelve required revisions are applied
-below and each is marked `[R1-n]`. Line numbers were read from the working tree,
-and round 1 found four of mine wrong — the corrected ones are marked
-`[R1-verified]` and were re-read rather than carried over.
+Tier: **HEAVY** (item 26). **Round 3 text**, incorporating both gate rounds.
+
+Round 1 returned **REVISE (BLOCKER)** with twelve required revisions; round 2
+returned **REVISE (MAJOR)** with eight more, and ruled explicitly that the
+remainder was *"a wording fix the author can apply immediately, not a design
+question"* and that **no question in this packet requires the human owner**.
+Round-1 revisions are marked `[R1-n]`, round-2 revisions `[R2-n]`.
+
+**`[R1-11]` has no textual home, and that is deliberate rather than dropped
+`[R2-6]`.** It required fixing two stale citations (`:1927` → `test.tsx:2101`,
+and `:1123` → `:1127-1135`) inside round 1's §7.4 — a Least-confident entry that
+no longer exists, because §7 was rewritten wholesale for round 2. The
+corrections are recorded in the run log instead.
+
+**One claim below is relayed rather than personally re-measured, and is marked
+as such:** the `CheckboxListItem` prop list in §3.2. `node_modules` is absent
+from the shared tree, so round 2 read the installed component source in its own
+worktree; I did not repeat that read.
 
 ## 1. The defect
 
@@ -72,8 +85,9 @@ this is a deliberate call the gate should attack (§7.1).** `ScheduleRule` carri
 the `HH:MM` `ISOTimeString` that `TimeInput` produces and that
 `computeEndTimeError` (`:534`) consumes. Making it the state shape would add a
 lossy round-trip and a second validation vocabulary on every keystroke. Also
-note `validateScheduleRule` (`format.ts:228-256`) **throws `RangeError` by
-design** and is unsuitable for live form validation. `ScheduleRule` is GAM-443's
+note `validateScheduleRule` (`format.ts:228`) **throws `RangeError` by
+design** and — `[R2-8]`, which I verified myself — **is not exported at all**,
+so it is unavailable regardless of suitability. `ScheduleRule` is GAM-443's
 *rendering* vocabulary; this ticket's form state is not required to be it, and
 nothing in this ticket produces a `ScheduleRule`.
 
@@ -93,10 +107,27 @@ still costs zero extra input. Rows follow `WEEKDAY_OPTIONS` order, not click
 order.
 
 Rows render as a **sibling block below the `CheckboxList`**, never inside
-`CheckboxListItem`. `docs/swarm/astryx-api.md:3337-3339` documents
-`### CheckboxListItem` with a literal `undefined` body — **zero props** — so
-under constitution item 2 any `children` or `endContent` on it is presumed
-hallucinated → MAJOR.
+`CheckboxListItem`.
+
+**The reason, corrected `[R2-4]`.** Round 1 asserted `CheckboxListItem` has
+*zero props*; that is **false**. Round 2 read the installed source and found
+`label`, `value`, `description`, `endContent`, `isDisabled`, `isLoading`,
+`isChecked`, `onCheck` — and `endContent` is even click-safe (`Item.tsx` bails
+on `target.closest('button, a, input, …')`, so an input there would not toggle
+the checkbox). *(Relayed from round 2 — `node_modules` is absent from the shared
+tree and I did not repeat the read.)*
+
+What is true is that `docs/swarm/astryx-api.md:3337-3339` documents
+`### CheckboxListItem` with a literal `undefined` body — **the doc section is
+defective, not the component**. A literal item 2 reading of an empty section
+would also condemn the `label`/`value` this file already ships green at
+`:1365-1369`, which is the tell that the section is broken rather than
+authoritative.
+
+So the sibling block stands on **375px layout grounds, measured with
+`layout-measurement`** — not on a false claim about the component API. Do not
+use `endContent` here anyway: item 2 forecloses it on documentation grounds, and
+this ticket is not the place to escalate a defective doc section.
 
 **3.3 Single-weekday behaviour is byte-identical `[R1-7]`.** With zero or one
 weekday selected, weekly mode renders and behaves exactly as today. Mechanism in
@@ -114,9 +145,39 @@ Every conversion still goes through `chicagoWallTimeToUtcIso` **per (date, time)
 pair** — NFR-09. The offset is probed per date and never cached, which is what
 makes a DST-crossing series correct.
 
-**3.5 Validation.** The end-after-start guard holds **per row**, reusing
-`computeEndTimeError` (`:534`) rather than a second comparison. `isValid`
-(`:1103-1107`) must gain the per-row term, so a bad row blocks submission.
+**3.5 Validation — read this twice, it is the round-2 MAJOR `[R2-1]`.** The
+end-after-start guard holds **per row**, reusing `computeEndTimeError` (`:534`)
+rather than a second comparison.
+
+**In weekly-multi the shared pair's `endTimeError` term is REPLACED BY, not
+supplemented with, the per-row terms.** `isValid` must not gate on a value the
+coach can no longer see or correct.
+
+Why this is not a nicety — round 2 ran the trap and captured it. `endTimeError`
+(`:1080`) is computed only from the shared `startTime`/`endTime`; the create
+branch of `isValid` (`:1107`) gates on `endTimeError === undefined`
+*unconditionally*; and that error's only rendering surface is the shared End
+input's `status` prop (`:1448-1452`). I re-read all three sites myself and they
+are exactly as described. So this coach sequence bricks the dialog:
+
+> weekly mode → one weekday → type Start 20:00 / End 18:00 (error visible) →
+> check a second weekday → **the shared pair vanishes, carrying its error with
+> it** → rows seed from it → coach fixes *both rows* → **Create is still
+> disabled, with no visible error and no reachable control.**
+
+Recovery requires un-checking a weekday, which nothing on screen suggests. That
+is the T609 principle at `:1457-1465` inverted, and round 2's probe confirmed the
+disabling term survives the second weekday (`TWO weekdays → disabled=true`,
+error still in the DOM).
+
+**Same root cause, also to be specified:** `buildEventSessionsPayload` returns
+`[]` when the shared `startTime`/`endTime` is `undefined` (`:493`, pinned by
+`test.tsx:397-398`), and that length drives both `isValid` (`:1107`) and
+`confirmLabel` (`:1108`). **When the per-day argument IS supplied, derive
+`sessions[]` from the per-day times alone; the shared-pair `undefined` guard
+applies only when that argument is absent.** Round 2 could not reach an
+`undefined` shared start through the UI, so this is a spec gap being closed
+deliberately, not a proven defect.
 
 **3.6 Payload shape is frozen.** Keep `onCreateMeetings`'s `{ event, sessions }`
 shape (`:318-321`). Round 1 followed it to `insertSessions`
@@ -157,8 +218,12 @@ per-day times.** That is a follow-up row (§8), not a silent omission.
 - `tests/e2e-personas/coach-meeting.spec.ts`
 - `tests/e2e-personas/screenshots/**` — **`[R1-4]`**, added because the
   `e2e-personas` skill makes `capture(page, …)` mandatory and those files are
-  git-tracked; `coach-meeting.spec.ts` already calls `capture` at `:186` and
-  `:195`. Without this the required e2e work could not be committed.
+  git-tracked (67 tracked files, verified). **Citations corrected `[R2-5]`:**
+  `coach-meeting.spec.ts` calls `capture` at `:85`, `:116`, `:159`, `:194` and
+  `:204` — round 1's `:186`/`:195` were wrong, and I re-ran the grep myself
+  rather than carry them over. `capture()` writes to
+  `tests/e2e-personas/screenshots/` (`personaHarness.ts:167-169`). Without this
+  path the required e2e work could not be committed.
 
 **Forbidden**, each for a reason: `src/pages/meetings/MeetingsList.tsx` and
 everything else under `src/pages/meetings/` (a parallel decomposition ticket owns
@@ -174,18 +239,34 @@ than at push time); `docs/swarm/**` and `.claude/**` (orchestrator-owned).
 1. A P3-shaped series — Tue 6:00–8:00 PM **and** Sun 3:30–6:30 PM over a
    multi-week range — is creatable in one dialog pass, and the emitted
    `sessions[]` carries the correct distinct UTC pair for each weekday.
-2. **DST, with the wall time pinned `[R1-6]`.** Unit-level criterion. A Sunday
-   rule at **15:30–18:30** Chicago spanning 2026-11-01 emits
-   `2026-10-25T20:30:00.000Z` (CDT) and `2026-11-01T21:30:00.000Z` (CST) — same
-   wall time, different offset. **Guardrail:** any wall time before 07:00 on
+2. **DST, with the wall time pinned `[R1-6]` and all four values pinned
+   `[R2-7]`.** Unit-level criterion. A Sunday rule at **15:30–18:30** Chicago
+   spanning 2026-11-01 emits, verified by both gate rounds running the real
+   conversion:
+
+   | Date | `startsAt` | `endsAt` |
+   | -- | -- | -- |
+   | 2026-10-25 (CDT) | `2026-10-25T20:30:00.000Z` | `2026-10-25T23:30:00.000Z` |
+   | 2026-11-01 (CST) | `2026-11-01T21:30:00.000Z` | `2026-11-02T00:30:00.000Z` |
+
+   Same wall time, different offset. **Pin the `endsAt` values too** — the
+   2026-11-01 end rolls over to the *next UTC date*, and a checker who has not
+   been told will read that rollover as the bug. **Guardrail:** any wall time
+   before 07:00 on
    2026-11-01 fails for a pre-existing, out-of-scope reason already documented at
    `:526-533` (`chicagoWallTimeToUtcIso` probes the offset at the *naive-UTC*
    instant, so `06:00` → `11:00Z` rather than the true `12:00Z`). Do not pick a
    morning time and do not "fix" that here — if it matters, it is a follow-up.
-3. **Byte-identical single-weekday, with a mechanism `[R1-7]`.** With ≤1 weekday
-   selected the DOM contains **exactly two `TimeInput`s**, and
-   `test.tsx:979-1014` passes **unedited**. If that test needs editing, that is a
-   §3.3 violation, not a test to update.
+3. **Byte-identical single-weekday, with a mechanism `[R1-7]` and a stated
+   measurement `[R2-7]`.** With ≤1 weekday selected the DOM contains **exactly
+   two** time fields, and `test.tsx:979-1014` passes **unedited**. If that test
+   needs editing, that is a §3.3 violation, not a test to update.
+
+   **Measure it as "exactly two `<label>`s whose text starts with `Start time` /
+   `End time`" — NOT as `input[type="time"]`.** Astryx's `TimeInput` renders a
+   *text* input with a `<label htmlFor>`; round 2's probe measured **zero**
+   `input[type="time"]` in the live DOM. A checker reaching for the obvious
+   selector would measure 0 and call it green.
 4. Single mode and custom mode untouched — shared pair still works, including
    `endTimeError` and `min={startTime}`.
 5. Per-row end-before-start blocks submission.
@@ -197,7 +278,19 @@ than at push time); `docs/swarm/**` and `.claude/**` (orchestrator-owned).
    and `onSaveMeetingSeries`'s `desiredFutureSessions` are exactly what they are
    today. *A per-day input that is rendered and then discarded is a failure.*
    This criterion must fail against an un-gated build.
-8. The e2e weekly test is extended to create a two-different-times series through
+8. **The trap criterion `[R2-2]` — this one must fail against the obvious wrong
+   build.** In create mode, weekly, with an inverted shared pair set **before**
+   the second weekday is checked: once every per-day row is valid, Create must
+   **not** be disabled. A build where `isValid` still reads the hidden pair's
+   `endTimeError` fails this. Nothing in criteria 1-7 catches that build —
+   criterion 5 is green on it.
+9. **Un-checking back to one weekday `[R2-3]`.** When the coach drops from two
+   weekdays to one, generation hands back to the shared pair. **The surviving
+   single weekday's row values win: write them into the shared pair as the rows
+   disappear**, so the time the coach last saw is the time that applies. Do not
+   silently restore a stale shared value — the coach's most recent edit was to
+   the row.
+10. The e2e weekly test is extended to create a two-different-times series through
    the real UI and **read the `event_sessions` rows back**, asserting both UTC
    pairs — not asserting on what the dialog rendered. Infrastructure exists:
    `sessionsFor(event.id)`/`eventsTitled(title)` at `spec.ts:239-246`, raw
@@ -225,10 +318,14 @@ before touching anything under `src/pages/meetings/**`.
    wrong:** if a coach editing P3/GG into per-day times is the actual September
    need, then shipping create-only solves the demo and not the job, and the
    follow-up row is a deferral of the real work rather than of an edge.
-3. **Hiding the shared pair in weekly-multi is better than disabling or
-   relabelling it (§3.2).** **What would make this wrong:** a control that
-   vanishes on the second checkbox may read as a bug to the coach; a relabelled
-   "default time for new days" might be clearer than absence.
+3. ~~Hiding the shared pair in weekly-multi is safe.~~ **RULED WRONG by round 2,
+   and the packet is fixed rather than the doubt merely noted.** Hiding it
+   stranded `endTimeError` → `isValid` on an invisible control — see §3.5 and
+   criterion 8. The *hiding* survives; what did not survive is the assumption
+   that hiding a control is free when something downstream still reads it.
+   Residual doubt worth attacking: a pair that vanishes on the second checkbox
+   may still read as a bug to the coach, and a relabelled "default time for new
+   days" might be clearer than absence.
 4. **`buildEventSessionsPayload`'s optional argument keeps old callers correct
    (§3.4).** **What would make this wrong:** if any of the eight weekly tests
    asserts on the *absence* of a fourth/fifth argument or on exact arity, an
@@ -236,9 +333,13 @@ before touching anything under `src/pages/meetings/**`.
 5. **Per-day times persist across a mode switch by doing nothing `[R1-12]`.**
    Round 1 established there is no mode-switch reset at all (`:1338` is a bare
    `setMode`; `recurringWeekdays`, `recurringRange` and `customDates` all
-   survive), so persisting is free and consistent. **What would make this wrong:**
-   stale per-day times surviving a weekday being unchecked and re-checked could
-   resurrect a time the coach believed they had removed.
+   survive), so persisting is free and consistent. Round 2 ruled the *basis*
+   verified but the *transitions* unspecified, so criterion 9 `[R2-3]` now
+   settles the N→1 case explicitly: the surviving row's values win and are
+   written back into the shared pair. **What would make this wrong, and it is
+   still open:** stale per-day times surviving a weekday being unchecked and
+   **re-checked** could resurrect a time the coach believed they had removed.
+   Criterion 9 covers N→1, not N→1→N.
 
 ## 8. Follow-up to file before the PR opens (item 20)
 
