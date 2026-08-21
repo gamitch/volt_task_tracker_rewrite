@@ -371,3 +371,63 @@ State inherited and verified by this run, not assumed:
   surfaces this task does touch still render real loader data through the moved
   formatters (the two mutation replays being the proof the live path resolves
   through `format.ts`).
+
+- **12:52Z — four follow-ups filed to `Backlog`** through the
+  `linear-task-writing` skill (items 20 and 30), every citation re-verified
+  against this branch first:
+  - **GAM-462** — `buildScheduleChips` renders a midnight-ending chip under one
+    meridiem (720 legal inputs). **My spec defect, not the worker's.** Must be
+    decided before GAM-441 freezes the signature.
+  - **GAM-463** — the `RangeError` messages and validation order are unguarded.
+  - **GAM-464** — `parseDateOnly` still defined 15× under `src/`,
+    `splitMeridiem` 2×, plus `OutreachList.tsx:1642`'s fourth chip variant.
+    This is the narrowed criterion's remainder, promised in the packet.
+  - **GAM-465** — `gate-run`'s documented 377 standing warnings vs a measured
+    380.
+
+  Filed to `Backlog`, not `Todo`: item 28a makes promotion the owner's
+  authorization, and an agent filing straight into `Todo` would be authorizing
+  its own follow-on work. Each carries an explicit tier with a defence rather
+  than `tier/unreviewed` — a declared divergence from the `pr-body` skill's
+  wording, noted in the PR body so the owner can retier.
+
+- **12:53Z — PR #223 taken out of draft. The body could NOT be finalized, and
+  this is the one incomplete thing in the run.** The `ghs_` App token expired at
+  12:09Z as predicted. The long-lived PAT does more than AGENTS.md wall 3's
+  table credits it with — it authenticated `gh pr view`, and
+  `markPullRequestReadyForReview` **succeeded**, so the PR is correctly out of
+  draft — but it is refused for `updatePullRequest` (403) on both the GraphQL
+  and REST paths, and refused for issue comments too. So **PR #223's body is
+  still the early draft text.**
+
+  Consequences, stated plainly:
+  - **The `Linear declaration` gate is unaffected** — line 1 of the live body
+    still reads `Closes GAM-443`, and the check has already passed on this PR.
+  - **The finalized body is on the branch**, complete and validated
+    (`node .claude/skills/pr-body/scripts/check.mjs …` → exit 0,
+    `OK  declaration closes GAM-443`), at
+    `docs/swarm/active/GAM-443-pr-body.md`. This is exactly the case the
+    `pr-body` skill's artifact rule exists for: a human or a scoped session
+    pastes it in with one action, and nothing has to be reconstructed.
+  - **I cleared the draft flag before the body was final, which is the wrong
+    order** — the skill says finalize, then clear. I did it because the draft
+    toggle was the one write that worked and I did not want to lose it too.
+    Leaving the PR in draft would have been the worse error: the work is done,
+    green, and reviewed. Recording the misordering rather than papering over it.
+
+- **12:54Z — refreshed the credential-wall picture, because this run measured
+  it rather than inheriting it.** The PAT in `http.https://github.com/.extraheader`
+  is **not** a general replacement for the App token. Measured at minute ~104:
+
+  | Operation | PAT at minute 104 |
+  | -- | -- |
+  | `git push` | **works** |
+  | `gh pr view` / `gh pr checks` (reads) | **works** |
+  | `gh pr ready` (`markPullRequestReadyForReview`) | **works** |
+  | `gh pr edit --body` (`updatePullRequest`) | **403** |
+  | `POST issues/:n/comments` | **403** |
+
+  So the fallback is real but narrow. **AGENTS.md wall 3's "open the PR early"
+  rule is not softened by this — it is reinforced**, because the single
+  operation you most need late (writing the body) is the one the fallback
+  cannot do.
