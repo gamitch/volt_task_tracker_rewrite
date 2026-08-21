@@ -1615,9 +1615,7 @@ export function ScheduleMeetingsDialog({
                               <TimeInput
                                 label={`${option.label} end time`}
                                 value={times.endTime}
-                                onChange={(value) =>
-                                  handlePerDayEndTimeChange(option.value, value)
-                                }
+                                onChange={(value) => handlePerDayEndTimeChange(option.value, value)}
                                 isRequired
                                 min={times.startTime}
                                 status={

@@ -468,7 +468,12 @@ describe('buildEventSessionsPayload (GAM-445 packet §3.4 -- per-day argument)',
   });
 
   it('is byte-identical to the pre-GAM-445 signature when the 5th argument is omitted (packet §7.4)', () => {
-    const withoutArg = buildEventSessionsPayload(['2026-07-22', '2026-07-24'], '18:00', '20:00', '');
+    const withoutArg = buildEventSessionsPayload(
+      ['2026-07-22', '2026-07-24'],
+      '18:00',
+      '20:00',
+      '',
+    );
     // Same call, explicit `undefined` 5th argument -- must produce the exact
     // same output, proving the new parameter is genuinely additive/optional,
     // not a silent behavior change for every existing caller.
@@ -496,7 +501,7 @@ describe('buildEventSessionsPayload (GAM-445 packet §3.4 -- per-day argument)',
     ]);
   });
 
-  it('skips (does not fabricate) a date whose own weekday has an incomplete per-day time, per §3.4\'s closed spec gap', () => {
+  it("skips (does not fabricate) a date whose own weekday has an incomplete per-day time, per §3.4's closed spec gap", () => {
     // 2026-08-11 is a Tuesday, given no entry at all; 2026-08-09 is a Sunday
     // given only a start time.
     const perDayTimesByDow = new Map<Dow, PerDayTime>([
@@ -1264,7 +1269,7 @@ describe('<ScheduleMeetingsDialog /> GAM-445 per-weekday times', () => {
     expect(getFieldControl('Sun end time')).toBeDefined();
   });
 
-  it('AC1 (P3-shaped, through the real UI): distinct per-day times produce distinct UTC pairs in the payload -- this is this file\'s own mutation-replay target for the per-day generator', async () => {
+  it("AC1 (P3-shaped, through the real UI): distinct per-day times produce distinct UTC pairs in the payload -- this is this file's own mutation-replay target for the per-day generator", async () => {
     const onCreateMeetings = vi.fn().mockResolvedValue(undefined);
     act(() => {
       root.render(
@@ -1427,14 +1432,17 @@ describe('<ScheduleMeetingsDialog /> GAM-445 per-weekday times', () => {
       '18:00',
       '20:00',
       false,
-      new Map([['2026-09-01', { startsAt: '2026-09-01T23:00:00.000Z', endsAt: '2026-09-02T01:00:00.000Z' }]]),
+      new Map([
+        [
+          '2026-09-01',
+          { startsAt: '2026-09-01T23:00:00.000Z', endsAt: '2026-09-02T01:00:00.000Z' },
+        ],
+      ]),
     );
     expect(payload.desiredFutureSessions).toEqual(expectedDesiredFutureSessions);
     // The pre-existing session's OWN stored time survives untouched (T611,
     // unrelated to this task).
-    expect(
-      payload.desiredFutureSessions.find((s) => s.sessionDate === '2026-09-01'),
-    ).toEqual({
+    expect(payload.desiredFutureSessions.find((s) => s.sessionDate === '2026-09-01')).toEqual({
       sessionDate: '2026-09-01',
       startsAt: '2026-09-01T23:00:00.000Z',
       endsAt: '2026-09-02T01:00:00.000Z',
@@ -1442,7 +1450,7 @@ describe('<ScheduleMeetingsDialog /> GAM-445 per-weekday times', () => {
     });
   });
 
-  it('AC8 (the trap criterion): an inverted shared pair set BEFORE the second weekday is checked, then every per-day row fixed, leaves Create enabled -- a build gating on the hidden pair\'s endTimeError fails this', () => {
+  it("AC8 (the trap criterion): an inverted shared pair set BEFORE the second weekday is checked, then every per-day row fixed, leaves Create enabled -- a build gating on the hidden pair's endTimeError fails this", () => {
     act(() => {
       root.render(<ScheduleMeetingsDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
     });
@@ -1512,7 +1520,7 @@ describe('<ScheduleMeetingsDialog /> GAM-445 per-weekday times', () => {
     expect(container.textContent).not.toContain('End time must be after the start time.');
   });
 
-  it('AC9: dropping from two weekdays to one hands generation back to the shared pair, carrying the SURVIVING row\'s own values (not a stale default)', () => {
+  it("AC9: dropping from two weekdays to one hands generation back to the shared pair, carrying the SURVIVING row's own values (not a stale default)", () => {
     act(() => {
       root.render(<ScheduleMeetingsDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
     });
