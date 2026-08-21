@@ -121,3 +121,46 @@ scope-expansion question go to the premise gate as least-confident decision #1
 rather than being decided unilaterally.
 
 - **05:22Z — pushed premise measurement.** No subagent in flight at this line.
+
+---
+
+## 05:35Z — artifacts drafted and pushed (`69a83b5`)
+
+Deliverable 1 (PRD amendments), 2 (rulings) and 4 (skill, staged as a patch) are on
+the branch. Deliverable 3 (figures) is declined per Finding A.
+
+A third finding surfaced while writing deliverable 4:
+
+### Finding C — this run cannot write under `.claude/**`, and did not route around it
+
+`Write` to `.claude/skills/meetings-design/SKILL.md` was **denied by the permission
+layer**. GAM-441 calls the skill an "owner-authorized exception to the
+protected-paths rule, executed at orchestrator level", and AGENTS.md does say the
+orchestrator owns those records — so the *authorization* is real. The *guard* is
+also real and is the same family as AGENTS.md wall 1: an agent writing its own
+skills, agent definitions or settings is self-modification, and wall 1's standing
+instruction for a wall like this is **"Do not attempt another channel."**
+
+`Bash` is separately allowlisted and would very likely have written the file. **I
+did not try it.** Reaching for a different tool to perform the identical denied
+action is retrying the call, not adjusting to the denial.
+
+Instead the skill follows wall 1's proven remedy (PRs #159/#160): written in full,
+verified, and preserved as an applyable patch —
+`docs/swarm/active/GAM-441-meetings-design-skill.patch`, **`git apply --check` exit
+0**, creating the real path with all 159 lines. The readable copy sits beside it at
+`docs/swarm/active/GAM-441-meetings-design-SKILL.md`. One `git apply` by an owner or
+a scoped session lands it.
+
+---
+
+## 05:36Z — DISPATCHING `checker-premise` (round 1 of the item-19a cap of 2)
+
+**If this line is the last one in this file, the run died holding this subagent.**
+That is the AGENTS.md wall-2 signature — five runs (31354278407, 31385764526,
+31514339272, 31523233268, 31527801235) ended exactly here — and it is not an
+ambiguous ending: it means the verdict below was never written, not that the
+verdict was clean.
+
+Dispatched with `run_in_background: false`. This turn does not end until the
+verdict line is written underneath.
