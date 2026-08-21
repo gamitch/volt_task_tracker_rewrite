@@ -175,3 +175,13 @@ mid-chain, the last line names what the run was holding when it died.
   `describe('loadCoachMeetingsData …')` at `:182` with `:246` untouched, and
   `attendance_pct` is a bare passthrough at `meetings.ts:458` with no `?? 0`
   anywhere.
+- **23:25 — PR #233 body finalized and pushed to GitHub**, 15 minutes inside
+  the credential wall (`exp 23:40:39Z`). Declaration check exit 0.
+- **23:26 — DISPATCHING `checker-reviewer` on `bc1727c`, blocking.**
+  Ordering note, deliberate: the draft flag is still set and I am NOT clearing
+  it before the checker reports. If the `ghs_` credential expires mid-check I
+  lose `gh pr ready` and the PR stays draft — that is the acceptable failure
+  here, because clearing it early would assert review-readiness for work no
+  checker had yet looked at. A human clears a draft flag with one click; an
+  unchecked "ready" is a process violation.
+  *If this line is the last one in this file, the run died holding this subagent.*
