@@ -277,6 +277,12 @@ import { EventFormLayout, EventFormSection } from '../../components/forms/EventF
 // `allTeamIds`; the options list itself is derived separately (§3d) to keep
 // an already-scoped archived team visible-but-disabled.
 import { excludeArchivedTeams } from '../../lib/teams/archivedTeams';
+// GAM-445 packet §3.1 -- `Dow` (`0 = Sunday … 6 = Saturday`) is frozen by
+// GAM-443/format.ts and `WEEKDAY_OPTIONS.dayIndex` (below) is already
+// `Dow`-compatible; importing it here is nearly free and avoids a second
+// weekday-index vocabulary. `src/lib/meetings/**` is forbidden to EDIT, not
+// to import (that is exactly what being frozen means).
+import type { Dow } from '../../lib/meetings/format';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase shapes of the real `events`/`event_sessions`
@@ -327,7 +333,7 @@ const DEFAULT_TITLE = 'Team meeting';
 const DEFAULT_START_TIME: ISOTimeString | undefined = createISOTimeString('18:00') ?? undefined;
 const DEFAULT_END_TIME: ISOTimeString | undefined = createISOTimeString('20:00') ?? undefined;
 
-const WEEKDAY_OPTIONS: ReadonlyArray<{ value: string; label: string; dayIndex: number }> = [
+const WEEKDAY_OPTIONS: ReadonlyArray<{ value: string; label: string; dayIndex: Dow }> = [
   { value: 'mon', label: 'Mon', dayIndex: 1 },
   { value: 'tue', label: 'Tue', dayIndex: 2 },
   { value: 'wed', label: 'Wed', dayIndex: 3 },
@@ -396,7 +402,7 @@ export function generateRecurringSessionDates(
   const dayIndices = new Set(
     weekdayValues
       .map((value) => WEEKDAY_OPTIONS.find((option) => option.value === value)?.dayIndex)
-      .filter((dayIndex): dayIndex is number => dayIndex !== undefined),
+      .filter((dayIndex): dayIndex is Dow => dayIndex !== undefined),
   );
   const start = parseDateOnly(range.start);
   const end = parseDateOnly(range.end);
@@ -404,7 +410,9 @@ export function generateRecurringSessionDates(
 
   const dates: string[] = [];
   for (let cursor = start; cursor.getTime() <= end.getTime(); cursor = addDays(cursor, 1)) {
-    if (dayIndices.has(cursor.getUTCDay())) {
+    // `Date.prototype.getUTCDay()` always returns 0-6, so this is a safe
+    // narrowing cast, not an assumption.
+    if (dayIndices.has(cursor.getUTCDay() as Dow)) {
       dates.push(toIsoDate(cursor));
     }
   }
@@ -481,15 +489,52 @@ export function chicagoWallTimeToUtcIso(dateStr: string, timeStr: string): strin
   return new Date(naiveUtc.getTime() - offsetMinutes * 60000).toISOString();
 }
 
+/** GAM-445 packet §3.1/§3.4 -- one weekday's own `HH:MM` pair, `undefined`
+ * when that weekday has not yet had a valid time entered. */
+export interface PerDayTime {
+  startTime: string | undefined;
+  endTime: string | undefined;
+}
+
 /** Module doc #1/#6 -- builds the real `event_sessions` row payload. Returns
  * `[]` (no valid sessions) when either time is unset, since a date alone
- * cannot satisfy `starts_at`/`ends_at not null`. */
+ * cannot satisfy `starts_at`/`ends_at not null`.
+ *
+ * GAM-445 packet §3.4 -- `perDayTimesByDow` is an ADDITIVE, OPTIONAL fifth
+ * argument, keyed by `Dow` (the weekday index every date in `dates` maps to
+ * via `parseDateOnly(date).getUTCDay()`), not by the form's `WEEKDAY_OPTIONS`
+ * value strings -- that translation happens once, at the call site, where
+ * `WEEKDAY_OPTIONS` already carries both. Every existing caller that omits
+ * this argument gets byte-identical old behaviour (the single shared
+ * `startTime`/`endTime` applied to every date, `[]` when either is
+ * `undefined`). When it IS supplied, `sessions[]` is derived from the
+ * per-day times ALONE -- the shared-pair `undefined` guard above does not
+ * apply, per §3.4's closed spec gap: a date whose own weekday has no
+ * complete per-day time is skipped (not fabricated from the shared pair). */
 export function buildEventSessionsPayload(
   dates: readonly string[],
   startTime: string | undefined,
   endTime: string | undefined,
   notes: string,
+  perDayTimesByDow?: ReadonlyMap<Dow, PerDayTime>,
 ): CreateMeetingsSessionPayload[] {
+  if (perDayTimesByDow !== undefined) {
+    return dates.flatMap((date) => {
+      const dow = parseDateOnly(date).getUTCDay() as Dow;
+      const times = perDayTimesByDow.get(dow);
+      if (times === undefined || times.startTime === undefined || times.endTime === undefined) {
+        return [];
+      }
+      return [
+        {
+          sessionDate: date,
+          startsAt: chicagoWallTimeToUtcIso(date, times.startTime),
+          endsAt: chicagoWallTimeToUtcIso(date, times.endTime),
+          notes,
+        },
+      ];
+    });
+  }
   if (startTime === undefined || endTime === undefined) return [];
   return dates.map((date) => ({
     sessionDate: date,
@@ -860,6 +905,20 @@ export function buildEditDesiredFutureSessions(
 // Component.
 // ---------------------------------------------------------------------------
 
+/** GAM-445 packet §3.1 -- the component's own per-day time state shape.
+ * Deliberately distinct from the exported, pure-function `PerDayTime`
+ * (plain `string`, above): `TimeInput`'s `value`/`onChange` and the shared
+ * `startTime`/`endTime` state are all the branded `ISOTimeString`, and
+ * keeping that brand here means every per-day row's `TimeInput` and the
+ * shared-pair state setters accept these values with no cast. `ISOTimeString`
+ * is a subtype of `string`, so a `WeeklyPerDayTime` value is still directly
+ * usable wherever the exported `PerDayTime` is expected (`buildEventSessionsPayload`'s
+ * per-day argument). */
+interface WeeklyPerDayTime {
+  startTime: ISOTimeString | undefined;
+  endTime: ISOTimeString | undefined;
+}
+
 export interface ScheduleMeetingsDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
@@ -938,6 +997,13 @@ export function ScheduleMeetingsDialog({
   const [singleDate, setSingleDate] = useState<ISODateString | undefined>(undefined);
   const [recurringRange, setRecurringRange] = useState<DateRange | null>(null);
   const [recurringWeekdays, setRecurringWeekdays] = useState<string[]>([]);
+  // GAM-445 packet §3.1 -- per-weekday time state, keyed by the SAME
+  // `WEEKDAY_OPTIONS.value` strings `recurringWeekdays` already uses (not a
+  // second weekday vocabulary). Only ever populated for weekdays that have
+  // been checked while per-day rows were showing (see
+  // `handleRecurringWeekdaysChange` below) -- an entry's absence means "not
+  // yet seeded from the shared pair," not "zero time."
+  const [perDayTimes, setPerDayTimes] = useState<Record<string, WeeklyPerDayTime>>({});
   const [customDates, setCustomDates] = useState<string[]>([]);
   const [customDatePicker, setCustomDatePicker] = useState<ISODateString | undefined>(undefined);
 
@@ -1012,6 +1078,10 @@ export function ScheduleMeetingsDialog({
       setEndTime(DEFAULT_END_TIME);
       setNotes('');
     }
+    // GAM-445 packet §3.1 -- "Nothing persists across opens" (module doc)
+    // applies to per-day times too; same shared reset point as
+    // `timeFieldsTouched`/`teamScopeTouched` below, not duplicated per branch.
+    setPerDayTimes({});
     setSubmitError(null);
     setPendingEditSave(null);
     // T611 -- single shared reset point (worker packet §3.4); NOT duplicated
@@ -1041,9 +1111,45 @@ export function ScheduleMeetingsDialog({
     [mode, singleDate, recurringRange, recurringWeekdays, customDates],
   );
 
+  // GAM-445 packet §3.2/§3.8 -- per-day rows render only in create mode,
+  // weekly mode, with MORE than one weekday selected. `!isEditMode` is the
+  // gate `[R1-1]` requires: edit mode keeps today's single-shared-time
+  // weekly behaviour untouched, and `buildEditDesiredFutureSessions` below
+  // is never threaded a per-day argument.
+  const showPerDayRows = mode === 'weekly' && recurringWeekdays.length > 1 && !isEditMode;
+
+  // GAM-445 packet §3.2 -- rows follow `WEEKDAY_OPTIONS` order, not click
+  // order; this is the one list both the row markup and the payload/
+  // validation math below iterate.
+  const checkedWeekdayOptions = useMemo(
+    () => WEEKDAY_OPTIONS.filter((option) => recurringWeekdays.includes(option.value)),
+    [recurringWeekdays],
+  );
+
+  // GAM-445 packet §3.4 -- translates the form's `WEEKDAY_OPTIONS.value`-keyed
+  // `perDayTimes` state into the `Dow`-keyed map `buildEventSessionsPayload`
+  // accepts. A weekday with no entry yet (the single render between
+  // `handleRecurringWeekdaysChange` committing its seed and this memo
+  // re-running) falls back to the shared pair's own current values, which is
+  // exactly what that seed writes anyway.
+  const perDayTimesByDow = useMemo(() => {
+    const map = new Map<Dow, PerDayTime>();
+    for (const option of checkedWeekdayOptions) {
+      map.set(option.dayIndex, perDayTimes[option.value] ?? { startTime, endTime });
+    }
+    return map;
+  }, [checkedWeekdayOptions, perDayTimes, startTime, endTime]);
+
   const sessionsPayload = useMemo(
-    () => buildEventSessionsPayload(sessionDates, startTime, endTime, notes),
-    [sessionDates, startTime, endTime, notes],
+    () =>
+      buildEventSessionsPayload(
+        sessionDates,
+        startTime,
+        endTime,
+        notes,
+        showPerDayRows ? perDayTimesByDow : undefined,
+      ),
+    [sessionDates, startTime, endTime, notes, showPerDayRows, perDayTimesByDow],
   );
 
   // T611 -- computed together, over `initialData`, the same way `resetForm()`
@@ -1079,6 +1185,34 @@ export function ScheduleMeetingsDialog({
   // own doc comment: "two undefined values are not an error").
   const endTimeError = computeEndTimeError(startTime, endTime);
 
+  // GAM-445 packet §3.5 -- per-row end-after-start guard, reusing
+  // `computeEndTimeError` per weekday rather than a second comparison.
+  const perDayEndTimeErrors = useMemo(
+    () =>
+      new Map(
+        checkedWeekdayOptions.map((option) => {
+          const times = perDayTimes[option.value] ?? { startTime, endTime };
+          return [option.value, computeEndTimeError(times.startTime, times.endTime)] as const;
+        }),
+      ),
+    [checkedWeekdayOptions, perDayTimes, startTime, endTime],
+  );
+
+  // GAM-445 packet §3.5 -- every checked weekday needs BOTH a defined pair
+  // AND no ordering error before Create enables. `sessionsPayload.length > 0`
+  // alone is not enough: `buildEventSessionsPayload`'s per-day branch silently
+  // SKIPS an incomplete/inverted row rather than counting it invalid, so a
+  // build gating only on the count could enable with one broken row simply
+  // shrinking the total by one.
+  const perDayRowsValid = checkedWeekdayOptions.every((option) => {
+    const times = perDayTimes[option.value] ?? { startTime, endTime };
+    return (
+      times.startTime !== undefined &&
+      times.endTime !== undefined &&
+      perDayEndTimeErrors.get(option.value) === undefined
+    );
+  });
+
   // T510 -- rule 2 ("title/location/description always editable") would be
   // impossible for a fully-past series (zero reconcilable sessions) under the
   // create-mode rule below; in edit mode, `isValid` drops the session-count
@@ -1100,11 +1234,21 @@ export function ScheduleMeetingsDialog({
   // `!timeFieldsTouched || …` shape (an untouched edit-mode save reuses each
   // session's OWN stored time -- packet §3's "Edit-mode interaction that must
   // be preserved" -- so the displayed pair's ordering must not block it).
+  //
+  // GAM-445 packet §3.5, read twice -- in weekly-multi (`showPerDayRows`)
+  // the shared pair's `endTimeError` term is REPLACED BY, not supplemented
+  // with, `perDayRowsValid`: the shared pair is hidden and its error is no
+  // longer visible or correctable once a second weekday is checked, so
+  // `isValid` must never gate on it (this is the packet's own trap scenario
+  // and acceptance criterion 8 -- a build that ANDs both terms together
+  // fails it).
   const isValid = isEditMode
     ? title.trim() !== '' &&
       (!timeFieldsTouched ||
         (startTime !== undefined && endTime !== undefined && endTimeError === undefined))
-    : title.trim() !== '' && sessionsPayload.length > 0 && endTimeError === undefined;
+    : title.trim() !== '' &&
+      sessionsPayload.length > 0 &&
+      (showPerDayRows ? perDayRowsValid : endTimeError === undefined);
   const confirmLabel = computeConfirmLabel(isEditMode, sessionsPayload.length);
 
   // T510 -- "already happened" disclosure (packet §4a component-changes list).
@@ -1132,6 +1276,71 @@ export function ScheduleMeetingsDialog({
   function handleEndTimeChange(value: ISOTimeString | undefined): void {
     setTimeFieldsTouched(true);
     setEndTime(value);
+  }
+
+  /** GAM-445 packet §3.2/§7.5 -- wraps the "Repeat on" `CheckboxList`'s own
+   * `onChange`. Two responsibilities, both stated in the packet:
+   *
+   * 1. Any weekday in `next` that has no `perDayTimes` entry yet is seeded
+   *    from the shared pair's CURRENT values, but ONLY once per-day rows are
+   *    about to be visible (`next.length > 1`) -- packet §3.2: "the shared
+   *    pair's current values seed row 1 and every newly-added row." Seeding
+   *    a weekday while it is still the LONE checked one (rows not shown)
+   *    would cache whatever the shared pair happened to hold at that
+   *    moment, and that cached value would then survive un-refreshed once a
+   *    second weekday made rows appear -- silently ignoring every edit the
+   *    coach made to the shared pair in between. `perDayTimes` is reset to
+   *    `{}` whenever `next.length <= 1` so there is nothing to go stale, and
+   *    a later >1 transition always reads the shared pair's value AS OF
+   *    THAT TRANSITION. A weekday dropped from `next` likewise has its
+   *    entry removed, so a later re-check reseeds fresh rather than
+   *    resurrecting a stale value the coach believed they had removed
+   *    (packet §7.5's disclosed-if-not-cheap open sibling -- handled here
+   *    because it was cheap).
+   * 2. Acceptance criterion 9: dropping from two weekdays to one hands
+   *    generation back to the shared pair, and the SURVIVING weekday's row
+   *    values win -- written into the shared pair before its own
+   *    `perDayTimes` entry is dropped, so the time the coach last saw is the
+   *    time that applies.
+   */
+  function handleRecurringWeekdaysChange(next: string[]): void {
+    if (recurringWeekdays.length > 1 && next.length === 1) {
+      const survivorTimes = perDayTimes[next[0]];
+      if (survivorTimes !== undefined) {
+        setStartTime(survivorTimes.startTime);
+        setEndTime(survivorTimes.endTime);
+      }
+    }
+    if (next.length > 1) {
+      setPerDayTimes((prev) => {
+        const updated: Record<string, WeeklyPerDayTime> = {};
+        for (const day of next) {
+          updated[day] = prev[day] ?? { startTime, endTime };
+        }
+        return updated;
+      });
+    } else {
+      setPerDayTimes({});
+    }
+    setRecurringWeekdays(next);
+  }
+
+  /** GAM-445 packet §3.2 -- one weekday row's own Start/End `TimeInput`
+   * `onChange`. Unlike the shared pair's `handleStartTimeChange`/
+   * `handleEndTimeChange`, per-day rows do not exist in edit mode (§3.8), so
+   * there is no `timeFieldsTouched`-equivalent flag to latch here. */
+  function handlePerDayStartTimeChange(day: string, value: ISOTimeString | undefined): void {
+    setPerDayTimes((prev) => ({
+      ...prev,
+      [day]: { startTime: value, endTime: prev[day]?.endTime },
+    }));
+  }
+
+  function handlePerDayEndTimeChange(day: string, value: ISOTimeString | undefined): void {
+    setPerDayTimes((prev) => ({
+      ...prev,
+      [day]: { startTime: prev[day]?.startTime, endTime: value },
+    }));
   }
 
   // GAM-305 fix round 2 -- wraps the MultiSelector's own `onChange` so any
@@ -1358,7 +1567,7 @@ export function ScheduleMeetingsDialog({
                     <CheckboxList
                       label="Repeat on"
                       value={recurringWeekdays}
-                      onChange={setRecurringWeekdays}
+                      onChange={handleRecurringWeekdaysChange}
                       hasDividers
                     >
                       {WEEKDAY_OPTIONS.map((option) => (
@@ -1369,6 +1578,59 @@ export function ScheduleMeetingsDialog({
                         />
                       ))}
                     </CheckboxList>
+
+                    {/* GAM-445 packet §3.2 -- per-day rows are a SIBLING
+                        block below `CheckboxList`, never inside
+                        `CheckboxListItem` (375px layout grounds, measured
+                        with the `layout-measurement` skill -- see packet
+                        §3.2's doc-defect note on why this is NOT an Astryx
+                        API limitation). One row per checked weekday, in
+                        `WEEKDAY_OPTIONS` order (not click order). Only
+                        rendered with >1 weekday selected and never in edit
+                        mode (`showPerDayRows`, §3.8) -- a single weekday
+                        keeps today's shared-pair-only rendering, byte for
+                        byte (§3.3). */}
+                    {showPerDayRows && (
+                      <VStack gap={2}>
+                        {checkedWeekdayOptions.map((option) => {
+                          const times = perDayTimes[option.value] ?? { startTime, endTime };
+                          const rowError = perDayEndTimeErrors.get(option.value);
+                          return (
+                            <HStack key={option.value} gap={2} wrap="wrap">
+                              {/* Weekday-FIRST labels ("Tue start time"), not
+                                  "Start time (Tue)" -- `getFieldControl` in
+                                  the test file matches by `startsWith`, so a
+                                  trailing qualifier would silently rebind
+                                  every existing `getFieldControl('Start
+                                  time')` call to whichever input happens to
+                                  render first (packet §3.7). */}
+                              <TimeInput
+                                label={`${option.label} start time`}
+                                value={times.startTime}
+                                onChange={(value) =>
+                                  handlePerDayStartTimeChange(option.value, value)
+                                }
+                                isRequired
+                              />
+                              <TimeInput
+                                label={`${option.label} end time`}
+                                value={times.endTime}
+                                onChange={(value) =>
+                                  handlePerDayEndTimeChange(option.value, value)
+                                }
+                                isRequired
+                                min={times.startTime}
+                                status={
+                                  rowError !== undefined
+                                    ? { type: 'error', message: rowError }
+                                    : undefined
+                                }
+                              />
+                            </HStack>
+                          );
+                        })}
+                      </VStack>
+                    )}
                   </>
                 )}
 
@@ -1425,33 +1687,45 @@ export function ScheduleMeetingsDialog({
                   </Text>
                 )}
 
-                <HStack gap={2} wrap="wrap">
-                  <TimeInput
-                    label="Start time"
-                    value={startTime}
-                    onChange={handleStartTimeChange}
-                    isRequired
-                  />
-                  <TimeInput
-                    label="End time"
-                    value={endTime}
-                    onChange={handleEndTimeChange}
-                    isRequired
-                    // GAM-290 (packet §3.5) -- secondary entry guard: rejects an
-                    // out-of-range TYPED End before it commits. Does NOT alone
-                    // fix the issue's own reproduction (Start moved past an
-                    // already-settled End never consults `min` -- packet §2),
-                    // which is why `endTimeError`/`status` below is the load-
-                    // bearing mechanism; the two own disjoint cases and do not
-                    // both fire for the same interaction.
-                    min={startTime}
-                    status={
-                      endTimeError !== undefined
-                        ? { type: 'error', message: endTimeError }
-                        : undefined
-                    }
-                  />
-                </HStack>
+                {/* GAM-445 packet §3.2 -- hidden (not merely redundant) once
+                    per-day rows take over: a visible control that no longer
+                    contributes a session time is exactly the T609 failure
+                    documented below at the Notes section (`:1457-1465`'s
+                    quoted ruling, restated at packet §1's "a control that
+                    accepts input, shows it applied, and silently discards it
+                    is worse than no control at all"). Its CURRENT values
+                    still seed row 1 and every newly-added row -- see
+                    `handleRecurringWeekdaysChange` -- so the same-time-every-
+                    day case still costs zero extra input. */}
+                {!showPerDayRows && (
+                  <HStack gap={2} wrap="wrap">
+                    <TimeInput
+                      label="Start time"
+                      value={startTime}
+                      onChange={handleStartTimeChange}
+                      isRequired
+                    />
+                    <TimeInput
+                      label="End time"
+                      value={endTime}
+                      onChange={handleEndTimeChange}
+                      isRequired
+                      // GAM-290 (packet §3.5) -- secondary entry guard: rejects an
+                      // out-of-range TYPED End before it commits. Does NOT alone
+                      // fix the issue's own reproduction (Start moved past an
+                      // already-settled End never consults `min` -- packet §2),
+                      // which is why `endTimeError`/`status` below is the load-
+                      // bearing mechanism; the two own disjoint cases and do not
+                      // both fire for the same interaction.
+                      min={startTime}
+                      status={
+                        endTimeError !== undefined
+                          ? { type: 'error', message: endTimeError }
+                          : undefined
+                      }
+                    />
+                  </HStack>
+                )}
               </EventFormSection>
 
               {/* T609 -- create-mode-only field (mirrors Description's own
