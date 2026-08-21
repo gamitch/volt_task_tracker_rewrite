@@ -291,6 +291,62 @@ export const voltTheme = defineTheme({
 > per-session. Mirrors the resolution T131 shipped on the outreach rows
 > (commit `b959b90`). Everything else in MTG-01 stands.
 
+> **AUTHORIZED DEVIATION (2026-08-21, George) — `/meetings` becomes a series-card
+> page. MTG-01's `Section`/`Item` session list below is superseded for the coach
+> view; MTG-14's student/parent view is superseded by MTG-01c.** Approved in a
+> design session on 2026-08-21 (design canvas linked on GAM-441). The unit of the
+> page changes from the *session* to the **series** — a 38-session series renders
+> today as a wall of pills, which is the defect this replaces. Everything MTG-01
+> says about *data* is unchanged: the same `events` row + `event_sessions` rows,
+> the same team scope, the same statuses. Only the presentation changes.
+>
+> - **MTG-01a Coach series cards.** One fixed-size `Card` per meeting **event**
+>   (not per session), each carrying: title and team scope; **schedule chips**
+>   (one per weekday-with-time rule, e.g. `Tue 6–8 PM`, `Sun 3:30–6:30 PM`);
+>   season **progress** (sessions completed of total) on a `ProgressBar`;
+>   **attendance %** across completed sessions; and a **next-session line**
+>   ("Next: Tue, Aug 26 · 6–8 PM", or the finished state). Cards are grouped by an
+>   **Active / Finished** `TabList`; a series with no scheduled sessions remaining
+>   lands under **Finished**.
+> - **MTG-01b Schedule drill-out.** Selecting a card opens a **month-tab schedule
+>   panel** listing that series' sessions for the selected month, with per-session
+>   status and the same edit/cancel affordances MTG-01's row expander carried. The
+>   per-row `Edit` chip from the 2026-07-28 deviation above is retained here.
+> - **MTG-01c Student & parent view.** Students and parents get a **hero card**
+>   for the next meeting plus their own attendance summary and history, replacing
+>   the history table MTG-14 describes. Parents switch between linked students.
+>   Read-only, exactly as MTG-14 requires.
+> - **MTG-01d Right-rail calendar.** A month `Calendar` with a per-day agenda sits
+>   beside the cards. Rail↔card selection is **in-memory focus state**; URL
+>   parameters are a possible follow-up and are deliberately not required now.
+> - **MTG-01e Series identity color.** Each series gets a color assigned
+>   **deterministically from a curated palette, keyed on the event id**. There is
+>   **no database column and no user-facing picker** — a color is a rendering
+>   detail, not data.
+> - **MTG-01f Cross-series overlap.** Two series meeting at the same time is
+>   **intentional** on this team (owner ruling, same session). It is marked with
+>   **badges only** — on the series card, the session row, and the agenda item —
+>   and explicitly **no page-level banner**. Touching intervals (4–6 PM then
+>   6–8 PM) are not an overlap.
+> - **MTG-01g Tap-to-cycle attendance chip — authorized, with binding
+>   accessibility requirements.** MTG-13 already keeps attendance editable after
+>   completion, so cycling a chip changes nothing about *who* may edit. The
+>   control **must** be a real `<button>`; its accessible name is the **student
+>   name + current status**; each state change is announced via `aria-live`; and
+>   the target is **≥44px**. `checker-accessibility` grades against *this ruling*
+>   — not against a preference for a `SegmentedControl` or any other control.
+> - **MTG-01h Relative-date chips** ("Today", "in 3 days") are **BEH-08
+>   wayfinding, not constitution item-17 countdown mechanics.** They state a fact
+>   about a date the user already chose to look at; they create no deadline
+>   pressure, no scarcity and no re-engagement hook. Item 17 is unrelaxed —
+>   nothing here authorizes a countdown, a streak, or loss-aversion framing.
+>
+> **UXC-02 and UXC-07 (`docs/swarm/VOLT_UX_Craft_PRD_v3.md:77,:82`) are superseded
+> for `/meetings` only** — a card is not a row, so the `List`→`Table` migration and
+> the ≤72px collapsed-row cap do not apply to this page. Both remain in full force
+> on every other coach surface they name. A supersession pointer is recorded beside
+> those IDs in that file.
+
 - **MTG-01** `/meetings` (coach): `Section` "Upcoming" and `Section` "Past" lists of **meeting sessions** (`Item` rows: date, time range, team scope, status `Badge`, attendance summary for past). Actions: **Schedule meetings**, per-row `MoreMenu` (Edit, Cancel session — `AlertDialog`).
 - **MTG-02** **Schedule meetings** `Dialog purpose="form"`: title (default "Team meeting"), team scope (`MultiSelector` of teams, default all), location, schedule mode (`SegmentedControl`: Single | Weekly recurring | Custom dates — parity with the current app), date/time pickers (`DateInput`/`TimeInput`, `DateRangeInput` for recurring range, weekday `CheckboxList` for recurring), notes. Creates one `events` row (type `meeting`) + one `event_sessions` row per date. Nothing is created until **Create meetings** is clicked; the button is disabled until title + at least one valid date exist.
 - **MTG-03** Meetings do not use RSVP. Expected attendees = active roster of the scoped team(s) as of the session date.
@@ -309,6 +365,7 @@ export const voltTheme = defineTheme({
 - **MTG-12** Only coaches/admins may set `excused`.
 - **MTG-13 End meeting:** button → `AlertDialog` summary ("14 present · 2 late · 1 excused · 1 absent") → sets session `completed`, fills `absent` for roster members with no attendance row, sets `check_out_at = end_time` for open check-ins. Completed sessions feed MET-01/02. Attendance remains editable by coaches after completion — ~~(audit-logged)~~ **not audit-logged, deliberately** (owner ruling 2026-08-03; see DATA-02). Correcting attendance after a meeting has ended is a normal workflow for this team, not a fraud signal. Attribution is `attendance.recorded_by` + `attendance.updated_at` on the row.
 - **MTG-14 Student/parent meeting views:** `/meetings` for students = their own history (status per session) + participation %; parents see the same per linked student. Read-only.
+  - **⚠️ Presentation superseded 2026-08-21 by MTG-01c** (the dated deviation above MTG-01). The history *table* is replaced by a hero card for the next meeting plus an attendance summary and history list; parents switch between linked students. **Read-only is unchanged**, and so is every datum listed here.
 
 ### 6.4 Outreach & volunteer hours
 
@@ -386,7 +443,7 @@ export const voltTheme = defineTheme({
 | `/login` | public | `Basic Login` | `TextInput type="email/password"`, `Button` | AUTH-02 |
 | `/accept-invite` | invited | Login Card pattern | — | AUTH-03 |
 | `/` | all | `Analytics Dashboard` (coach) / custom stacks | `Card`, `ProgressBar`, `List` | HOME-01…04 |
-| `/meetings` | all | List page | `Section`, `Item`, `Badge` | MTG-01, MTG-14 |
+| `/meetings` | all | Card page (2026-08-21 deviation; was: List page) | `Card`, `TabList`, `Calendar`, `Badge`, `ProgressBar` | MTG-01 as amended by MTG-01a…h, MTG-14 |
 | `/meetings/live/:sessionId` | coach/admin | custom 2-pane | `SegmentedControl`, `StatusDot`, QR | MTG-05…13 |
 | `/kiosk/:sessionId` | coach/admin | fullscreen | QR, tally | MTG-07 |
 | `/checkin` | student | fullscreen result | Bolt (DES-01) | MTG-08/09 |
