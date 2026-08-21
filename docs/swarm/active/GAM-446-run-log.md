@@ -126,3 +126,23 @@ mid-chain, the last line names what the run was holding when it died.
   at `checkin.test.ts:237`). Both cuts get follow-up rows under item 20.
 - **23:00 — DISPATCHING `checker-premise` round 2 (item 19a's second and final round), blocking.**
   *If this line is the last one in this file, the run died holding this subagent.*
+- **23:09 — `checker-premise` round 2 VERDICT: DISPATCH.** Highest residual
+  MINOR; no BLOCKER, no MAJOR. Both round-1 BLOCKERs and all four MAJORs
+  re-measured as fixed. The gate again RAN rather than read: it built
+  revision 2's whole prescription in its own worktree and got **all six gates
+  exit 0, 2633/2633 tests, zero regression**, with `coachModel.ts` absent from
+  the diffstat. It also wrote probe tests for AC 1/3/4/6 and **replayed both
+  prescribed mutations to real red** — `?? 0` → "expected +0 to be null";
+  index-keyed merge → "expected 20 to be 1". So the acceptance criteria are
+  known-reddable before a worker ever sees them.
+  - It confirmed all four of my round-2 least-confident decisions SOUND, and
+    checked the roster cut against the owner's own record rather than my
+    reasoning: constitution item 1 puts PRD requirement IDs above issue text,
+    MTG-01a does not carry a roster count, and the owner's six rulings on this
+    redesign (`auto-mode-decisions.md:4298-4341`) do not mention one either.
+  - It caught **its own round-1 error** propagating into my packet: the
+    `MeetingsList.test.tsx:246` whitelist belongs to the *student* loader and
+    cannot be reached by this change. `:182` alone is the grant.
+  - Seven MINOR/NIT line-edits to fold in before dispatch; it stated
+    explicitly that a third round would be the wrong call over editorial
+    corrections (19a).
