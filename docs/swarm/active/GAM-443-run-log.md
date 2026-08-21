@@ -37,3 +37,12 @@ last line says what the run was holding when it died.
   It is not — the function does not exist yet.
 
 - **05:05Z — branch created, run log written, draft PR next.**
+
+- **05:07Z — draft PR #223 opened** (<https://github.com/gamitch/volt_task_tracker_rewrite/pull/223>),
+  at minute ~5 of the 60-minute credential, carrying only the run log and the
+  PR-body artifact. Body artifact written *before* the API call and validated
+  by `.claude/skills/pr-body/scripts/check.mjs` (exit 0, `closes GAM-443`).
+
+- **05:08Z — reading the real code to verify the issue's citations** before
+  writing the HEAVY packet (item 19c: roughly half of a gate's round-1 findings
+  are the author's own unverified line numbers).
