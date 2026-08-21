@@ -105,3 +105,13 @@ judgment needed at claim time).
   scoped. If this line is the last one in this file, the run died after
   verification, before finalizing the PR body and moving the issue to
   In Review.
+- 2026-08-21: **Close-out.** Finalized `docs/swarm/active/GAM-438-pr-body.md`
+  with the full evidence block, mutation table, e2e-personas result and
+  disclosed gaps; passes the declaration-gate check. `gh pr edit 220
+  --body-file ...` + `gh pr ready 220` — PR #220 is now open, not draft.
+  Moved GAM-438 `In Progress → In Review` via Linear GraphQL, read back and
+  confirmed `state.name == "In Review"`. Posted the close-out comment on
+  the issue with the gate block and PR link. No follow-ups filed (item 20
+  n/a — nothing deferred; item 27 n/a — no fixture/stub introduced). This
+  run's work on GAM-438 is complete; the merge, not this run, is what
+  closes the issue (item 28e).
