@@ -16,22 +16,6 @@ disagree, the PRD wins and this file is the bug — say so rather than following
 The owner rulings behind it are recorded in `docs/swarm/auto-mode-decisions.md`
 under *"2026-08-21 — George approves the `/meetings` card redesign"*.
 
-## ⚠ Read this first: there are no reference figures yet
-
-House convention is that a checker opens the binding figure with the Read tool
-before grading craft. **For this redesign there is no such figure.** GAM-441
-required the approved canvas's two artboards to be committed, and the dispatched
-run could not reach the canvas (claude.ai artifact; SPA shell, `/api/artifacts`
-403). It declined to re-draw them, because a re-drawn figure would put an agent's
-guess in the authority position.
-
-So: **do not go looking for `redesign-meetings-*.webp`, and do not treat its
-absence as permission to invent craft.** Until the export row lands, the binding
-standard is this file plus MTG-01a…h. The nearest *legitimate* visual references
-are `docs/swarm/figures/ux-craft/new-meetings.webp` and `new-student-meetings.webp`
-— these are the **pre-redesign** standard. Use them for type scale, spacing and
-density; **not** for page structure, which is exactly what changed.
-
 ## Don't re-derive these — import them
 
 Six tickets need the same formatters and shapes. Copying is how `formatWeekdayDate`
