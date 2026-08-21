@@ -71,3 +71,17 @@ holding that subagent.*
     my doubts list (no `updated_at` on `seasons`) fully verified, no schema
     change needed, `scratch-postgres` correctly omitted.
   Round 2 of the item-19a two-round cap remains.
+- **05:33Z — packet revised (revision 2)** and pushed. All 10 findings applied.
+  The substantive change is a new **D5**: keep `activeSeason.refresh()` but add
+  stale-while-revalidate retention inside `CoachHome`'s own wrapper, so
+  `CoachHomeContent` is not unmounted by the refresh. Chosen over "accept the
+  reload" because it restores the four write states item 12 requires, stays
+  inside the existing Allowed Files, and leaves `SeasonProvider`'s four other
+  consumers untouched. New criterion **A8** bounds it: the existing first-mount
+  skeleton tests must stay green *unmodified* — needing to edit them means D5
+  was implemented too broadly.
+- **05:34Z — DISPATCHED `checker-premise` round 2 of 2 (item 19a cap),
+  `run_in_background: false`.** A third REVISE escalates to the owner rather
+  than looping.
+  *If this line is the last one in this file, the run died holding this
+  subagent.*
