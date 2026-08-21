@@ -57,3 +57,10 @@ the next reader has to infer.
   has a separate build path (`buildEditDesiredFutureSessions`, `:829-857`) that
   knows nothing about per-day times — decision 3 asks the gate to attack exactly
   that as a possible data-corruption path.
+- **19:36Z — `checker-premise` DISPATCHED** (round 1 of the item 19a two-round
+  cap) against `docs/swarm/active/GAM-445-packet.md`, `run_in_background: false`,
+  model pin `opus` applying itself from `.claude/agents/checker-premise.md`
+  frontmatter — no override passed, and none is warranted.
+  **If this line is the last one in this file, the run died holding this
+  subagent** — that is wall 2 exactly, and the verdict line that should follow
+  was never written because the process exited while waiting.
