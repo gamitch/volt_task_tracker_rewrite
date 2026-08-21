@@ -45,10 +45,24 @@ extra to act on either.
 
 ## Verification
 
-Documentation only; prettier does not cover `*.md` and no source changed. Gates
-were run on this tree at `9ef1a54`'s content and reported **5 of 6** — gate 6
-skipped for want of a `src/` path to scope to, which is the correct outcome for a
-docs-only diff, not a gap.
+```
+GATE RUN — 09bb8d2 on claude/gam-457-session-record-2026-08-21 — tree clean
+
+  1 tsc              exit 0  PASS
+  2 vite build       exit 0  PASS
+  3 format:check     exit 0  PASS
+  4 eslint           exit 0  PASS       0 errors, 380 warnings
+  5 vitest (full)    exit 0  PASS       102 files / 2598 tests  baseline 2588 (+10)
+  6 vitest (scoped)      –  SKIP
+                            no scope given and none derivable from the diff
+
+VERDICT: PASS — 5 of 6 gates. NOT all six: 1 skipped.
+```
+
+**5 of 6, not six.** Gate 6 is skipped because the diff touches no `src/` file —
+the correct outcome for a docs-only change, not a gap. The `+10` against baseline
+is `main` gaining tests since that baseline was measured, not this diff adding
+any; documentation cannot move a test count.
 
 The record's own factual content was verified as it was written: row states were
 **read from Linear at write time rather than recalled**, which is how it caught
