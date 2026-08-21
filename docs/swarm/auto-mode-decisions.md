@@ -4246,3 +4246,51 @@ into per-decision ADR files. The function already exists — D-numbered rulings 
 semantics — but retrieval is poor enough that `AGENTS.md` tells agents not to read either file end
 to end. Real migration cost, nothing currently breaking. Revisit if a session ever misses a ruling
 because it could not find it.
+
+## 2026-08-21 — George rules on the brand accent and on `lucide-react`, in a design session
+
+Two rulings came out of a `/design` session that rebuilt the coach dashboard against the production
+app (`volt-timetracker.lovable.app`). Both change a document that outranks agent judgment, so both
+are recorded before any code: the accent contradicts **PRD DES-04**, the icon library contradicts
+**constitution item 9**. Dispute-log **D020** and **D021** are the entries; this is the authority
+they cite.
+
+### What he actually said
+
+On the accent, choosing between "Keep Volt Violet", "Go orange app-wide" and "Orange on dashboard
+only", he chose **"Go orange app-wide"** — an option whose own text stated it "repaints every screen
+(nav, buttons, progress bars) and is an explicit, recorded deviation from DES-04 that you're
+authorizing as owner." So the deviation was named in the question, not discovered afterwards.
+
+On the icon library, unprompted, after the orchestrator reported that `Icon`'s docs point at
+`lucide-react`/`@heroicons/react` and that constitution item 9 excludes both:
+
+> "I can ask the constitution be modified. \"docs suggest lucide-react/heroicons, but constitution
+> item 9's dependency allowlist excludes both.\""
+
+Offered lucide, heroicons, or staying with a hand-authored local set, he chose **`lucide-react`**.
+
+He also asked for the side nav specifically — *"can we make the left nav text bigger and when we
+collapse the left nav could they be icons?"* — which is what made an icon set necessary at all;
+before that the nav was explicitly out of scope on his own instruction (*"our side nav stays the
+same"*).
+
+On sequencing he chose **all three slices sequenced** (accent → nav → dashboard, with the
+write-path goal editor last), and asked the orchestrator to **draft both governance records for his
+approval** rather than writing them himself.
+
+### Why the orchestrator did not just proceed
+
+Item 1 puts PRD requirement IDs above agent judgment and makes a conflict a dispute, not something
+to improvise around. Item 9 requires recorded approval for a new dependency. Neither ruling is
+hard to justify on the merits, but an unrecorded one reaches a checker as a violation with no
+exemption, and the rework costs more than the entries do.
+
+### What is NOT settled by these rulings
+
+- **The competition badge colour.** DES-04 gives orange to competition badges. Once orange is the
+  brand accent, a competition badge stops reading as a category and starts reading as "selected."
+  A replacement hue is in scope for the accent work and has not been chosen. See D020.
+- **The progress-bar accent.** `theme.css` pins `.astryx-progressbar.accent` to `#0074e2`
+  independently of `--color-accent`, so the goal bar renders blue today and will keep rendering
+  blue under an orange theme unless that pin is changed deliberately.
