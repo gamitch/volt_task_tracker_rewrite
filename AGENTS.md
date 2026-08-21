@@ -295,6 +295,35 @@ the defect and not the provenance, state a priority and defend it, verify every
 line number against current `main` before writing, and keep the original text in
 a `<details>` block when rewriting. `GAM-303` is the reference rewrite.
 
+A claimed row carries a **run log in its comments**, at exactly three
+transitions — no more. Silence is how GAM-404 happened: *"A dispatched run that
+dies without leaving an `**Escalating` comment notifies no one."*
+
+1. **Claim**, immediately after the item-28 read-back: branch name, tier plus
+   the one-line defence item 26 requires, what the run intends to do, and
+   anything already known to be unresolved.
+2. **Blocked, or a decision is needed from the owner** — the moment the run
+   stops, not when it resumes. Keep the existing `**Escalating` lead so the
+   convention still matches.
+3. **Close-out**, posted with the move to `In Review`: the six-gate evidence
+   block with exit codes, the PR link, and any deferral's follow-up row id
+   under item 20.
+
+Do **not** comment on routine pushes, individual gate runs, or mid-work
+progress. Every entry has to be worth reading or the log stops being read at
+all, and real escalations get buried in it.
+
+Open each comment with a line naming the author and the stage —
+`**Run log · <agent> · claim · YYYY-MM-DD**`. The Linear MCP connection
+authenticates as the owner's account, so an agent's comment is otherwise
+**indistinguishable from an owner instruction**; without the prefix, machine
+chatter dilutes real directives and a later reader can mistake a run's own
+reasoning for an authorisation.
+
+The close-out comment does not link the PR — Linear does not link on comments
+(see item 28's own note). Linking is the branch name and the `Closes GAM-nnn`
+first body line. The comment is a human-readable record only.
+
 Under item 27, a task shipping a user-visible surface that still reads from a
 fixture, stub, or hardcoded value closes as `Partial`, not `Passed`, with the
 wiring task's id on the row. Follow the data to its real source before
