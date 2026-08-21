@@ -22,3 +22,28 @@ judgment needed at claim time).
   per wall 3. If this line is the last one in this file, the run died
   before reading the actual `CoachHome.tsx`/`KpiStrip.tsx` source it was
   about to restructure.
+- 2026-08-21: `npm ci` run (node_modules was absent — 342 packages
+  installed). Read every cited line in `CoachHome.tsx`/`KpiStrip.tsx`
+  directly and confirmed all of the issue's citations against `main`
+  (header, KpiCard, both grids, Next-up pairing, the admin `showSeasonSetupCard`
+  gate, KpiStrip's four tiles). Fetched the live reference app
+  `volt-timetracker.lovable.app` and confirmed both bundle files the issue
+  cites (`styles-B5BNo3Jc.css`, `routes-_guevisi.js`) exist verbatim and
+  that `.metric-card`/`.accent-card`/`.goal-ring-card` carry the
+  gradient/border treatment the issue describes. Found one real gap: the
+  issue's claim that exact values are "recorded in the plan file" points at
+  nothing that exists in this repo — no such file was ever written or
+  linked; substituted a direct fetch of the live production CSS instead
+  and recorded the real values in the packet. Also found
+  `docs/swarm/astryx-api.md`'s `Card` entry stale (`undefined`, no props
+  table) though `Card` genuinely has `variant`/`xstyle`/sizing props
+  (cross-checked via `npm run astryx -- component Card`, item 2's
+  "cross-check, not a source" caveat honored — `xstyle` is what the packet
+  actually needs and it's already documented per-component). Wrote
+  `docs/swarm/active/GAM-438-packet.md`. **Risk judgment (item 19b): light
+  self-check performed in place of a separate `checker-premise` dispatch**
+  — no migration/RLS/auth/metric-SQL surface, zero data-correctness risk,
+  and every citation was independently re-verified against `main` and
+  against the live reference app rather than trusted from the issue text.
+  If this line is the last one in this file, the run died after writing
+  the packet, before dispatching the worker.
