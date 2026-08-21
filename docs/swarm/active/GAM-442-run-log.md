@@ -155,3 +155,42 @@ PR credential (`ghs_`) decoded at minute 1: `iat 2026-08-21T05:02:29Z`,
   subagent** — revision 2 of the packet was never gated and no worker was ever
   dispatched. `supabase/` is still untouched. Resume by re-gating
   `docs/swarm/active/GAM-442-worker-packet.md` at revision 2.
+
+- **05:46Z — `checker-premise` round 2 VERDICT: `REVISE`, scoped to §6(f).**
+  Returned, waited on, read. It re-stood a cluster (PostgreSQL 16.15, port
+  55443, all 25 migrations) rather than grading on paper.
+
+  **Both round-1 BLOCKERs RESOLVED, and re-measured rather than argued.** It
+  wrote a view to revision 2's §4 + §4.1 spec and got `held_ct = 2` where the
+  round-1 fan-out gave 5; it wrote criterion (a2) exactly as §6 words it and
+  confirmed the new third mutant turns it **RED while leaving (a), (b1), (b2)
+  and (c) green** — which is the precise proof that (a2) is the sole guard on
+  `held_ct`, exactly as §8.1(3) claims. MAJOR-1, MAJOR-3 and all three MINORs
+  and the NIT also resolved.
+
+  **But the revision introduced two new MAJORs of its own, both measured, both
+  in the one paragraph I rewrote (§6(f)):**
+
+  - **NEW-1 — my seed recipe cannot satisfy my own pass rule.** §6(f) says a
+    view returning 0 rows on both sides is "not a pass"; the recipe I wrote
+    leaves `v_student_hours` at exactly 0, because that view needs a *completed*
+    session carrying a *present/late* mark on an outreach event, not merely the
+    event's existence (`20260804000000_volunteer_hours_outreach_only.sql:44-59`).
+    A worker obeying the packet literally would produce a correct red run for a
+    packet-authoring reason.
+  - **NEW-2 — §6(f) prescribes `start.sh --skip-last 1` while §6.0(i) says that
+    script cannot run in this container.** Directly contradictory; the worker
+    could not obey both. The gate noted this one is half its own fault — it
+    supplied the `--skip-last` citation in round 1, before the non-root finding
+    existed.
+
+  Three MINORs and a NIT besides: §4 forbids `count(*)` outright while §4.1
+  permits a CTE shape in which `count(*)` is correct (measured byte-identical),
+  so a correct implementation could be graded non-compliant; (b3)'s "well below"
+  is not gradeable; §2's three-file cap needs one sentence about inlining;
+  §5.3's "8.4-adjacent" invents a category §5.1 does not have.
+
+  **This is not a third gate round.** The gate stated explicitly that every
+  remaining fix is a verbatim text swap needing no new measurement, and that no
+  re-gate is required. Item 19a's cap is not at risk: applying prescribed edits
+  is not a loop.
