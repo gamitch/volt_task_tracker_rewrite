@@ -187,3 +187,19 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
 
   Five mutations total across the two commits, five reddened. The two guards the
   checker specifically called unpinned are now pinned, and I watched both fail.
+- 00:47Z — **Item-20 follow-ups filed**, to `Backlog` carrying `tier/unreviewed`
+  (never straight to `Todo` — promotion is the owner's signal, GAM-382):
+  - **GAM-473** — the card's missing location / canceled count / hours / season
+    span, framed as the decision it actually is (does the card carry supporting
+    facts, or does the drill-out?) rather than "add four fields".
+  - **GAM-474** — no Edit affordance on the card; whether editing belongs there
+    at all, with the trigger being GAM-448's dispatch.
+  - **GAM-475** — `astryx-api.md`'s `Heading` section is the literal string
+    `undefined`, so item 2 is untestable for every `Heading` prop.
+
+  Deliberately **not** filed, because rows already exist and duplicating them
+  would be the noise item 30 exists to prevent: **GAM-466** (the series palette
+  tokens — my §3b blocker is already someone's open row), **GAM-471** (roster
+  count, which additionally has a `student_teams` writer problem), **GAM-452**
+  (the assembly that gives this component its first render site) and **GAM-460**
+  (graded marks beside attendance %).
