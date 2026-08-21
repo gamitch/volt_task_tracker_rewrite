@@ -45,3 +45,9 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   that a blocker to raise, not a gap to fill with invented hex); and
   `onSaveMeetingSeries` is **not** on the frozen `SeriesCardProps`, so the Edit
   panel has no seam to submit through.
+- 23:04Z — **DISPATCHED `checker-premise`** (item 19, scoped light per 19b — the
+  pattern is a fixture-driven UI component with no write path, so the gate is
+  aimed only at the packet's §0 citation table and its three §3 blocker claims).
+  Dispatched with `run_in_background: false`; the orchestrator is blocking on it
+  now. **If this line is the last one in this file, the run died holding this
+  subagent.**
