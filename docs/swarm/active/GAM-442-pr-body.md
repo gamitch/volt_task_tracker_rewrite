@@ -205,10 +205,11 @@ carries the warning in required words: *"a consumer that renders
 `attendance_pct` without also rendering `graded_marks_ct` reintroduces D014's
 known regression."*
 
-`20260806000000_met01_explicit_marks.sql:107-112` says D014 must be revisited if
+`20260806000000_met01_explicit_marks.sql:95-100` says D014 must be revisited if
 those counts stop being shown. **The consuming SeriesCard ticket inherits that
-obligation**, and it is tracked as a follow-up rather than left in a comment
-(item 20).
+obligation.** It is filed as an item-20 follow-up row at this run's close-out
+rather than left in a code comment; the row id is recorded in the Linear
+close-out comment on GAM-442 and in `docs/swarm/active/GAM-442-run-log.md`.
 
 ## Scope note: three files, not the issue's one
 
@@ -233,8 +234,9 @@ Both verified on a second **virgin** cluster, since this PR's own runner creates
 2. **`.claude/skills/scratch-postgres/scripts/start.sh` cannot run as non-root
    here** — `chown: … Operation not permitted` at uid 1001.
 
-Neither is in this task's Allowed Files, neither was repaired here, and both are
-filed as follow-ups under item 20 rather than left as a comment. On the same
+Neither is in this task's Allowed Files, neither was repaired here, and both get
+an item-20 follow-up row at this run's close-out rather than a code comment —
+ids in the Linear close-out comment and the run log. On the same
 cluster where t205 fails, this PR's runner exits 0 at 16/16 — so neither defect
 is evidence about this work.
 

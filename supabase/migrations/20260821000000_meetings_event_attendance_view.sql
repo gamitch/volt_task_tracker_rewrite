@@ -140,7 +140,7 @@
 -- attendance row" the NORMAL shape for an unmarked student -- absences are
 -- written only when a coach explicitly opts in. An explicit-marks denominator
 -- counts only marks that exist, so FORGETTING TO MARK SOMEONE INFLATES THE
--- PERCENTAGE. That file states the consequence verbatim at `:107-112`: "this
+-- PERCENTAGE. That file states the consequence verbatim at `:95-100`: "this
 -- INVERTS the failure mode ... RPT-02's visible marked/present/late/excused
 -- counts are the mitigation. If RPT-02 ever stops showing them, D014 must be
 -- revisited."

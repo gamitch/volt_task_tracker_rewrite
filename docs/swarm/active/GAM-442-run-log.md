@@ -327,3 +327,47 @@ on the same grounds.
   full evidence body. What would be missing is only the independent grade, and
   a resuming run should dispatch `checker-reviewer` against §4/§6 of the packet
   and then close out — it must **not** re-run the worker.
+
+- **11:54Z — `checker-reviewer` VERDICT: `PASS`.** Returned, waited on, read in
+  full. One MINOR, two NITs, **no BLOCKER and no MAJOR**.
+
+  It did not grade on the worker's paste. It stood up its own PostgreSQL 16.15
+  cluster, re-ran the suite (16/16, exit 0), **re-ran all three mutants itself**
+  (each exit 3, with (b1)/(b2)/(c) staying green under mutant 3), re-ran the
+  gate block, and reproduced every figure in the worker's report independently.
+  It also ran a probe the packet never asked for: the suite against a
+  **migrations-only database with the fixture never loaded** → `13 failed`,
+  exit 3, with `A0` reporting *"every assertion below may be vacuous"*. That
+  answers the question the premise gate's BLOCKER-1 was really about — this
+  suite fails loudly rather than passing on an empty fixture.
+
+  On my highest-value question — does (a2) genuinely constrain `held_ct`, or
+  could it pass a broken view — the verdict is that it is a **real guard,
+  proven by mutation rather than by reading**: two of its three assertions
+  cross-check the view against a direct `count(*)` on `event_sessions` rather
+  than a hard-coded literal, and all three go red under mutant 3.
+
+  Item 10 confirmed (six `A` lines, zero `M`/`D`/`R`), item 6 confirmed
+  (fabricated names, `@example.invalid`), item 27 explicitly addressed rather
+  than skipped: no `src/**` in the diff, the view reads real base tables, so
+  Partial-vs-Passed does not bite and the item-27 exposure belongs to the
+  consuming SeriesCard ticket.
+
+- **11:57Z — MINOR fixed in place, and why that is not an item-10 violation.**
+  The checker measured that the D014 quote lives at
+  `20260806000000_met01_explicit_marks.sql:95-100`, not the `:107-112` the
+  packet had propagated into shipped code (`:107-112` is the body of the
+  `marked` CTE). **I verified this myself** with `sed -n '93,113p'` before
+  acting: the "THE KNOWN COST … INVERTS the failure mode" block is at 95-100.
+  Corrected in the migration comment and in the PR body.
+
+  Item 10 forbids editing an **applied** migration. `20260821000000_…` has
+  never been applied to any database — it is new and unmerged in this very PR —
+  so correcting it now is strictly better than shipping a comment that points a
+  future reader at the wrong twelve lines plus a follow-up migration to fix a
+  comment. The checker's own follow-up #1 proposed either route.
+
+  The checker's NIT-2 (`(b-guard)` has no non-vacuity floor of its own) is
+  accepted and **not** fixed: A0 is measurably its guard, the checker confirmed
+  A0 reddens first, and re-opening a 16/16 suite to re-assert something already
+  covered is churn. Logged here, which is what a NIT gets.
