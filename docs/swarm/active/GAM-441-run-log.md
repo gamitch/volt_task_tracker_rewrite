@@ -59,3 +59,65 @@ that is the AGENTS.md wall-2 signature, not an ambiguous ending.
 change has no test to turn red, and I am not going to invent one to tick the box.
 The clause's purpose is to guarantee the verification is real; the substitutes here
 are the independent premise round above and the full six gates, both recorded below.
+
+---
+
+## 05:20Z — premise measured (before drafting a single word)
+
+Every claim the issue rests on, re-checked against this branch's tree rather than
+taken from the issue text (item 30c / AGENTS.md orientation step 6):
+
+| Claim in GAM-441 | Measured | Verdict |
+| -- | -- | -- |
+| MTG-01 at ~:294 specifies `Section` "Upcoming"/"Past" + per-session `Item` rows | `VOLT_Portal_PRD.md:294`, exact | **holds** |
+| §7.1 `/meetings` row at ~:389 lists `Section, Item, Badge` | `:389` — <code>\| `/meetings` \| all \| List page \| `Section`, `Item`, `Badge` \| MTG-01, MTG-14 \|</code> | **holds** |
+| Edit-chip dated-blockquote amendment precedent at ~:286 | blockquote spans `:287–292`, owner-attributed, dated 2026-07-28 | **holds** (off by one line) |
+| `docs/swarm/figures/ux-craft/` exists; `old-*.webp` are the prior standard | 71 figures; 8 `old-*.webp` present | **holds** |
+| No `meetings-design` skill exists | `.claude/skills/` has 11 skills, none named `meetings-design` | **holds** |
+| MTG-13 keeps attendance editable post-completion | `:310`, explicit, plus a 2026-08-03 owner ruling | **holds** |
+| BEH-08 is date-rendering wayfinding | `:252` | **holds** |
+| DES-05 status colors | `:210` — Present/Late/Excused/Absent → success/warning/neutral/error | **holds** |
+| `src/pages/meetings/**` and `src/lib/meetings/**` exist (skill trigger paths) | both present; `MeetingsList.tsx` is 2997 lines exactly | **holds** |
+| "Six UI tickets blocked" | **eleven** siblings carry `meetings-redesign` (GAM-442…452) | **understated, not wrong** |
+
+**The premise holds. The run proceeds.** Two findings that change the work, both
+recorded here before drafting so neither can be quietly absorbed:
+
+### Finding A — the two figures cannot be produced, and must not be faked (BLOCKS deliverable 3)
+
+The issue's design-canvas attachment is
+`https://claude.ai/code/artifact/d5ea5a27-eee6-4196-b895-63b85b5790ba`. Measured
+from this container:
+
+- `GET` the canvas → **HTTP 200, 14,081 bytes of SPA skeleton** (`skel-logo`,
+  `skel-title`, `hdr-degraded`, `robots: noindex, nofollow`). Occurrences of
+  `meetings`, `artboard`, `seriescard`, `volt` in the payload: **0**. The artboards
+  are client-rendered behind a claude.ai login this run does not hold.
+- `GET /api/artifacts/<id>` → **HTTP 403**.
+
+So the artboards are not reachable, and GAM-441's own binding constraint is
+*"The figures must be exported from the approved canvas, not re-drawn."*
+Re-drawing them would manufacture a **binding craft standard the owner never
+approved**, which eleven sibling tickets and every `checker-accessibility` round
+would then be graded against — strictly worse than having no figure, because it
+launders an agent's guess into the authority position. Deliverable 3 is therefore
+**declined, not attempted**, and filed as its own row under item 20. Deliverables
+1, 2 and 4 are unaffected and ship in full.
+
+### Finding B — UXC-02/UXC-07 are in a different PRD, and it is not in Allowed Files
+
+GAM-441 step 1 requires noting that UXC-02/UXC-07 are superseded for this page.
+The issue's "Where it renders / lives" table cites only `VOLT_Portal_PRD.md`, and
+its Allowed Files list matches. But **neither ID exists in that file**:
+
+- `docs/swarm/VOLT_UX_Craft_PRD_v3.md:77` — UXC-02, `List`→**`Table`** migration, graded **MAJOR**
+- `docs/swarm/VOLT_UX_Craft_PRD_v3.md:82` — UXC-07, collapsed coach rows **≤72px measured**
+
+The filer appears to have believed the UXC IDs lived in the portal PRD. Writing the
+supersession only where the issue says to would leave a **MAJOR-graded requirement
+sitting unqualified in the file a checker actually opens to grade UXC-02** — which
+is this ticket's own defect, reproduced one file over. Handling and the
+scope-expansion question go to the premise gate as least-confident decision #1
+rather than being decided unilaterally.
+
+- **05:22Z — pushed premise measurement.** No subagent in flight at this line.
