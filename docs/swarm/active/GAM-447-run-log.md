@@ -33,3 +33,15 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   (~minute 5, ~55 minutes of PR credential still live). Body artifact
   `docs/swarm/active/GAM-447-pr-body.md` written *before* the API call and
   validated by the declaration checker (`OK declaration closes GAM-447`).
+- 22:52Z — Rebased the branch onto `origin/main` @ `3d27d8a`: PRs #230 (GAM-444)
+  and #231 (GAM-445) had merged *after* this run started, and they create
+  `src/lib/meetings/types.ts` and the `src/pages/meetings/coach/` stubs this
+  ticket builds on. The pre-rebase base would have made the packet's citations
+  false.
+- 23:02Z — **Packet written**: `docs/swarm/active/GAM-447-packet.md`. It records
+  three measured premise corrections (§3): `SeriesCardModel` cannot carry
+  location / roster count / canceled count / hours / span chip / "N expected";
+  `--color-series-1…8` does **not** exist in `src/theme/volt.ts` (the skill calls
+  that a blocker to raise, not a gap to fill with invented hex); and
+  `onSaveMeetingSeries` is **not** on the frozen `SeriesCardProps`, so the Edit
+  panel has no seam to submit through.
