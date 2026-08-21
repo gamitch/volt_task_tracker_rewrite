@@ -129,6 +129,12 @@ GATE RUN - 7318ae0 on claude/gam-439-inline-season-goal-editor - tree clean
 VERDICT: PASS - all six gates exit 0
 ```
 
+Baseline measured independently at the parent commit `c6561ea`:
+**102 files / 2598 tests, exit 0**, and eslint **380 warnings**. So the suite
+went 2598 → 2609 (+11: 8 CoachHome, 3 seasons) with **no test dropped**, and
+**zero new eslint warnings**. A green suite that lost tests is not green, so
+that comparison is the point of running the baseline.
+
 **Re-run after merging `main` in.** The block above describes `7318ae0`, which is
 no longer the head — `main` moved 21 commits while this branch was stalled and
 had to be merged in (see *Run record*). Gates were therefore re-run on the merge
@@ -152,12 +158,6 @@ worktree: **103 files / 2612 tests**. The merge is **+1 file / +11 tests** —
 exactly this branch's own contribution (8 `CoachHome`, 3 `seasons`) — so it is a
 clean union that dropped nothing from either parent. eslint warnings unchanged
 at 380.
-
-Baseline measured independently at the parent commit `c6561ea`:
-**102 files / 2598 tests, exit 0**, and eslint **380 warnings**. So the suite
-went 2598 → 2609 (+11: 8 CoachHome, 3 seasons) with **no test dropped**, and
-**zero new eslint warnings**. A green suite that lost tests is not green, so
-that comparison is the point of running the baseline.
 
 ### Mutation-replay — four mutants, each in the checker's own worktree (item 23)
 
@@ -241,7 +241,6 @@ the merge that all three overlapping changes survived: this run's
 `SeasonGoalEditor` / `updateSeasonGoal` / D5 retention / `key={season.id}`,
 GAM-456's `COACH_HOME_TITLE_STYLE` and `COACH_HOME_EYEBROW_STYLE`, and GAM-455's
 `roundForDisplay` at both float sites.
-
 
 This branch carries two runs. The first opened this PR, wrote the packet and
 closed the premise gate at **DISPATCH**, then died at the moment it dispatched
