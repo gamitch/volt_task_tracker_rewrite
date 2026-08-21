@@ -36,3 +36,11 @@ verification below and no subagent has been dispatched yet.
 
 If this line is the last one in this file, the run died holding the packet
 before any worker was dispatched.
+
+3. **Draft PR opened** · 2026-08-21 · PR #219 opened as draft early (item 28
+   wall 3 — PR credential is time-boxed to ~60 min; opened at ~minute 15 with
+   run log + packet + pr-body artifact on the branch). `pr-body` skill's
+   `check.mjs` confirmed the declaration line parses as `Closes GAM-437`.
+
+If this line is the last one in this file, the run died holding the draft PR
+before any worker was dispatched.
