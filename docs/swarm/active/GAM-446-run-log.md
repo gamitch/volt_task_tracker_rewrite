@@ -39,3 +39,39 @@ mid-chain, the last line names what the run was holding when it died.
   opened well before 23:40Z. `git push` uses the long-lived PAT in the
   extraheader (confirmed present) and survives past it.
 - **22:47 — run log created and pushed; draft PR next, before any source work.**
+- **22:49 — draft PR #233 opened** at roughly minute 8, with ~52 minutes of PR
+  credential left. Wall 3 discharged: the body artifact is on the branch, so
+  even if this run dies the work is publishable by hand.
+- **22:58 — STALE BASE CAUGHT AND CORRECTED.** The run started on `bdfafcf`
+  (PR #221), but `origin/main` had already moved to `3d27d8a` — PRs #230
+  (GAM-444, the MeetingsList decomposition) and #231 (GAM-445) merged in
+  between. On the stale base `src/lib/meetings/types.ts` **did not exist**, and
+  I was one step from reporting the issue's central premise ("code against the
+  frozen `types.ts` contracts") as false. It is true; my checkout was wrong.
+  Rebased onto `3d27d8a`. **Recorded because the failure was mine and the next
+  reader deserves the correction, not a clean story.**
+- **23:02 — reconnaissance complete, all citations verified against `3d27d8a`.**
+  Findings that change the packet, all measured:
+  1. `v_event_attendance` exists (`supabase/migrations/20260821000000_*.sql`),
+     columns `event_id, held_ct, graded_marks_ct, excused_ct,
+     attended_marks_ct, attendance_pct`.
+  2. **The view's own catalog comment makes `graded_marks_ct` mandatory for any
+     consumer**: "A CONSUMER THAT RENDERS attendance_pct WITHOUT ALSO RENDERING
+     graded_marks_ct REINTRODUCES D014's KNOWN REGRESSION." The issue never
+     mentions `graded_marks_ct`. GAM-460 (Backlog) owns the render side, so the
+     loader must carry the value or GAM-460 is unimplementable.
+  3. **The frozen `SeriesCardModel` has `attendancePct` but no `heldCt`, no
+     `gradedMarksCt` and no roster field**, and `src/lib/meetings/types.ts` is
+     NOT in the issue's Allowed Files. The issue's "exact field names per the
+     frozen types.ts contracts" therefore names fields that do not exist. This
+     is the packet's main open question and the premise gate's first target.
+  4. `makeLoadCoachMeetingsData` (`meetings.ts:899-936`) really is six parallel
+     queries; `queryTeams` (`:417`) is the select-string guard precedent
+     (`meetings.test.ts:72`).
+  5. `guardian_links` is `(id, parent_profile_id, student_id, relationship,
+     created_at)` with `unique (parent_profile_id, student_id)`; the existing
+     earliest-child query is `resolveCurrentStudentId.ts`'s
+     `queryFirstLinkedStudentId`, ordered `created_at` asc `.limit(1)`.
+  6. **Concurrency hazard: PR #232 (GAM-447, SeriesCard) is OPEN right now** on
+     a sibling branch. Disjoint files from this ticket, but both are downstream
+     of `types.ts`.
