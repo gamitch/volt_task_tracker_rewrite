@@ -24,3 +24,8 @@ no write path/schema/RLS/auth, no signature change, ~2 line production change, n
   committed (`1810837`), re-ran gate-run: **PASS — all six gates exit 0** (full 2600 tests, +2 over
   baseline; scoped 230, +2 over baseline; tsc/build/lint/format all clean; 0 eslint errors,
   380 pre-existing warnings, no new ones introduced).
+- 2026-08-21 · **opened draft PR #229** (`gh pr create --draft`) at commit `4ceb18a`, body from
+  `docs/swarm/active/GAM-455-pr-body.md` (declaration-checked OK, `Closes GAM-455` line 1), well inside
+  the ~60-minute dispatch-credential window (decoded `exp` ~12:13:24Z, opened ~11:27Z). e2e-personas
+  verification as coach is the one remaining step, noted in the body as in-progress; will update body
+  and clear draft once it lands.
