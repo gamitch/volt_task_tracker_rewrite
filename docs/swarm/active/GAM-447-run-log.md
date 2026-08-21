@@ -29,3 +29,7 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   packet, orchestrator replays the mutation and runs the gates.
 - 22:42Z — Branch `claude/gam-447-series-card` created; run log is the first
   file write.
+- 22:45Z — **Draft PR opened: <https://github.com/gamitch/volt_task_tracker_rewrite/pull/232>**
+  (~minute 5, ~55 minutes of PR credential still live). Body artifact
+  `docs/swarm/active/GAM-447-pr-body.md` written *before* the API call and
+  validated by the declaration checker (`OK declaration closes GAM-447`).
