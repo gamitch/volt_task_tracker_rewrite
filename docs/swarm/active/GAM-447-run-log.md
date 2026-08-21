@@ -145,3 +145,22 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   independent read of the artifact is the closest available substitute for the
   round that could not run. Blocking on it. **If this line is the last one in
   this file, the run died holding this subagent.**
+- 00:22Z — **`checker-reviewer` VERDICT: PASS**, highest severity MINOR — no
+  BLOCKER, no MAJOR. It confirmed the four orchestrator claims it could cheaply
+  reach, confirmed no forbidden file was touched, and confirmed DATA-01 is clean
+  (no division, multiplication or rounding anywhere in the component). It also
+  compared the render against the reference figure card-by-card and found every
+  in-scope element present with the right copy, and every out-of-scope element
+  **absent rather than faked** — no fabricated zero for a field the frozen model
+  cannot carry. Its item-27 reading: the carve-out applies, because the component
+  reads no fixture and has no render site at all yet.
+  Findings: MINOR-1 attendance hierarchy is one flat string, not label/value/
+  supporting; MINOR-2 three height tests are near-tautological and the title
+  clamp is unpinned (deleting `maxLines={1}` reddens nothing); MINOR-3 the
+  selected ring is untested; MINOR-4 `aria-current` on an unnamed `role=generic`
+  div likely announces nothing; MINOR-5 the exported function's JSDoc still says
+  "Stub"; plus five NITs.
+- 00:23Z — **RE-DISPATCHED the same `worker-implementer`** (context intact) to fix
+  the cheap MINORs and NITs in place rather than file five follow-up rows for
+  work that is inside its own Allowed Files. Blocking. **If this line is the last
+  one in this file, the run died holding this subagent.**
