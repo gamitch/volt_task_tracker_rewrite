@@ -52,7 +52,7 @@
  *    resolves `level` (1-6, required), `children` (required), `maxLines`):
  *    `level`, `maxLines` used, for the title clamp (item 4 below).
  *  - `Text` (astryx-api.md:829-878 Props table): `type` (`'supporting'`,
- *    `'label'`, `'body'`), `maxLines` used.
+ *    `'label'`, `'body'`, `'large'`), `weight`, `maxLines` used.
  *  - `HStack`/`VStack` (astryx-api.md:350-396): `gap`, `vAlign`, `wrap`,
  *    `height`, `justify` used.
  *  - `Badge` (astryx-api.md:526-533 Props table): `label`, `variant`
@@ -67,7 +67,8 @@
  *    reinforcing item 1's "no percentage arithmetic" with "no percentage
  *    rendering" from this component's only other numeric-progress surface.
  *  - `Button` (astryx-api.md:1807-1827 Props table): `label`, `variant`
- *    (`'secondary'`), `onClick` used.
+ *    (`'secondary'`), `onClick` used. `aria-current` also reaches this
+ *    element -- see item 3 below (checker remedy MINOR-4/NIT-3).
  *  - `EmptyState` (astryx-api.md:3997-4007 Props table): `title`
  *    (required), `description`, `headingLevel`, `isCompact` used.
  *  - `Skeleton` (astryx-api.md:642-649 Props table): `width`, `height`,
@@ -87,13 +88,13 @@
  *    role="status">Loading meetings…</VisuallyHidden>`).
  *
  * -----------------------------------------------------------------------
- * 3. `style`/`aria-*`/`data-*` on `<Card>` -- GAM-447 packet §5's own
- *    authorization, reproduced here so a later reader/checker does not
- *    re-litigate it (the same "record the citation" instruction
- *    `CoachHome.tsx`'s module doc follows for its own `style`-on-`Card`
- *    use): the installed `@astryxdesign/core` `CardProps extends
- *    BaseProps<HTMLDivElement>` and declares both `style?: CSSProperties`
- *    and `className?: string`
+ * 3. `style`/`aria-*`/`data-*` on `<Card>`, and `aria-current` on
+ *    `<Button>` -- GAM-447 packet §5's own authorization, reproduced here
+ *    so a later reader/checker does not re-litigate it (the same "record
+ *    the citation" instruction `CoachHome.tsx`'s module doc follows for its
+ *    own `style`-on-`Card` use): the installed `@astryxdesign/core`
+ *    `CardProps extends BaseProps<HTMLDivElement>` and declares both
+ *    `style?: CSSProperties` and `className?: string`
  *    (`node_modules/@astryxdesign/core/dist/Card/Card.d.ts:31-37`);
  *    `BaseProps` types `[key: \`data-${string}\`]: unknown` and every
  *    `aria-*` attribute (`dist/BaseProps.d.ts:24-33`); and the installed
@@ -107,19 +108,38 @@
  *    TICKET ONLY, given `astryx-api.md:2985-2996`'s Card Props table does
  *    not list `height`/`minHeight` as achieving the fixed-size promise
  *    alone in every layout context, and the packet grants `style`/
- *    `className`/`data-*`/`aria-*` explicitly (see packet §5). This file
- *    uses:
- *      - `data-series-palette-index={model.paletteIndex}` -- see item 6.
- *      - `aria-current={isSelected ? 'true' : undefined}` -- criterion 8
- *        (DES-12 "selected" state is BOTH visual and programmatic; a screen
- *        reader user gets `aria-current`, not just a colored border).
- *      - `aria-busy="true"` on the loading branch's `Card`, so the loading
- *        state is announced without adding a second live region.
- *      - `style={{ boxShadow: ... }}` (accent-colored inset ring, using the
- *        existing `--color-accent` token from `theme.css:206`, never a new
- *        hex literal) ONLY when `isSelected` -- a shape/contrast change,
- *        not a hue-only change, so the selected state does not rely on
- *        color alone even for users who cannot perceive the accent hue.
+ *    `className`/`data-*`/`aria-*` explicitly (see packet §5). The same
+ *    `BaseProps` pass-through pattern holds for `Button`: `ButtonProps
+ *    extends BaseProps<HTMLButtonElement>`
+ *    (`node_modules/@astryxdesign/core/dist/Button/Button.d.ts:59`) and
+ *    `Button.js` spreads `...props` onto the rendered `<button>`, so
+ *    `aria-current` genuinely reaches that element too. This file uses:
+ *      - `data-series-palette-index={model.paletteIndex}` on `<Card>` --
+ *        see item 6.
+ *      - `aria-busy="true"` on the loading branch's `<Card>`, so the
+ *        loading state is announced without adding a second live region
+ *        (checker remedy NIT: paired with `role="status"` on the
+ *        `VisuallyHidden` announcement below it).
+ *      - `style={{ outline: ..., outlineOffset: ... }}` on `<Card>`
+ *        (accent-colored ring, using the existing `--color-accent` token
+ *        from `theme.css:206`, never a new hex literal) ONLY when
+ *        `isSelected` -- a shape/contrast change, not a hue-only change, so
+ *        sighted users do not have to rely on hue alone to see selection.
+ *        `outline` (not `box-shadow`) is used deliberately: Windows
+ *        High-Contrast / forced-colors mode strips author `box-shadow` but
+ *        preserves `outline` (checker remedy NIT-3), so the ring survives
+ *        forced-colors mode where a `box-shadow` ring would silently
+ *        vanish. `outlineOffset: '-2px'` keeps the ring inside the card's
+ *        own edge instead of growing the card's visual/hit box.
+ *      - `aria-current={isSelected ? 'true' : undefined}` on the "View
+ *        full schedule" `<Button>`, NOT on `<Card>` (checker remedy
+ *        MINOR-4: a `<div>` has no accessible name and, per ARIA, no
+ *        default role assistive tech announces by default, so
+ *        `aria-current` on the card `<div>` was unannounced dead weight; a
+ *        real, focusable, NAMED `<button>` is where AT actually surfaces
+ *        `aria-current`). The visual ring above and this `aria-current`
+ *        together are DES-12's "selected" state: visual AND programmatic,
+ *        never color-only (packet §4 criterion 8).
  *
  * -----------------------------------------------------------------------
  * 4. Height invariance (criterion 1). The real height risks are chip count
@@ -129,11 +149,28 @@
  *    `model.scheduleChips.length`, `model.title.length`, or
  *    `model.sessionsTotal`. Two more measures make the fixed height
  *    actually hold visually, not just nominally:
- *      - the title clamps via `Heading maxLines={1}` (astryx-api.md's own
- *        Heading `maxLines` -- see item 2) instead of wrapping/growing;
+ *      - the title clamps via `Heading maxLines={TITLE_MAX_LINES}` (2 --
+ *        astryx-api.md's own Heading `maxLines` -- see item 2) instead of
+ *        wrapping/growing indefinitely. `maxLines={1}` was tried first but
+ *        is NOT independently testable in this repo's jsdom test
+ *        environment: reading the installed `Heading.js` directly (and
+ *        confirming empirically by rendering it) shows the single-line
+ *        case applies an opaque StyleX atomic class with no DOM-observable
+ *        signal at all (no inline style, no data attribute), whereas
+ *        `maxLines > 1` sets a genuine inline `WebkitLineClamp` style
+ *        (`Heading.js`'s own `inlineStyle = maxLines > 1 ? {
+ *        WebkitLineClamp: maxLines } : undefined`) that a test can read
+ *        back via `h3.style.getPropertyValue('-webkit-line-clamp')` -- the
+ *        same `getPropertyValue` idiom this file's own `--x-height` tests
+ *        already use. 2 lines still bounds the title well within the fixed
+ *        card height (`Card`'s own overflow containment, item 2, is the
+ *        real backstop regardless of the clamp value) while making the
+ *        clamp a real, checker-verifiable assertion (checker remedy
+ *        MINOR-2) instead of a silent, unpinned claim.
  *      - the schedule-chip row is capped at `MAX_VISIBLE_SCHEDULE_CHIPS`
- *        (4) real chips plus one `+N more` chip when there are more --
- *        see item 5 for why 4 is a declared deviation, not an oversight.
+ *        (4) real chips plus one `+N more` chip when there are more than
+ *        one hidden -- see item 5 for why 4 is a declared deviation, not
+ *        an oversight, and for the "exactly 5" special case.
  *    `Card`'s own fixed-height/scrollable behavior (item 2's `Card` note)
  *    then contains whatever overflow remains. The test asserts the DOM
  *    `--x-height` custom property `Card` sets (`element.style.
@@ -154,8 +191,15 @@
  *     size-card promise (item 4 above) outranks the skill's literal chip
  *     count, and the drill-out schedule panel (a sibling ticket, MTG-01b)
  *     carries the full, uncapped detail -- nothing is silently lost, only
- *     deferred to the view that has room for it. `overlapCount` is
- *     rendered as its own separate `Badge`, not counted against this cap.
+ *     deferred to the view that has room for it. The overlap `Badge` lives
+ *     in this same chip row (checker remedy NIT: moved off the `wrap`-ping
+ *     title row, where a long clamped title could previously push it to a
+ *     second line) but is NOT counted against the chip cap itself.
+ *     **Exactly-one-hidden special case (checker remedy NIT):** when
+ *     capping would hide exactly one chip (`scheduleChips.length ===
+ *     MAX_VISIBLE_SCHEDULE_CHIPS + 1`, i.e. 5), the cap buys no height --
+ *     a `+1 more` badge is no smaller than the 5th chip it would replace --
+ *     so all 5 real chips render instead, and nothing is hidden for free.
  *
  * (b) **`Badge` for schedule chips/counts over `astryx-api.md`'s general
  *     "don't use badges for metadata" Don't (astryx-api.md:521-522, "Use
@@ -226,7 +270,15 @@
  *    additive, optional props (packet §1 explicitly authorizes additive
  *    optional props on this file since `SeriesCard` has no real callers
  *    yet); `sessionsTotal === 0` is the empty branch (no fabricated
- *    caller prop needed, since it is already on the frozen model).
+ *    caller prop needed, since it is already on the frozen model);
+ *    `errorMessage` is gated on truthiness, not `!== undefined`, so a
+ *    caller-supplied empty string does not render an empty-description
+ *    `Banner` (checker remedy NIT). `isSelected`'s visual ring (item 3)
+ *    renders on the `<Card>` in all four states, but its `aria-current`
+ *    pair only has somewhere to live in the populated state, since that is
+ *    the only state with a focusable "View full schedule" `<button>` --
+ *    the loading/empty/error branches have no interactive element to carry
+ *    it, and this component does not invent one just to hold an attribute.
  */
 import { type CSSProperties, type ReactNode } from 'react';
 import {
@@ -278,8 +330,15 @@ const SERIES_CARD_HEIGHT_PX = 380;
 
 /** Declared deviation from `meetings-design` skill SKILL.md:40 (module doc
  * item 5a) -- caps the VISIBLE schedule chips so the row cannot grow the
- * card; the remainder collapses into one `+N more` chip. */
+ * card; the remainder collapses into one `+N more` chip, UNLESS there is
+ * exactly one hidden chip, in which case the cap buys no height and all
+ * chips render (module doc item 5a "exactly-one-hidden special case"). */
 const MAX_VISIBLE_SCHEDULE_CHIPS = 4;
+
+/** `Heading`'s own runtime only applies a DOM-observable clamp signal
+ * (`WebkitLineClamp` inline style) when `maxLines > 1` -- see module doc
+ * item 4 for the empirical finding behind widening this from 1 to 2. */
+const TITLE_MAX_LINES = 2;
 
 /** MTG-01a "next-session line ... or the finished state"
  * (`types.ts:296-300`) -- the finished copy itself is this component's own
@@ -291,8 +350,13 @@ function buildSelectionStyle(isSelected: boolean | undefined): CSSProperties | u
   // Module doc item 3 -- an accent-colored ring (shape + contrast change),
   // not a hue-only change, so the selected state does not rely on color
   // alone. `--color-accent` is an existing token (`theme.css:206`), never a
-  // new hex literal.
-  return isSelected ? { boxShadow: 'inset 0 0 0 2px var(--color-accent)' } : undefined;
+  // new hex literal. `outline` (not `box-shadow`) survives forced-colors
+  // mode, where the UA strips author `box-shadow` but preserves `outline`
+  // (checker remedy NIT-3). Negative `outlineOffset` keeps the ring inside
+  // the card's own edge instead of growing its visual/hit box.
+  return isSelected
+    ? { outline: '2px solid var(--color-accent)', outlineOffset: '-2px' }
+    : undefined;
 }
 
 function formatAttendanceText(attendancePct: number | null): string {
@@ -305,10 +369,10 @@ function formatAttendanceText(attendancePct: number | null): string {
 }
 
 /**
- * Stub -- GAM-444 creates this file and freezes its props; the rendering is
- * a downstream meetings-redesign ticket's own deliverable (packet §1: "MOVE
- * CODE; ADD NO FEATURES. If you find yourself writing new rendering logic,
- * you have left scope").
+ * Renders MTG-01a's coach series card in all four DES-12 states (loading,
+ * empty, error, populated) from the frozen `SeriesCardModel`/
+ * `SeriesCardProps` (GAM-444). This is no longer the GAM-444 stub -- it
+ * replaced that stub's `return null;` body (GAM-447, this ticket).
  *
  * GAM-447 is that downstream ticket -- see the module doc above for the
  * full decision record (Astryx prop sourcing, the chip-cap and Badge
@@ -322,9 +386,12 @@ export function SeriesCard(props: SeriesCardProps): ReactNode {
     height: SERIES_CARD_HEIGHT_PX,
     padding: 4 as const,
     'data-series-palette-index': model.paletteIndex,
-    'aria-current': isSelected ? ('true' as const) : undefined,
     style: buildSelectionStyle(isSelected),
   };
+  // Module doc item 3 -- `aria-current` lives on the "View full schedule"
+  // button (a real, named, focusable element), not on the unnamed `<Card>`
+  // `<div>`.
+  const selectedButtonProps = { 'aria-current': isSelected ? ('true' as const) : undefined };
 
   if (isLoading === true) {
     return (
@@ -348,7 +415,7 @@ export function SeriesCard(props: SeriesCardProps): ReactNode {
     );
   }
 
-  if (errorMessage !== undefined) {
+  if (errorMessage) {
     return (
       <Card {...sharedCardProps}>
         <VStack gap={3} height="100%" justify="center">
@@ -375,7 +442,14 @@ export function SeriesCard(props: SeriesCardProps): ReactNode {
     );
   }
 
-  const visibleChips = model.scheduleChips.slice(0, MAX_VISIBLE_SCHEDULE_CHIPS);
+  // Module doc item 5a "exactly-one-hidden special case" -- capping at 4
+  // when there are exactly 5 chips would hide the 5th chip behind a
+  // `+1 more` badge that is no smaller, buying no height at all. Show all
+  // 5 in that one case; otherwise cap normally.
+  const hasExactlyOneHiddenChip = model.scheduleChips.length === MAX_VISIBLE_SCHEDULE_CHIPS + 1;
+  const visibleChips = hasExactlyOneHiddenChip
+    ? model.scheduleChips
+    : model.scheduleChips.slice(0, MAX_VISIBLE_SCHEDULE_CHIPS);
   const hiddenChipCount = model.scheduleChips.length - visibleChips.length;
   const attendanceText = formatAttendanceText(model.attendancePct);
   const nextSessionText = model.nextSessionLabel ?? FINISHED_SESSIONS_COPY;
@@ -384,12 +458,9 @@ export function SeriesCard(props: SeriesCardProps): ReactNode {
     <Card {...sharedCardProps}>
       <VStack gap={3} height="100%">
         <VStack gap={0.5}>
-          <HStack gap={1.5} vAlign="center" wrap="wrap">
-            <Heading level={3} maxLines={1}>
-              {model.title}
-            </Heading>
-            {overlapCount ? <Badge variant="neutral" label={`${overlapCount} overlap`} /> : null}
-          </HStack>
+          <Heading level={3} maxLines={TITLE_MAX_LINES}>
+            {model.title}
+          </Heading>
           <Text type="supporting" maxLines={1}>
             {model.teamScopeLabel}
           </Text>
@@ -407,23 +478,36 @@ export function SeriesCard(props: SeriesCardProps): ReactNode {
             <Badge key={`chip-${index}`} label={chip} />
           ))}
           {hiddenChipCount > 0 && <Badge key="chip-more" label={`+${hiddenChipCount} more`} />}
+          {/* Checker remedy NIT -- moved off the title `HStack` (a `wrap`-ping
+              row with a clamped `Heading`, where a long title could push this
+              badge to a second line) into the chip row, matching the figure. */}
+          {overlapCount ? <Badge variant="neutral" label={`${overlapCount} overlap`} /> : null}
         </HStack>
 
         <VStack gap={1}>
+          {/* Checker remedy MINOR-... -- caption line above the bar, matching
+              the figure. */}
+          <Text type="supporting">
+            {`${model.sessionsCompleted} of ${model.sessionsTotal} sessions held`}
+          </Text>
           <ProgressBar
             label={`${model.title}: sessions held`}
             isLabelHidden
             value={model.sessionsCompleted}
             max={model.sessionsTotal}
           />
-          <Text type="supporting">
-            {`${model.sessionsCompleted} of ${model.sessionsTotal} sessions held`}
-          </Text>
         </VStack>
 
         <VStack gap={0.5}>
+          {/* Checker remedy MINOR-1 -- three nodes (label / prominent value /
+              supporting caption), not one flat sentence. `formatAttendanceText`
+              is unchanged: `null` stays "—", a real value passes through
+              verbatim (e.g. "96.5%"), never rounded or recomputed here. */}
           <Text type="label">Attendance</Text>
-          <Text type="body">{`${attendanceText} across ${model.sessionsCompleted} held`}</Text>
+          <Text type="large" weight="semibold">
+            {attendanceText}
+          </Text>
+          <Text type="supporting">{`across ${model.sessionsCompleted} held`}</Text>
         </VStack>
 
         <VStack gap={0.5}>
@@ -432,6 +516,7 @@ export function SeriesCard(props: SeriesCardProps): ReactNode {
         </VStack>
 
         <Button
+          {...selectedButtonProps}
           label={`View full schedule (${model.sessionsTotal} sessions)`}
           variant="secondary"
           onClick={() => onSelect?.({ eventId: model.eventId })}

@@ -3,16 +3,29 @@
  * Tests for `SeriesCard.tsx` (GAM-447). No `@testing-library/react` is
  * installed in this repo -- these tests use the same raw `createRoot`/`act`
  * pattern `CheckinResult.test.tsx` and `CoachMeetingsView.test.tsx` already
- * established. DOM reads follow two existing precedents directly:
+ * established. DOM reads follow precedents already in this repo:
  *   - `element.style.getPropertyValue('--x-height')` to read a `SizeValue`
  *     prop back out of the DOM, exactly as `CoachHome.test.tsx:2094` reads
  *     `--x-gridTemplateColumns` off `Grid`.
+ *   - `element.style.getPropertyValue('-webkit-line-clamp')` reads the title
+ *     clamp back out the same way -- `Heading`'s own runtime only sets this
+ *     inline style when `maxLines > 1` (empirically confirmed; `maxLines={1}`
+ *     applies an opaque StyleX atomic class with zero DOM-observable signal,
+ *     which is why `SeriesCard.tsx` uses `TITLE_MAX_LINES = 2`, see its
+ *     module doc item 4).
+ *   - `element.style.outline`/`outlineOffset` reads the selection-ring style
+ *     back the same way `--x-height` is read, just off React's own applied
+ *     `style` object instead of an Astryx dynamic-style custom property.
  *   - focusing a real `<button>` then dispatching a `click` (not a
- *     `keydown`) to prove keyboard reachability/activation, exactly as
+ *     `keydown`) to prove keyboard reachability, exactly as
  *     `LiveConsole.test.tsx`'s "reachable and activatable via keyboard"
  *     test already does -- jsdom does not itself simulate the browser's
  *     native Enter/Space-to-click activation of a real `<button>`, so the
- *     click is dispatched directly at the focused element.
+ *     click is dispatched directly at the focused element. The load-bearing
+ *     assertion for "keyboard access" is `tagName === 'BUTTON'` (a native
+ *     button is unconditionally Enter/Space-activatable per the HTML spec,
+ *     a browser guarantee this suite cannot re-simulate in jsdom) plus DOM
+ *     focus actually landing on it.
  */
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -79,6 +92,25 @@ function scheduleButton(): HTMLButtonElement {
   return found as HTMLButtonElement;
 }
 
+function titleHeadingEl(): HTMLElement {
+  const el = container.querySelector('h3');
+  expect(el, 'expected a rendered <h3> title').toBeTruthy();
+  return el as HTMLElement;
+}
+
+/** The `Attendance` block's three `Text` nodes, in DOM order, scoped to the
+ * `[data-type="label"]` node whose text is exactly "Attendance" (there are
+ * other `label`/`supporting` `Text` nodes elsewhere on the card). */
+function attendanceBlockTexts(): string[] {
+  const labelEl = Array.from(container.querySelectorAll('[data-type="label"]')).find(
+    (el) => el.textContent === 'Attendance',
+  );
+  expect(labelEl, 'expected an Attendance label node').toBeTruthy();
+  const block = labelEl?.parentElement;
+  expect(block, 'expected the Attendance label to have a parent block').toBeTruthy();
+  return Array.from(block?.children ?? []).map((el) => el.textContent ?? '');
+}
+
 // ---------------------------------------------------------------------------
 // 1. Height invariance
 // ---------------------------------------------------------------------------
@@ -132,6 +164,22 @@ describe('height invariance', () => {
     expect(chipRelatedBadges.length).toBe(5);
     expect(container.textContent).toContain('+8 more');
   });
+
+  it('renders all 5 chips (no "+N more") when exactly one chip would otherwise be hidden', () => {
+    const chips = ['Mon 1–2 PM', 'Tue 2–3 PM', 'Wed 3–4 PM', 'Thu 4–5 PM', 'Fri 5–6 PM'];
+    renderCard({ model: baseModel({ scheduleChips: chips }) });
+    const chipTexts = badgeEls()
+      .filter((b) => !b.textContent?.includes('overlap'))
+      .map((b) => b.textContent);
+    expect(chipTexts).toEqual(chips);
+    expect(container.textContent).not.toContain('more');
+  });
+
+  it('pins the title clamp: the rendered <h3> carries a real, DOM-observable line-clamp style', () => {
+    renderCard({ model: baseModel({ title: 'x'.repeat(300) }) });
+    const heading = titleHeadingEl();
+    expect(heading.style.getPropertyValue('-webkit-line-clamp')).toBe('2');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -150,6 +198,19 @@ describe('attendancePct rendering (DATA-01 -- never computed, never fabricated)'
     expect(container.textContent).toContain('0%');
     expect(container.textContent).not.toContain('—');
   });
+
+  it('renders a real non-integer value verbatim, e.g. "96.5%", never rounded', () => {
+    renderCard({ model: baseModel({ attendancePct: 96.5 }) });
+    expect(container.textContent).toContain('96.5%');
+  });
+
+  it('splits into three nodes -- label, prominent value, supporting caption -- not one flat sentence', () => {
+    renderCard({ model: baseModel({ attendancePct: 87, sessionsCompleted: 3 }) });
+    const [label, value, caption] = attendanceBlockTexts();
+    expect(label).toBe('Attendance');
+    expect(value).toBe('87%');
+    expect(caption).toBe('across 3 held');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -157,10 +218,12 @@ describe('attendancePct rendering (DATA-01 -- never computed, never fabricated)'
 // ---------------------------------------------------------------------------
 
 describe('DES-12 four states', () => {
-  it('loading: renders a Skeleton-based branch, no populated content', () => {
+  it('loading: renders a Skeleton-based branch, announces via aria-busy/role=status, no populated content', () => {
     renderCard({ model: baseModel(), isLoading: true });
     expect(container.querySelectorAll('.astryx-skeleton').length).toBeGreaterThan(0);
     expect(container.querySelector('button')).toBeNull();
+    expect(cardEl().getAttribute('aria-busy')).toBe('true');
+    expect(container.querySelector('[role="status"]')).toBeTruthy();
   });
 
   it('empty: sessionsTotal === 0 renders an EmptyState, no progress bar, no next-session line', () => {
@@ -175,6 +238,13 @@ describe('DES-12 four states', () => {
     const banner = container.querySelector('.astryx-banner');
     expect(banner).toBeTruthy();
     expect(container.textContent).toContain('Could not load attendance data.');
+  });
+
+  it('error: an empty-string errorMessage does not render an empty-description Banner', () => {
+    renderCard({ model: baseModel(), errorMessage: '' });
+    expect(container.querySelector('.astryx-banner')).toBeNull();
+    // Falls through to the populated branch instead.
+    expect(scheduleButton()).toBeTruthy();
   });
 
   it('populated: renders the full card', () => {
@@ -213,12 +283,14 @@ describe('onSelect', () => {
 // ---------------------------------------------------------------------------
 
 describe('overlap badge', () => {
-  it('appears for overlapCount > 0, with no error/urgency variant', () => {
+  it('appears in the chip row for overlapCount > 0, with no error/urgency variant', () => {
     renderCard({ model: baseModel(), overlapCount: 2 });
     const overlapBadge = badgeEls().find((b) => b.textContent?.includes('overlap'));
     expect(overlapBadge).toBeTruthy();
     expect(overlapBadge?.textContent).toContain('2 overlap');
     expect(overlapBadge?.getAttribute('data-variant')).toBe('neutral');
+    // Lives in the chip row, not the (now overlap-badge-free) title block.
+    expect(titleHeadingEl().parentElement?.contains(overlapBadge ?? null)).toBe(false);
   });
 
   it('is absent for overlapCount === 0', () => {
@@ -275,22 +347,22 @@ describe('schedule chips', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 10. Keyboard reachability/activation
+// 10. Keyboard reachability
 // ---------------------------------------------------------------------------
 
 describe('keyboard access', () => {
-  it('the schedule button is a real <button>, reachable by tab and activatable by Enter/Space', () => {
+  it("the schedule button is a real, focusable <button> (native Enter/Space activation is a <button>'s own browser guarantee, not re-simulated in jsdom)", () => {
     const onSelect = vi.fn();
     renderCard({ model: baseModel(), onSelect });
     const button = scheduleButton();
 
+    // Load-bearing: a real <button>, not a div with a click handler.
     expect(button.tagName).toBe('BUTTON');
 
     act(() => {
       button.focus();
     });
     expect(document.activeElement).toBe(button);
-    expect(button.tabIndex).not.toBe(-1);
 
     // A real native <button> natively activates on Enter/Space; jsdom does
     // not itself simulate that browser behavior, so the click is dispatched
@@ -307,13 +379,24 @@ describe('keyboard access', () => {
 // ---------------------------------------------------------------------------
 
 describe('isSelected', () => {
-  it('marks the card programmatically with aria-current when true', () => {
+  it('marks the schedule button programmatically with aria-current when true', () => {
     renderCard({ model: baseModel(), isSelected: true });
-    expect(cardEl().getAttribute('aria-current')).toBe('true');
+    expect(scheduleButton().getAttribute('aria-current')).toBe('true');
   });
 
   it('does not set aria-current when false/undefined', () => {
     renderCard({ model: baseModel() });
-    expect(cardEl().getAttribute('aria-current')).toBeNull();
+    expect(scheduleButton().getAttribute('aria-current')).toBeNull();
+  });
+
+  it('renders a visible selection ring (outline) on the Card when true', () => {
+    renderCard({ model: baseModel(), isSelected: true });
+    expect(cardEl().style.outline).toBeTruthy();
+    expect(cardEl().style.outlineOffset).toBeTruthy();
+  });
+
+  it('renders no selection ring when false/undefined', () => {
+    renderCard({ model: baseModel() });
+    expect(cardEl().style.outline).toBeFalsy();
   });
 });
