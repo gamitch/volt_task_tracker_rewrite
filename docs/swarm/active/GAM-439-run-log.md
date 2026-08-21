@@ -115,3 +115,9 @@ holding that subagent.*
 > estimated. Recorded rather than silently rewritten, because the run log's
 > value is that it is contemporaneous.
 
+- **05:31Z (real) — packet revision 3 pushed:** all six round-2 findings folded
+  in, including the mandatory `key={season.id}`, the failed-refresh disclosure,
+  the corrected consumer count (eight, not four), `Button isDisabled` added to
+  the verified-props list, and the in-`loaders/` test harnesses the gate found.
+  Added §9, the premise-gate record. Packet is cleared for dispatch under the
+  Definition of Ready.

@@ -202,8 +202,11 @@ Why this and not "accept the reload":
 * It keeps `refresh()`, so **the whole app stays consistent** — every
   `useActiveSeason()` consumer gets the new value.
 * It is confined to `CoachHome.tsx`, already an Allowed File. **`SeasonProvider`
-  is not modified**, so `TopNav`, `KpiStrip`, `CalendarPage` and `StudentHome`
-  keep their current behaviour exactly.
+  is not modified**, so its **eight** other consumers keep their current
+  behaviour exactly: `CalendarPage.tsx:613`, `ReportsShell.tsx:164`,
+  `SeasonSettings.tsx:728`, `StudentHome.tsx:2033`, `OutreachList.tsx:4455`,
+  `useOutreachBadgeCount.ts:131`, `TopNav.tsx:151`, `KpiStrip.tsx:173`.
+  (Revision 2 said four; the round-2 gate counted eight.)
 * It restores all four write states (item 12), which the reload made
   impossible.
 * It removes the double-fetch: `CoachHomeContent` never unmounts, so its
@@ -216,11 +219,22 @@ first-mount skeleton (`CoachHome.test.tsx:1165-1174` and `:1284-1285`) drive
 loading from mount and so are unaffected — **verify that yourself rather than
 trusting this line.**
 
-**Disclosed consequence:** while a refresh is in flight the dashboard shows the
-previous season object. If an admin elsewhere activated a *different* season,
-the dashboard renders the old one for the duration of one fetch and then
-corrects itself. That is the ordinary stale-while-revalidate trade and it is
-self-correcting.
+**Disclosed consequences**, both from the round-2 gate:
+
+1. While a refresh is in flight the dashboard shows the previous season object.
+   If an admin elsewhere activated a *different* season, the dashboard renders
+   the old one for the duration of one fetch and then corrects itself. The gate
+   measured the retained render to be internally **consistent** — `id`, `name`
+   and `defaultGoalHours` all come from one retained `SeasonRow`, and on settle
+   `seasonId` flips and every seasonId-keyed path re-runs. Stale, not wrong.
+2. **A failed post-save refresh now replaces a working dashboard.** Before this
+   task, `refresh()` was reachable from `CoachHome` only via the `'error'`
+   branch's Retry button; after it, every successful save calls it. If that
+   re-fetch fails, the full-page "Couldn't load the active season" banner
+   (`CoachHome.tsx:2291-2301`) replaces the dashboard *and* the success
+   confirmation. That branch is unchanged, the save has already committed, and
+   Retry recovers — but it is a new transition, disclosed here rather than
+   discovered by the reviewer.
 
 ## 4. Allowed Files
 
@@ -301,7 +315,25 @@ this file (`seasons.ts:111-113`) — add no new imports.
    call `useActiveSeason()` or `useAuth()` a second time inside
    `CoachHomeContent`.
 3. **D5 retention.** Implement the stale-while-revalidate retention in the
-   outer `CoachHome` wrapper as specified in D5.
+   outer `CoachHome` wrapper as specified in D5. Three constraints, all from
+   the round-2 gate, which built this and measured it:
+   - **`key={season.id}` on `<CoachHomeContent>` is mandatory.** Retention
+     spans a *refresh*, not a *change*: a genuinely different season must still
+     remount. Without the key, `useMilestoneToasts` state survives a season
+     switch and — because toast ids are
+     `${HOME_HOURS_GOAL_BAR_ID}-${milestone}` with no `seasonId`
+     (`CoachHome.tsx:1886`, rendered `key={toast.id}` at `:2481`) — React logs
+     `Encountered two children with the same key, 'team-hours-goal-25'` and the
+     milestone toast renders twice. Measured. The key does not change on a
+     same-season refresh, so it costs D5 nothing.
+   - **Both branches must return `<CoachHomeContent>` as the same element type
+     at the same position.** A wrapper `<>` or `<div>` in only one branch
+     remounts the subtree and destroys the success state D5 exists to enable.
+     The shape that measured clean is a single `renderContent(season: SeasonRow)`
+     helper called from both `case 'loading'` (retained) and `case 'ready'`.
+   - Expect two new imports in `CoachHome.tsx`: `useRef` on the React import
+     line, and `type SeasonRow` from `../../lib/supabase/types`. Both are
+     inside an Allowed File; no escalation.
 4. **Placement.** In the header `HStack` (`CoachHome.tsx:2490-2518` — a
    `hAlign="between" wrap="wrap"` row holding a title `VStack` and an inner
    button `HStack`), or as its own row directly beneath it. It must sit above
@@ -343,8 +375,10 @@ this file (`seasons.ts:111-113`) — add no new imports.
    (`:1183`), `value` (`:1184`, `number | null | undefined`), `onChange`
    (`:1185`, `(value: number) => void`), `isRequired` (`:1190`), `isDisabled`
    (`:1191`), `status` (`:1197`), `min` (`:1198`), `units` (`:1201`), `onEnter`
-   (`:1209`); `Button isLoading` (`:1818`). Any prop you add beyond these,
-   check yourself — absent from that file is presumed hallucinated → MAJOR.
+   (`:1209`); `Button isLoading` (`:1818`) and `Button isDisabled` (`:1820` —
+   added after round 2, which caught that §5b.5 required it while this list
+   omitted it). Any prop you add beyond these, check yourself — absent from
+   that file is presumed hallucinated → MAJOR.
 9. **Module doc.** This file's numbered module doc (`CoachHome.tsx:5-660`,
    entries 1-16) is the record of every prior change. Add a numbered GAM-439
    entry in the same voice: what was added, why the write is column-scoped,
@@ -364,7 +398,7 @@ Item 27: criterion **A1 names the real source**, not the render.
 | # | Criterion | How it is measured |
 | -- | -- | -- |
 | A1 | The control writes through `updateSeasonGoal` from `src/lib/supabase/loaders/seasons.ts` — the real loader, no fixture, no stub — reached on the real user path (`/` as an admin). Its default prop value is the real export. | Read the prop chain end to end; the injected seam's *default* must be the real function. |
-| A2 | `updateSeasonGoal` issues `.update()` with **exactly one key**, `default_goal_hours`. | Loader test asserting `Object.keys(...)` of the object passed to `.update()` has length 1. **A test that only asserts `default_goal_hours` is present would pass while the bug ships** — assert the key set, not the key. **Harness:** copy `makeFakeUpdateClient` from `src/pages/settings/SeasonSettings.test.tsx:973-984`, which fakes exactly `.from('seasons').update({...}).eq('id', ...)` and at `:1001-1008` already asserts a key-set property; or `makeFakeUpdateEqClient`, `src/pages/roster/AdminToggles.test.tsx:285-298`, which adds the `{data:null,error:null}` and error-rejection cases. **Do not model this on `coachHome.test.ts` — it has no `update` spy** (round-1 finding). |
+| A2 | `updateSeasonGoal` issues `.update()` with **exactly one key**, `default_goal_hours`. | Loader test asserting `Object.keys(...)` of the object passed to `.update()` has length 1. **A test that only asserts `default_goal_hours` is present would pass while the bug ships** — assert the key set, not the key. **Harness — three real models, pick one; do not model this on `coachHome.test.ts`, which has no `update` spy** (round-1 finding). Preferred, because it is already inside `loaders/`: the update-recording fakes at `src/lib/supabase/loaders/endMeeting.test.ts:374-420` and `outreach.test.ts:391` (round-2 finding). Otherwise `makeFakeUpdateClient`, `src/pages/settings/SeasonSettings.test.tsx:972-985`, which fakes exactly `.from('seasons').update({...}).eq('id', ...)` and at `:1001-1008` already asserts a key-set property; or `makeFakeUpdateEqClient`, `src/pages/roster/AdminToggles.test.tsx:285-298`, which adds the `{data:null,error:null}` and error-rejection cases. `endMeeting.test.ts:546` also shows a stricter, shorter assertion — `expect(updateSpy).toHaveBeenCalledWith({ default_goal_hours: 90 })` — which vitest deep-equality fails on an extra key, so it kills §7's mutant on its own. Either that or the `Object.keys(...).length === 1` form satisfies A2. |
 | A3 | Saving a new goal leaves `name`, `starts_on` and `ends_on` unchanged in the row. | `e2e-personas` write-then-read-back of all four columns (§7). |
 | A4 | A coach (role `coach`) sees **no** editor on the dashboard; an admin does. | `CoachHome.test.tsx` under both roles — the harness exists and is already in use: `src/test-utils/authHarness.tsx:131-150` exports `LoginAs`/`LoginAsDeferred`, and `CoachHome.test.tsx:111-112, 133-168` already renders as both `COACH_USER` and `ADMIN_USER`. |
 | A5 | All four write states render: idle, in-flight, error (with the typed value preserved), **and success**. | Component tests, one per state, with a rejecting seam for error. The success leg is only reachable because of D5 — if it is not, D5 is not implemented correctly. |
@@ -395,19 +429,19 @@ Item 27: criterion **A1 names the real source**, not the render.
 
 ## 8. Least confident decisions (item 19d)
 
-Revision-2 list. Round 1 resolved the previous entries 2 and 5 by measurement;
-entries 1 and 4 survived as sound and are not re-litigated here.
+Revision-2 list, annotated with round 2's verdicts. Round 1 resolved the
+original entries 2 and 5 by measurement; round 2 resolved entries 1 and 4.
 
 1. **D5's stale-while-revalidate is the right call over simply accepting the
-   reload.** Wrong if the retention interacts badly with a *season switch* —
-   an admin activating a different season elsewhere while this dashboard is
-   mounted, where rendering the previous season's data for one fetch could show
-   figures attributed to the wrong season name. I judged this acceptable
-   because it is one fetch long and self-correcting, and because the
-   alternative ships a full dashboard reload on every save. What would change
-   my mind: the checker finding that `CoachHomeContent`'s children key off
-   `seasonId` in a way that makes the intermediate render *wrong* rather than
-   merely stale.
+   reload.** Wrong if the retention interacts badly with a *season switch*.
+   **Round 2 measured this and the falsifier fired — though not where I aimed
+   it.** The retained render is internally *consistent*, not wrong: `seasonId`
+   flips on settle and every seasonId-keyed path re-runs. But because
+   `CoachHomeContent` no longer unmounts, `useMilestoneToasts` state survives a
+   season change and its toast keys collide. Fixed by `key={season.id}`
+   (§5b.3), verified by the gate. **Resolved — the decision stands with that
+   one-token addition.** Recorded here because this is precisely what a
+   declared doubt is for.
 2. **D5 belongs in `CoachHome.tsx` rather than in `SeasonProvider`.** Wrong if
    the checker judges that a provider-level `keepPreviousData` is the correct
    home for this and that solving it per-consumer is duplication waiting to
@@ -422,14 +456,29 @@ entries 1 and 4 survived as sound and are not re-litigated here.
    it: the owner saying so. I chose the conservative side because expanding a
    capability by omission is unrecoverable-by-default, while granting it later
    is one line.
-4. **A5's success leg is genuinely testable once D5 lands.** Wrong if
-   `onSeasonChanged()` still tears the component down through some path I have
-   not traced — round 1 measured the unmount under revision 1's design, not
-   under D5's. **The worker must confirm the success state actually renders in
-   a test, and if it does not, stop and report rather than deleting the
-   criterion.** This is the one place where revision 2 is relying on a
-   prediction rather than a measurement.
+4. **A5's success leg is genuinely testable once D5 lands.** This was the one
+   place revision 2 relied on prediction rather than measurement, and I flagged
+   it as such. **Round 2 built D5 and measured it: resolved, the prediction was
+   right.** `hasSuccess=true`, `hasSkeleton=false`, and `loadData` /
+   `loadDashboardData` back to one call each versus revision 1's two. Still
+   confirm it in your own test — but this is no longer an open doubt.
 5. **Placing the control in the header row (§5b.4).** Wrong if that
    `wrap="wrap"` row is already at its limit at narrow viewports and a fourth
    element makes it illegible. Measure at 768px; the own-row fallback is
    pre-approved.
+
+---
+
+## 9. Premise-gate record (item 19)
+
+| Round | Verdict | Findings | What it changed |
+| -- | -- | -- | -- |
+| 1 | **REVISE** | 2 MAJOR, 6 MINOR, 2 NIT | Proved by probe that `refresh()` unmounts `CoachHomeContent`, making the packet's success state impossible and doubling every dashboard fetch. Produced **D5**. Also killed a criterion that named a non-existent seam (A6), a wrong test-harness model (A2), and the `SupabaseLoaderError` copy/type traps. |
+| 2 | **DISPATCH** | 3 MINOR, 3 NIT | Implemented D5 and the editor in its own worktree; full suite **103 files / 2602 tests, exit 0**, all 101 `CoachHome.test.tsx` tests unmodified — so A8 is measured, not asserted. Found **F1**, a real React key collision D5 introduced, fixed by `key={season.id}`. 33 of 33 changed citations landed. |
+
+Gate closed at round 2 of the item-19a two-round cap. No escalation required.
+This packet is **cleared for dispatch** under the Definition of Ready.
+
+**What the gate could not settle, and nobody should pretend it did:** D3
+(admin-only) is a product call for the owner, not a fact in the repository, and
+§5b.4's header placement at 768px needs a browser. Both are disclosed above.
