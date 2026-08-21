@@ -61,9 +61,23 @@ GATE RUN — 1810837 on claude/gam-455-round-coach-dashboard-hours — tree clea
 VERDICT: PASS — all six gates exit 0
 ```
 
-`e2e-personas` as coach (issue's own required verification, matching this
-issue's `e2e-personas` label): **in progress at PR-open time — this section
-will be updated before the draft is cleared.**
+Re-run against the final commit (`7131ba0`, adding the e2e spec below): same
+result, all six green, full suite 2600/baseline 2598, scoped 230/baseline 228.
+
+`e2e-personas` as coach, real browser against a real PostgreSQL cluster
+carrying this repo's migrations (`tests/e2e-personas/gam-455-coach-dashboard-hours-rounding.spec.ts`):
+the harness seed's `v_team_hours.confirmed_hours` and
+`v_event_student_hours.total_hours` both come back `3.9999991469444444` (same
+raw-float shape the issue names, not the identical digits — confirmed live,
+not assumed). Signed in as `coach@volt.test`, loaded `/`, and asserted the
+**Hours by team** and **Top events by student hours** groups' rendered text —
+not the loader's return value. Screenshot at
+`tests/e2e-personas/screenshots/60-coach-dashboard-hours-rounding.png`.
+Mutation-replayed in the browser too: reverted both `roundForDisplay(...)`
+calls, rebuilt (`vite build --mode e2e`), reran — the spec failed with the raw
+`3.9999991469444445h` back on screen (`Volt Robotics 9911 hours3.9999991469444445h`).
+Restored the fix, rebuilt, reran — green. Harness torn down with
+`tests/e2e-harness/stop.sh` afterward.
 
 ## Scope (item 27)
 
@@ -79,7 +93,6 @@ site is known to remain.
 
 ## Known gaps, disclosed
 
-None known. The e2e-personas run is the remaining verification step and will
-be recorded here before this PR leaves draft.
+None known.
 
 Linear-Issue: GAM-455
