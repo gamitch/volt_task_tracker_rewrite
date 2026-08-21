@@ -352,13 +352,41 @@ end $$;
 
 -- ---------------------------------------------------------------------------
 -- Report.
+--
+-- The per-assertion lines go out as NOTICEs, as in every sibling file here.
+-- The TALLY is additionally printed as a bare, unprefixed `Tests  N passed (N)`
+-- line, because `mutation-replay`'s `replay.py` refuses a verdict it cannot
+-- parse and its summary parser is anchored to that shape at the start of a
+-- line -- a NOTICE's `NOTICE:  ` prefix would not match. This is the harness
+-- reporting its own count in a readable shape, NOT a shell shim re-printing it
+-- (the skill forbids the latter). It must print BEFORE the exception below, or
+-- a red run aborts with no tally at all and the replay reports UNTRUSTWORTHY
+-- instead of the genuine failure it just caused.
 -- ---------------------------------------------------------------------------
 do $$
-declare r record; failures int;
+declare r record;
 begin
   for r in select * from gam442_results order by assertion loop
     raise notice '%: %', r.assertion, r.status;
   end loop;
+end $$;
+
+\pset format unaligned
+\pset tuples_only on
+select case
+  when count(*) filter (where status not like 'PASS%') = 0
+    then format('Tests  %s passed (%s)', count(*), count(*))
+  else format('Tests  %s failed | %s passed (%s)',
+              count(*) filter (where status not like 'PASS%'),
+              count(*) filter (where status like 'PASS%'),
+              count(*))
+end from gam442_results;
+\pset tuples_only off
+\pset format aligned
+
+do $$
+declare failures int;
+begin
   select count(*) into failures from gam442_results where status not like 'PASS%';
   if failures > 0 then
     raise exception 'GAM-442: % of % assertion(s) FAILED (see notices above)',
