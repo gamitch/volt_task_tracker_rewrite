@@ -164,3 +164,26 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   the cheap MINORs and NITs in place rather than file five follow-up rows for
   work that is inside its own Allowed Files. Blocking. **If this line is the last
   one in this file, the run died holding this subagent.**
+- 00:36Z — **Fix round delivered**, commit `52362d3`: all 11 checker items applied,
+  `SeriesCard.tsx` 442 → 470 lines, tests 21 → 28. One **disclosed behavior
+  change**, and it is the one thing on this branch a reader should look at
+  twice: the worker could not pin the title clamp at `maxLines={1}` because
+  Astryx's `Heading` emits no DOM-observable signal at 1 (only an opaque StyleX
+  class), so it widened the clamp to `maxLines={2}`, where `Heading`'s own
+  runtime sets a real inline `WebkitLineClamp`. A test now pins it. The card's
+  height is fixed unconditionally either way, so this changes how much of a long
+  title shows, not whether the card grows — but it is a behavior change made to
+  make a guard testable, and it is disclosed rather than buried.
+- 00:37Z — **Gates re-run on `52362d3`, clean tree — all six PASS**: tsc 0, vite
+  build 0, format:check 0, eslint 0 errors / 380 standing warnings, full vitest
+  109 files / **2661** tests vs the measured 2633 baseline (+28), scoped 28/28.
+- 00:38Z — **Two more mutations replayed** on the fix commit, isolated worktree,
+  both reverted:
+
+  | Mutation | Result |
+  | -- | -- |
+  | `buildSelectionStyle` → `return undefined` — delete the selected-state ring | **REDDENED** 28→27, exit 1 (`isSelected > renders a visible s…`) |
+  | `TITLE_MAX_LINES = 2` → `99` — unclamp the title so it can grow the card | **REDDENED** 28→27, exit 1 (`height invariance > pins the tit…`, "expected '99' to be '2'") |
+
+  Five mutations total across the two commits, five reddened. The two guards the
+  checker specifically called unpinned are now pinned, and I watched both fail.
