@@ -65,3 +65,18 @@ before any worker was dispatched.
    verified the 7 icon names by other means (JSDoc @name tags, declare
    const lines, the aggregate export list). Orchestrator now independently
    inspecting the diff and replaying verification before pushing.
+
+6. **Orchestrator replay** · 2026-08-21 · independently inspected the diff
+   (matches packet; the `'side-nav-item'` key correction is real and
+   verified against `SideNavItem.js`'s own `themeProps(...)` call). Ran
+   `gate-run` at commit `d105112` (clean tree): all six gates PASS — tsc,
+   vite build, format:check, eslint (0 errors/380 warnings), full suite
+   102 files/2598 tests, scoped `src/components/nav/` 4 files/42 tests. No
+   literal pre-change baseline run, but the diff shows exactly 4 tests added
+   and none removed anywhere, so 2598/42 are 4 above pre-existing in both
+   counts. Mutation-replay: removed `icon={<item.icon aria-hidden="true" />}`
+   from the JSX call site, re-ran `SideNav.test.tsx` — 3 of 4 new tests went
+   red for the expected reason (missing icon element / missing aria-label
+   after collapse), confirming those tests actually guard the icon prop
+   rather than passing vacuously. Restored the file; tree confirmed clean
+   against HEAD before continuing.
