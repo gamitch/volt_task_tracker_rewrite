@@ -534,7 +534,7 @@ import {
   type TableColumn,
 } from '@astryxdesign/core';
 import { Link as RouterLink } from 'react-router-dom';
-import { useAuth, type Role } from '../../app/guards';
+import { useAuth } from '../../app/guards';
 // T511 -- `routePaths` is IMPORT-ONLY here (the route already exists and needs
 // no change). `router.tsx` loads every page via `lazy(() => import(...))`, so a
 // page importing this back from it is not a cycle -- the same idiom
@@ -612,21 +612,44 @@ import { StudentMeetingView } from './StudentMeetingView';
 // use; re-exported below (module doc #4) so `MeetingsList.test.tsx` and any
 // other importer of this page module keep working unchanged.
 import {
-  buildDateRangeLabel,
-  buildRecurrenceChips,
   formatHoursLabel,
   formatTimeRangeWithDuration,
   formatWeekdayDate,
-  sessionDurationHours,
 } from '../../lib/meetings/format';
 
+import type {
+  AttendanceStatus,
+  CancelMeetingSessionFn,
+  CoachMeetingRow,
+  CoachMeetingRowSummary,
+  CoachMeetingSessionDetail,
+  CoachMeetingSessionDetailTableRow,
+  CoachMeetingTableRow,
+  CurrentViewerIdentity,
+  LoadCoachMeetingsDataFn,
+  LoadStudentMeetingsDataFn,
+  PastAttendanceSummary,
+  ResolveCurrentStudentIdFn,
+  SessionStatus,
+  StudentMeetingHistoryRow,
+  Team,
+} from '../../lib/meetings/types';
+import {
+  buildCoachMeetingTableRows,
+  partitionCoachMeetingRows,
+} from '../../lib/meetings/coachModel';
+import { partitionByStatus } from '../../lib/meetings/studentModel';
+
 // ---------------------------------------------------------------------------
-// Types -- verbatim camelCase renames of real columns. See module doc #1/#3.
+// Types -- GAM-444 moved these to `src/lib/meetings/types.ts` (the frozen
+// `/meetings` redesign type contracts; module doc #1/#2/#3 travel with the
+// fixture/builder code they describe, in `src/lib/meetings/coachModel.ts` --
+// see that file's own header). Imported above (same "import + re-export"
+// pattern GAM-443 already established for `../../lib/meetings/format`),
+// re-exported below so every existing importer of this page module keeps
+// working unchanged.
 // ---------------------------------------------------------------------------
 
-export type EventType = 'meeting' | 'outreach' | 'competition';
-export type SessionStatus = 'scheduled' | 'completed' | 'canceled';
-export type AttendanceStatus = 'present' | 'late' | 'excused' | 'absent';
 type BadgeVariant =
   | 'neutral'
   | 'info'
@@ -643,651 +666,43 @@ type BadgeVariant =
   | 'teal'
   | 'yellow';
 
-interface Team {
-  id: string;
-  name: string;
-  /** T615/GAM-305 -- `teams.archived boolean not null default false`
-   * (`20260716000000_identity_roster.sql`), REQUIRED so `tsc` polices every
-   * construction site (`ScheduleTeamOption`'s own required field, which this
-   * type is passed into at `ScheduleMeetingsDialog`'s `teams` prop). See
-   * `src/lib/teams/archivedTeams.ts`. */
-  archived: boolean;
-}
+export type {
+  AttendanceStatus,
+  CancelMeetingSessionFn,
+  CoachMeetingEventTableRow,
+  CoachMeetingRow,
+  CoachMeetingRowSummary,
+  CoachMeetingSessionDetail,
+  CoachMeetingSessionDetailTableRow,
+  CoachMeetingTableRow,
+  CoachMeetingsData,
+  CurrentViewerIdentity,
+  EventType,
+  LoadCoachMeetingsDataFn,
+  LoadStudentMeetingsDataFn,
+  PartitionedRows,
+  PastAttendanceSummary,
+  ResolveCurrentStudentIdFn,
+  SessionStatus,
+  StudentMeetingHistoryRow,
+  StudentMeetingsData,
+  StudentParticipationMetric,
+} from '../../lib/meetings/types';
 
-interface FixtureEvent {
-  id: string;
-  seasonId: string;
-  type: EventType;
-  title: string;
-  teamIds: readonly string[] | null;
-  countsParticipation: boolean;
-  /** T122 (module doc #10e) -- real, already-existing `events` columns
-   * (`not null`, UXP-08's own resolution note). */
-  locationName: string;
-  address: string;
-  /** T510 -- optional (the 3 existing `FIXTURE_EVENTS` literals need no edit) --
-   * real, already-existing `events.description` column, threaded through so
-   * `ScheduleMeetingsDialog`'s edit mode can prefill it. */
-  description?: string;
-}
+export {
+  PLACEHOLDER_CURRENT_STUDENT_ID,
+  buildCoachMeetingRows,
+  buildCoachMeetingTableRows,
+  defaultLoadCoachMeetingsData,
+  partitionCoachMeetingRows,
+  summarizeCoachMeetingRow,
+} from '../../lib/meetings/coachModel';
 
-interface FixtureEventSession {
-  id: string;
-  eventId: string;
-  sessionDate: string;
-  startsAt: string;
-  endsAt: string;
-  status: SessionStatus;
-  /** T605 -- optional (every existing `FIXTURE_SESSIONS`/hand-built literal in
-   * this file and its test needs no edit), same "additive, optional at every
-   * app-level layer" precedent `teamIds?`/`description?` (below) already
-   * established. Real, already-existing `event_sessions.notes` column
-   * (`not null` at the DB layer -- see `loaders/meetings.ts`'s own
-   * `EventSessionDbRow.notes: string`, required there since a real row always
-   * has one); optional here only because fixture literals may omit it. */
-  notes?: string;
-}
-
-interface FixtureAttendanceRecord {
-  sessionId: string;
-  studentId: string;
-  status: AttendanceStatus;
-}
-
-/** T122 (module doc #10a) -- verbatim camelCase rename of `rsvps`'s real
- * columns (`session_id`, `student_id`, `status`), cited directly from
- * `supabase/migrations/20260717000000_scheduling_attendance.sql`'s own
- * `rsvps` table / check constraint. */
-interface FixtureRsvpRecord {
-  sessionId: string;
-  studentId: string;
-  status: 'going' | 'maybe' | 'declined';
-}
-
-/** T122 (module doc #10a) -- the two `students` columns this file's own
- * attendee-name rendering needs. */
-interface FixtureStudent {
-  id: string;
-  displayName: string;
-}
-
-/** Plain per-session tally (module doc #3 -- NOT a percentage). */
-export interface PastAttendanceSummary {
-  presentCt: number;
-  lateCt: number;
-  excusedCt: number;
-  absentCt: number;
-}
-
-/** T122 (module doc #10a) -- one of a `CoachMeetingRow`'s own sessions,
- * shown in that row's in-place expander (UXD-03). */
-export interface CoachMeetingSessionDetail {
-  sessionId: string;
-  sessionDate: string;
-  startsAt: string;
-  endsAt: string;
-  status: SessionStatus;
-  /** Plain scheduled-duration arithmetic (module doc #10b) -- never a
-   * metric-view formula. */
-  durationHours: number;
-  /** Real RSVP `status === 'going'` COUNT for this session (module doc
-   * #10a) -- a plain filter+length, not a percentage. */
-  expectedCt: number;
-  /** Populated for `status === 'completed'` sessions only; `null` otherwise
-   * (module doc #3, unchanged). */
-  attendanceSummary: PastAttendanceSummary | null;
-  /** Real `students.display_name` values for this session's present/late
-   * attendance rows (module doc #10a) -- empty for a non-completed session
-   * (no attendance exists yet to name). */
-  attendeeNames: readonly string[];
-  /** T605 -- optional, same reasoning as `FixtureEventSession.notes` above.
-   * `buildCoachMeetingRows` below always sets this to a real string
-   * (`session.notes ?? ''`), never leaves it `undefined` on a built row --
-   * optional only so the type itself stays additive over every pre-existing
-   * literal `CoachMeetingSessionDetail` in this file's own test file. */
-  notes?: string;
-}
-
-/** T122 (module doc #10a) -- now one row per meeting EVENT (recurring
- * series), not per session; `sessions` (below) carries the per-session
- * facts the expander (UXD-03) renders. */
-export interface CoachMeetingRow {
-  eventId: string;
-  title: string;
-  locationName: string;
-  teamScopeLabel: string;
-  /** Sorted ascending by `startsAt`. */
-  sessions: CoachMeetingSessionDetail[];
-  /** T510 -- optional (the 3 existing hand-built `CoachMeetingRow` literals in
-   * `MeetingsList.test.tsx` need no edit). The event's real `team_ids` (`null`
-   * = all teams) -- threaded through so `ScheduleMeetingsDialog`'s edit mode
-   * can prefill team scope; `teamScopeLabel` above stays the display-only
-   * derived string, unchanged. */
-  teamIds?: readonly string[] | null;
-  /** T510 -- optional, same reasoning as `teamIds` above. */
-  description?: string;
-}
-
-export interface CoachMeetingsData {
-  rows: CoachMeetingRow[];
-  /** T147 -- `loaders/meetings.ts`'s `makeLoadCoachMeetingsData` already
-   * fetches this (`loadTeamRows`, for `buildCoachMeetingRows`'s own per-row
-   * team-scope label) -- threaded through here too so it can reach
-   * `<ScheduleMeetingsDialog>`'s own `teams` prop, replacing that dialog's
-   * fixture `DEFAULT_TEAMS`. */
-  teams: readonly Team[];
-}
-
-export type LoadCoachMeetingsDataFn = () => Promise<CoachMeetingsData>;
-
-export interface StudentMeetingHistoryRow {
-  sessionId: string;
-  title: string;
-  sessionDate: string;
-  startsAt: string;
-  endsAt: string;
-  status: SessionStatus;
-  /** `null` when the session hasn't happened yet (no attendance row exists). */
-  myAttendanceStatus: AttendanceStatus | null;
-}
-
-/**
- * Verbatim camelCase rename of `v_student_participation`'s seven real
- * columns (module doc #3). A `StudentParticipationMetric | null` value of
- * outer `null` means the student has no row in the view at all (no explicit
- * attendance mark this season). A present row's own `participationPct: null`
- * means every counted mark was `excused` (MET-01, `types.ts`'s
- * `VStudentParticipationRow` doc) -- never a fabricated 0% either way.
- */
-export interface StudentParticipationMetric {
-  studentId: string;
-  teamId: string;
-  seasonId: string;
-  expectedCt: number;
-  presentCt: number;
-  lateCt: number;
-  excusedCt: number;
-  participationPct: number | null;
-}
-
-export interface StudentMeetingsData {
-  history: StudentMeetingHistoryRow[];
-  participation: StudentParticipationMetric | null;
-}
-
-export type LoadStudentMeetingsDataFn = (studentId: string) => Promise<StudentMeetingsData>;
-
-/** T096 (module doc #7c) -- the real `event_sessions.status = 'canceled'` mutation seam. */
-export type CancelMeetingSessionFn = (sessionId: string) => Promise<void>;
-
-/**
- * T096 (module doc #6, Trap #4) -- the minimal identity shape
- * `resolveCurrentStudentId` needs: `AuthUser.id` (== `auth.uid()` ==
- * `profiles.id`) and `AuthUser.role`, never the full `AuthUser`/`AuthContextValue`
- * (this file has no other use for e.g. `email`).
- */
-export interface CurrentViewerIdentity {
-  id: string;
-  role: Role;
-}
-
-/** T096 (module doc #6, Trap #4) -- resolves the real `students.id` this
- * viewer's student/parent view should be scoped to; `null` when none can be
- * resolved (no linked student yet). */
-export type ResolveCurrentStudentIdFn = (viewer: CurrentViewerIdentity) => Promise<string | null>;
-
-// ---------------------------------------------------------------------------
-// Placeholder identifiers -- module doc #6. `PLACEHOLDER_CURRENT_STUDENT_ID`
-// is KEPT (T096 does not remove it -- `MeetingsList.test.tsx` still imports
-// it) but is no longer this component's own runtime default for an
-// unresolved `studentId`; see module doc #6 for its narrowed role.
-// ---------------------------------------------------------------------------
-
-export const PLACEHOLDER_CURRENT_STUDENT_ID = 'student-placeholder-current-viewer';
-const PLACEHOLDER_SEASON_ID = 'season-placeholder-current';
-
-// ---------------------------------------------------------------------------
-// Fixture data (constitution item 6: fabricated names only). Module doc #1/#2.
-// ---------------------------------------------------------------------------
-
-const FIXTURE_TEAMS: readonly Team[] = [
-  { id: 'team-ravens', name: 'Ravens', archived: false },
-  { id: 'team-titans', name: 'Titans', archived: false },
-];
-
-const FIXTURE_EVENTS: readonly FixtureEvent[] = [
-  {
-    id: 'event-weekly-build',
-    seasonId: PLACEHOLDER_SEASON_ID,
-    type: 'meeting',
-    title: 'Weekly Build Meeting',
-    teamIds: null, // null = all teams (module doc #1)
-    countsParticipation: true,
-    // T122 (module doc #10e) -- real column, fabricated value.
-    locationName: 'Robotics Lab',
-    address: '123 Main St, Springfield, IL',
-  },
-  {
-    id: 'event-ravens-strategy',
-    seasonId: PLACEHOLDER_SEASON_ID,
-    type: 'meeting',
-    title: 'Ravens Strategy Session',
-    teamIds: ['team-ravens'],
-    countsParticipation: true,
-    locationName: 'Ravens Team Room',
-    address: '456 Oak Ave, Springfield, IL',
-  },
-  // Deliberately type: 'outreach' -- proves NAV-07 filtering (module doc #2).
-  // This event's own session ("Community Food Drive") must NEVER appear
-  // anywhere this file renders.
-  {
-    id: 'event-food-drive',
-    seasonId: PLACEHOLDER_SEASON_ID,
-    type: 'outreach',
-    title: 'Community Food Drive',
-    teamIds: null,
-    countsParticipation: false,
-    locationName: 'Community Center',
-    address: '789 Elm St, Springfield, IL',
-  },
-];
-
-const FIXTURE_SESSIONS: readonly FixtureEventSession[] = [
-  {
-    id: 'session-upcoming-build',
-    eventId: 'event-weekly-build',
-    sessionDate: '2026-07-22',
-    startsAt: '2026-07-22T23:00:00.000Z', // 6:00 PM America/Chicago (UTC-5, DST)
-    endsAt: '2026-07-23T01:00:00.000Z', // 8:00 PM America/Chicago
-    status: 'scheduled',
-  },
-  {
-    id: 'session-upcoming-ravens',
-    eventId: 'event-ravens-strategy',
-    sessionDate: '2026-07-25',
-    startsAt: '2026-07-25T22:30:00.000Z', // 5:30 PM America/Chicago
-    endsAt: '2026-07-26T00:00:00.000Z', // 7:00 PM America/Chicago
-    status: 'scheduled',
-  },
-  {
-    id: 'session-past-build-completed',
-    eventId: 'event-weekly-build',
-    sessionDate: '2026-07-15',
-    startsAt: '2026-07-15T23:00:00.000Z',
-    endsAt: '2026-07-16T01:00:00.000Z',
-    status: 'completed',
-  },
-  {
-    id: 'session-past-ravens-completed',
-    eventId: 'event-ravens-strategy',
-    sessionDate: '2026-07-11',
-    startsAt: '2026-07-11T22:30:00.000Z',
-    endsAt: '2026-07-12T00:00:00.000Z',
-    status: 'completed',
-  },
-  {
-    id: 'session-past-build-canceled',
-    eventId: 'event-weekly-build',
-    sessionDate: '2026-07-08',
-    startsAt: '2026-07-08T23:00:00.000Z',
-    endsAt: '2026-07-09T01:00:00.000Z',
-    status: 'canceled',
-  },
-  // Outreach session -- module doc #2. Must never render anywhere.
-  {
-    id: 'session-food-drive',
-    eventId: 'event-food-drive',
-    sessionDate: '2026-07-19',
-    startsAt: '2026-07-19T15:00:00.000Z',
-    endsAt: '2026-07-19T18:00:00.000Z',
-    status: 'scheduled',
-  },
-];
-
-const FIXTURE_ATTENDANCE: readonly FixtureAttendanceRecord[] = [
-  // session-past-build-completed: 3 present, 1 late, 1 excused, 1 absent.
-  {
-    sessionId: 'session-past-build-completed',
-    studentId: 'student-placeholder-current-viewer',
-    status: 'present',
-  },
-  { sessionId: 'session-past-build-completed', studentId: 'student-b', status: 'present' },
-  { sessionId: 'session-past-build-completed', studentId: 'student-c', status: 'present' },
-  { sessionId: 'session-past-build-completed', studentId: 'student-d', status: 'late' },
-  { sessionId: 'session-past-build-completed', studentId: 'student-e', status: 'excused' },
-  { sessionId: 'session-past-build-completed', studentId: 'student-f', status: 'absent' },
-  // session-past-ravens-completed: current viewer was late; two others present.
-  {
-    sessionId: 'session-past-ravens-completed',
-    studentId: 'student-placeholder-current-viewer',
-    status: 'late',
-  },
-  { sessionId: 'session-past-ravens-completed', studentId: 'student-b', status: 'present' },
-  { sessionId: 'session-past-ravens-completed', studentId: 'student-g', status: 'present' },
-];
-
-/** T122 (module doc #10a) -- fabricated display names (constitution item 6)
- * for `FIXTURE_ATTENDANCE`'s own student ids, so the coach view's expander
- * has real attendee names to show instead of "Unknown student". */
-const FIXTURE_STUDENTS: readonly FixtureStudent[] = [
-  { id: 'student-placeholder-current-viewer', displayName: 'Alex Rivera' },
-  { id: 'student-b', displayName: 'Bailey Chen' },
-  { id: 'student-c', displayName: 'Casey Nguyen' },
-  { id: 'student-d', displayName: 'Drew Patel' },
-  { id: 'student-e', displayName: 'Emerson Diaz' },
-  { id: 'student-f', displayName: 'Frankie Lopez' },
-  { id: 'student-g', displayName: 'Gray Kim' },
-];
-
-/** T122 (module doc #10a) -- `'going'` RSVPs for the two still-scheduled
- * sessions, feeding `CoachMeetingSessionDetail.expectedCt` /
- * `CoachMeetingRowSummary.expectedCt`. */
-const FIXTURE_RSVPS: readonly FixtureRsvpRecord[] = [
-  { sessionId: 'session-upcoming-build', studentId: 'student-b', status: 'going' },
-  { sessionId: 'session-upcoming-build', studentId: 'student-c', status: 'going' },
-  { sessionId: 'session-upcoming-build', studentId: 'student-d', status: 'going' },
-  { sessionId: 'session-upcoming-build', studentId: 'student-e', status: 'going' },
-  { sessionId: 'session-upcoming-build', studentId: 'student-f', status: 'going' },
-  { sessionId: 'session-upcoming-ravens', studentId: 'student-b', status: 'going' },
-  { sessionId: 'session-upcoming-ravens', studentId: 'student-g', status: 'going' },
-];
-
-/**
- * Fabricated row shaped exactly like `v_student_participation`'s real output
- * (module doc #3) -- `participationPct` is what the view's own SQL would
- * have produced for these expected/present/excused counts (7 expected, 4
- * present incl. 1 late, 0 excused -> round(100*4/7,1) = 57.1); never
- * computed by this file.
- */
-const FIXTURE_PARTICIPATION_METRICS: readonly StudentParticipationMetric[] = [
-  {
-    studentId: PLACEHOLDER_CURRENT_STUDENT_ID,
-    teamId: 'team-ravens',
-    seasonId: PLACEHOLDER_SEASON_ID,
-    expectedCt: 7,
-    presentCt: 4,
-    lateCt: 1,
-    excusedCt: 0,
-    participationPct: 57.1,
-  },
-];
-
-// ---------------------------------------------------------------------------
-// Pure builder functions -- exported for direct testing.
-// ---------------------------------------------------------------------------
-
-function teamScopeLabel(teamIds: readonly string[] | null, teams: readonly Team[]): string {
-  if (teamIds === null) {
-    return 'All teams';
-  }
-  const teamById = new Map(teams.map((team) => [team.id, team.name] as const));
-  return teamIds.map((id) => teamById.get(id) ?? id).join(', ');
-}
-
-function summarizeAttendance(
-  sessionId: string,
-  attendance: readonly FixtureAttendanceRecord[],
-): PastAttendanceSummary {
-  const records = attendance.filter((record) => record.sessionId === sessionId);
-  return {
-    presentCt: records.filter((r) => r.status === 'present').length,
-    lateCt: records.filter((r) => r.status === 'late').length,
-    excusedCt: records.filter((r) => r.status === 'excused').length,
-    absentCt: records.filter((r) => r.status === 'absent').length,
-  };
-}
-
-/** Module doc #2 -- the ONLY `event.type` filter in this file. */
-function meetingEventIdsOf(events: readonly FixtureEvent[]): Set<string> {
-  return new Set(events.filter((event) => event.type === 'meeting').map((event) => event.id));
-}
-
-/** T122 (module doc #10a) -- now groups by EVENT (one row per recurring
- * meeting series), not per session; `rsvps`/`students` are new, OPTIONAL
- * (default `[]`) parameters so every pre-existing call site that doesn't
- * pass them (none in this file after this task, but kept optional for a
- * minimal, additive signature change) still type-checks. An event with zero
- * real sessions produces no row (nothing to show). */
-export function buildCoachMeetingRows(
-  events: readonly FixtureEvent[],
-  sessions: readonly FixtureEventSession[],
-  teams: readonly Team[],
-  attendance: readonly FixtureAttendanceRecord[],
-  rsvps: readonly FixtureRsvpRecord[] = [],
-  students: readonly FixtureStudent[] = [],
-): CoachMeetingRow[] {
-  const meetingEventIds = meetingEventIdsOf(events);
-  const meetingEvents = events.filter((event) => meetingEventIds.has(event.id));
-  const studentNameById = new Map(students.map((student) => [student.id, student.displayName]));
-
-  const rows: CoachMeetingRow[] = [];
-  for (const event of meetingEvents) {
-    const eventSessions = sessions
-      .filter((session) => session.eventId === event.id)
-      .slice()
-      .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
-    if (eventSessions.length === 0) continue;
-
-    const sessionDetails: CoachMeetingSessionDetail[] = eventSessions.map((session) => {
-      const expectedCt = rsvps.filter(
-        (rsvp) => rsvp.sessionId === session.id && rsvp.status === 'going',
-      ).length;
-      const attendanceSummary =
-        session.status === 'completed' ? summarizeAttendance(session.id, attendance) : null;
-      const attendeeNames =
-        session.status === 'completed'
-          ? attendance
-              .filter(
-                (record) =>
-                  record.sessionId === session.id &&
-                  (record.status === 'present' || record.status === 'late'),
-              )
-              .map((record) => studentNameById.get(record.studentId) ?? 'Unknown student')
-              .sort((a, b) => a.localeCompare(b))
-          : [];
-      return {
-        sessionId: session.id,
-        sessionDate: session.sessionDate,
-        startsAt: session.startsAt,
-        endsAt: session.endsAt,
-        status: session.status,
-        durationHours: sessionDurationHours(session.startsAt, session.endsAt),
-        expectedCt,
-        attendanceSummary,
-        attendeeNames,
-        // T605 -- real `event_sessions.notes` column, threaded through for the
-        // first time (§3.2/§6.1). `?? ''` matches this same file's own
-        // "never leave a real not-null column undefined on a built row"
-        // posture, and the real DB column is `not null` with no default
-        // regardless.
-        notes: session.notes ?? '',
-      };
-    });
-
-    rows.push({
-      eventId: event.id,
-      title: event.title,
-      locationName: event.locationName,
-      teamScopeLabel: teamScopeLabel(event.teamIds, teams),
-      sessions: sessionDetails,
-      // T510 -- threaded through for `ScheduleMeetingsDialog`'s edit mode.
-      teamIds: event.teamIds ?? null,
-      description: event.description ?? '',
-    });
-  }
-  return rows;
-}
-
-export interface PartitionedRows<T> {
-  upcoming: T[];
-  past: T[];
-}
-
-/** `scheduled` -> Upcoming; `completed`/`canceled` -> Past. Sorted by start time.
- * UNCHANGED (module doc #10c) -- still used by `StudentMeetingsView`'s own
- * per-session rows. */
-export function partitionByStatus<T extends { status: SessionStatus; startsAt: string }>(
-  rows: readonly T[],
-): PartitionedRows<T> {
-  const upcoming = rows
-    .filter((row) => row.status === 'scheduled')
-    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
-  const past = rows
-    .filter((row) => row.status !== 'scheduled')
-    .sort((a, b) => b.startsAt.localeCompare(a.startsAt));
-  return { upcoming, past };
-}
-
-/** T122 (module doc #10b) -- everything a `CoachMeetingRow`'s summary line
- * needs, derived purely from its own `sessions`. Exported for direct
- * testing. */
-export interface CoachMeetingRowSummary {
-  /** UXD-02 recurrence chips, e.g. `["MON (3)", "THU (2)"]`. Empty for a
-   * single-session event (the date range line covers that case alone). */
-  recurrenceChips: string[];
-  /** e.g. "Sat, Jul 25" (single session) or "Sat, Jul 25 – Thu, Aug 13"
-   * (multi-session), BEH-08's own weekday-date format. */
-  dateRangeLabel: string;
-  /** Sum of every non-canceled session's own `durationHours`. */
-  plannedHours: number;
-  /** Sum of every COMPLETED session's own `durationHours`. */
-  loggedHours: number;
-  /** Sum of every session's own `expectedCt` (cumulative across the whole
-   * series -- module doc #10b). */
-  expectedCt: number;
-  /** Sum of every completed session's present+late count (cumulative). */
-  attendedCt: number;
-  /** True when at least one of this row's sessions is still `'scheduled'`. */
-  hasUpcomingSession: boolean;
-  /** Sort key: nearest-upcoming session's `startsAt` when
-   * `hasUpcomingSession`, else the LATEST session's `startsAt`. */
-  sortStartsAt: string;
-  canceledCt: number;
-}
-
-export function summarizeCoachMeetingRow(
-  sessions: readonly CoachMeetingSessionDetail[],
-): CoachMeetingRowSummary {
-  const nonCanceled = sessions.filter((session) => session.status !== 'canceled');
-  const completed = sessions.filter((session) => session.status === 'completed');
-  const scheduled = sessions.filter((session) => session.status === 'scheduled');
-  const canceled = sessions.filter((session) => session.status === 'canceled');
-
-  const plannedHours = nonCanceled.reduce((sum, session) => sum + session.durationHours, 0);
-  const loggedHours = completed.reduce((sum, session) => sum + session.durationHours, 0);
-  const expectedCt = sessions.reduce((sum, session) => sum + session.expectedCt, 0);
-  const attendedCt = completed.reduce(
-    (sum, session) =>
-      sum +
-      (session.attendanceSummary
-        ? session.attendanceSummary.presentCt + session.attendanceSummary.lateCt
-        : 0),
-    0,
-  );
-
-  const hasUpcomingSession = scheduled.length > 0;
-  const sortedAscending = sessions.slice().sort((a, b) => a.startsAt.localeCompare(b.startsAt));
-  const sortStartsAt = hasUpcomingSession
-    ? (scheduled.slice().sort((a, b) => a.startsAt.localeCompare(b.startsAt))[0]?.startsAt ?? '')
-    : (sortedAscending[sortedAscending.length - 1]?.startsAt ?? '');
-
-  return {
-    recurrenceChips: buildRecurrenceChips(sessions),
-    dateRangeLabel: buildDateRangeLabel(sessions),
-    plannedHours,
-    loggedHours,
-    expectedCt,
-    attendedCt,
-    hasUpcomingSession,
-    sortStartsAt,
-    canceledCt: canceled.length,
-  };
-}
-
-/** T122 (module doc #10c) -- Upcoming/Past bucketing for grouped event rows
- * (a per-session `partitionByStatus` no longer applies -- see that
- * function's own updated doc). */
-export function partitionCoachMeetingRows(
-  rows: readonly CoachMeetingRow[],
-): PartitionedRows<CoachMeetingRow> {
-  const withSummary = rows.map((row) => ({ row, summary: summarizeCoachMeetingRow(row.sessions) }));
-  const upcoming = withSummary
-    .filter(({ summary }) => summary.hasUpcomingSession)
-    .sort((a, b) => a.summary.sortStartsAt.localeCompare(b.summary.sortStartsAt))
-    .map(({ row }) => row);
-  const past = withSummary
-    .filter(({ summary }) => !summary.hasUpcomingSession)
-    .sort((a, b) => b.summary.sortStartsAt.localeCompare(a.summary.sortStartsAt))
-    .map(({ row }) => row);
-  return { upcoming, past };
-}
-
-export function buildStudentMeetingsData(
-  studentId: string,
-  events: readonly FixtureEvent[],
-  sessions: readonly FixtureEventSession[],
-  attendance: readonly FixtureAttendanceRecord[],
-  participationMetrics: readonly StudentParticipationMetric[],
-): StudentMeetingsData {
-  const meetingEventIds = meetingEventIdsOf(events);
-  const eventById = new Map(events.map((event) => [event.id, event] as const));
-
-  const history = sessions
-    .filter((session) => meetingEventIds.has(session.eventId))
-    .map((session) => {
-      const event = eventById.get(session.eventId);
-      const myRecord = attendance.find(
-        (record) => record.sessionId === session.id && record.studentId === studentId,
-      );
-      return {
-        sessionId: session.id,
-        title: event?.title ?? 'Untitled meeting',
-        sessionDate: session.sessionDate,
-        startsAt: session.startsAt,
-        endsAt: session.endsAt,
-        status: session.status,
-        myAttendanceStatus: myRecord?.status ?? null,
-      };
-    });
-
-  const participation =
-    participationMetrics.find((metric) => metric.studentId === studentId) ?? null;
-
-  return { history, participation };
-}
-
-// ---------------------------------------------------------------------------
-// Fixture loaders -- obviously-fake defaults for the injectable `loadData`
-// seam (Known Context/Traps #1). Real callers (once T071's Supabase client
-// is wired to a page -- a separate, not-yet-dispatched task) pass their own.
-// ---------------------------------------------------------------------------
-
-export async function defaultLoadCoachMeetingsData(): Promise<CoachMeetingsData> {
-  return {
-    rows: buildCoachMeetingRows(
-      FIXTURE_EVENTS,
-      FIXTURE_SESSIONS,
-      FIXTURE_TEAMS,
-      FIXTURE_ATTENDANCE,
-      FIXTURE_RSVPS,
-      FIXTURE_STUDENTS,
-    ),
-    // T147 -- same fixture `buildCoachMeetingRows` above already consumes.
-    teams: FIXTURE_TEAMS,
-  };
-}
-
-export async function defaultLoadStudentMeetingsData(
-  studentId: string,
-): Promise<StudentMeetingsData> {
-  return buildStudentMeetingsData(
-    studentId,
-    FIXTURE_EVENTS,
-    FIXTURE_SESSIONS,
-    FIXTURE_ATTENDANCE,
-    FIXTURE_PARTICIPATION_METRICS,
-  );
-}
+export {
+  buildStudentMeetingsData,
+  defaultLoadStudentMeetingsData,
+  partitionByStatus,
+} from '../../lib/meetings/studentModel';
 
 // ---------------------------------------------------------------------------
 // BEH-08 / NFR-09 date + duration formatting -- module doc #4. GAM-443 moved
@@ -1669,56 +1084,6 @@ function CoachMeetingSessionRow({
       </HStack>
     </HStack>
   );
-}
-
-// ---------------------------------------------------------------------------
-// T135 -- `Table` row shape. `extends Record<string, unknown>` is required
-// by `Table`'s own generic constraint (`astryx-api.md` "Table" Props table,
-// `data: T[]`), the same idiom `OutreachList.tsx`'s `CoachEventTableRow`
-// already established.
-// ---------------------------------------------------------------------------
-
-export interface CoachMeetingEventTableRow extends Record<string, unknown> {
-  kind: 'event';
-  id: string;
-  row: CoachMeetingRow;
-  summary: CoachMeetingRowSummary;
-}
-
-export interface CoachMeetingSessionDetailTableRow extends Record<string, unknown> {
-  kind: 'sessionDetail';
-  id: string;
-  eventId: string;
-  eventTitle: string;
-  session: CoachMeetingSessionDetail;
-}
-
-export type CoachMeetingTableRow = CoachMeetingEventTableRow | CoachMeetingSessionDetailTableRow;
-
-/** Splices each expanded event's session-detail rows directly beneath it in
- * one flat array -- T130's `buildCoachOutreachTableRows` mechanism, copied
- * (not re-derived). Exported for direct testing. */
-export function buildCoachMeetingTableRows(
-  rows: readonly CoachMeetingRow[],
-  expandedEventIds: ReadonlySet<string>,
-): CoachMeetingTableRow[] {
-  const tableRows: CoachMeetingTableRow[] = [];
-  for (const row of rows) {
-    const summary = summarizeCoachMeetingRow(row.sessions);
-    tableRows.push({ kind: 'event', id: row.eventId, row, summary });
-    if (expandedEventIds.has(row.eventId)) {
-      for (const session of row.sessions) {
-        tableRows.push({
-          kind: 'sessionDetail',
-          id: `${row.eventId}::session::${session.sessionId}`,
-          eventId: row.eventId,
-          eventTitle: row.title,
-          session,
-        });
-      }
-    }
-  }
-  return tableRows;
 }
 
 function renderMeetingSessionDetailCell(
