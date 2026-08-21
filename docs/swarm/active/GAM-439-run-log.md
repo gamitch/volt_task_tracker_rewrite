@@ -168,3 +168,21 @@ holding that subagent.*
   cleared and would exceed the cap. Run 2 resumes at the worker.
 - **16:20Z — `node_modules` confirmed ABSENT** in this container (packet §4).
   `npm ci` is required before any gate, test or mutation command.
+- **16:21Z — `npm ci` started** (background shell, this tree) so the worker does
+  not spend its own budget on it.
+- **16:22Z — DISPATCHED `worker-implementer` (run 2's attempt 1; run 1's
+  dispatch produced no artifact, so this is attempt 1 of the item-limit 3),
+  `run_in_background: false`.** Packet: `docs/swarm/active/GAM-439-worker-packet.md`
+  revision 3, unchanged — it is the artifact the premise gate cleared, and
+  re-editing it after a DISPATCH verdict would invalidate that verdict.
+  Model: the agent's pinned **sonnet**, **no `model: "opus"` override**, for the
+  reason run 1 recorded and which I have re-checked rather than inherited: item
+  18's four triggers are `supabase/migrations/**`, RLS or `security definer`,
+  metric-view SQL, and auth/session/role-resolution logic. This task hits none —
+  §4 forbids migrations outright, no policy is touched, there is no metric SQL,
+  and D3's `user.role === 'admin'` is a *render* condition on an existing prop
+  (the `AdminToggles` precedent), not a change to how roles are resolved. Item
+  26's write-path trigger set the **process** tier, which this task got in full;
+  item 25 expressly retires bumping a worker because a topic sounds sensitive.
+  *If this line is the last one in this file, the run died holding this
+  subagent.*
