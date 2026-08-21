@@ -42,9 +42,13 @@ import {
   type CreateMeetingsSessionPayload,
   type EditMeetingSeriesInitialData,
   type ExistingMeetingSeriesSession,
+  type PerDayTime,
   type SaveMeetingSeriesPayload,
   type ScheduleTeamOption,
 } from './ScheduleMeetingsDialog';
+// GAM-445 packet §3.1 -- the same frozen weekday-index type the production
+// code imports; used here only to type per-day fixture Maps, never re-derived.
+import type { Dow } from '../../lib/meetings/format';
 
 // ---------------------------------------------------------------------------
 // D017 ruling 5 (docs/swarm/dispute-log.md) -- the "T510 edit mode" describe
@@ -411,6 +415,133 @@ describe('buildEventSessionsPayload (Known Context/Traps #1)', () => {
         sessionDate: '2026-07-24',
         startsAt: '2026-07-24T23:00:00.000Z',
         endsAt: '2026-07-25T01:00:00.000Z',
+        notes: '',
+      },
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GAM-445 -- per-weekday times, `buildEventSessionsPayload`'s ADDITIVE,
+// optional 5th argument (packet §3.4). Pure-function proof, no DOM.
+// ---------------------------------------------------------------------------
+
+describe('buildEventSessionsPayload (GAM-445 packet §3.4 -- per-day argument)', () => {
+  it('AC1 (P3-shaped): a Tue+Sun mix produces the correct DISTINCT UTC pair for each weekday, not one time applied to every date', () => {
+    // 2026-08-11 is a Tuesday, 2026-08-09/2026-08-16 are Sundays.
+    const perDayTimesByDow = new Map<Dow, PerDayTime>([
+      [2, { startTime: '18:00', endTime: '20:00' }], // Tue 6:00-8:00 PM
+      [0, { startTime: '15:30', endTime: '18:30' }], // Sun 3:30-6:30 PM
+    ]);
+    const sessions = buildEventSessionsPayload(
+      ['2026-08-09', '2026-08-11', '2026-08-16'],
+      undefined, // shared pair not consulted when the per-day argument is supplied.
+      undefined,
+      '',
+      perDayTimesByDow,
+    );
+    expect(sessions).toEqual([
+      {
+        sessionDate: '2026-08-09',
+        startsAt: chicagoWallTimeToUtcIso('2026-08-09', '15:30'),
+        endsAt: chicagoWallTimeToUtcIso('2026-08-09', '18:30'),
+        notes: '',
+      },
+      {
+        sessionDate: '2026-08-11',
+        startsAt: chicagoWallTimeToUtcIso('2026-08-11', '18:00'),
+        endsAt: chicagoWallTimeToUtcIso('2026-08-11', '20:00'),
+        notes: '',
+      },
+      {
+        sessionDate: '2026-08-16',
+        startsAt: chicagoWallTimeToUtcIso('2026-08-16', '15:30'),
+        endsAt: chicagoWallTimeToUtcIso('2026-08-16', '18:30'),
+        notes: '',
+      },
+    ]);
+    // The two weekdays' own UTC pairs are genuinely distinct -- guards
+    // against a generator that silently reused one weekday's time for every
+    // date (this file's own mutation-replay target for this criterion).
+    expect(sessions[0].startsAt).not.toBe(sessions[1].startsAt);
+    expect(sessions[0].endsAt).not.toBe(sessions[1].endsAt);
+  });
+
+  it('is byte-identical to the pre-GAM-445 signature when the 5th argument is omitted (packet §7.4)', () => {
+    const withoutArg = buildEventSessionsPayload(
+      ['2026-07-22', '2026-07-24'],
+      '18:00',
+      '20:00',
+      '',
+    );
+    // Same call, explicit `undefined` 5th argument -- must produce the exact
+    // same output, proving the new parameter is genuinely additive/optional,
+    // not a silent behavior change for every existing caller.
+    const explicitUndefined = buildEventSessionsPayload(
+      ['2026-07-22', '2026-07-24'],
+      '18:00',
+      '20:00',
+      '',
+      undefined,
+    );
+    expect(withoutArg).toEqual(explicitUndefined);
+    expect(withoutArg).toEqual([
+      {
+        sessionDate: '2026-07-22',
+        startsAt: '2026-07-22T23:00:00.000Z',
+        endsAt: '2026-07-23T01:00:00.000Z',
+        notes: '',
+      },
+      {
+        sessionDate: '2026-07-24',
+        startsAt: '2026-07-24T23:00:00.000Z',
+        endsAt: '2026-07-25T01:00:00.000Z',
+        notes: '',
+      },
+    ]);
+  });
+
+  it("skips (does not fabricate) a date whose own weekday has an incomplete per-day time, per §3.4's closed spec gap", () => {
+    // 2026-08-11 is a Tuesday, given no entry at all; 2026-08-09 is a Sunday
+    // given only a start time.
+    const perDayTimesByDow = new Map<Dow, PerDayTime>([
+      [0, { startTime: '15:30', endTime: undefined }],
+    ]);
+    const sessions = buildEventSessionsPayload(
+      ['2026-08-09', '2026-08-11'],
+      '18:00', // shared pair present but NOT consulted -- the per-day arg wins.
+      '20:00',
+      '',
+      perDayTimesByDow,
+    );
+    expect(sessions).toEqual([]);
+  });
+
+  it('AC2 (DST, wall time pinned, both endsAt/startsAt values pinned): a 15:30-18:30 Chicago rule emits the correct distinct-offset UTC pairs either side of the 2026-11-01 fall-back', () => {
+    const perDayTimesByDow = new Map<Dow, PerDayTime>([
+      [0, { startTime: '15:30', endTime: '18:30' }], // Sun
+    ]);
+    const sessions = buildEventSessionsPayload(
+      ['2026-10-25', '2026-11-01'],
+      undefined,
+      undefined,
+      '',
+      perDayTimesByDow,
+    );
+    expect(sessions).toEqual([
+      {
+        sessionDate: '2026-10-25',
+        startsAt: '2026-10-25T20:30:00.000Z', // CDT (-5).
+        endsAt: '2026-10-25T23:30:00.000Z',
+        notes: '',
+      },
+      {
+        sessionDate: '2026-11-01',
+        startsAt: '2026-11-01T21:30:00.000Z', // CST (-6) -- different offset, same wall time.
+        // The next-UTC-date rollover is real, not a bug: 18:30 CST is
+        // 00:30Z the FOLLOWING UTC date. Pinned explicitly so a checker who
+        // has not been told does not misread this as the defect.
+        endsAt: '2026-11-02T00:30:00.000Z',
         notes: '',
       },
     ]);
@@ -1053,6 +1184,370 @@ describe('<ScheduleMeetingsDialog /> disabled/enabled confirm button (Known Cont
 
     clickButton(findButtonByText('Remove 2026-07-29') as HTMLButtonElement);
     expect(findButtonByText('Create 0 meetings')?.disabled).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GAM-445 -- per-weekday times in weekly mode (packet §5, criteria 1/3/7/8/9).
+// Shared helper mirrors the exact "open the real DateRangeInput popover +
+// use the Next 6 weeks preset" interaction the pre-existing weekly DOM test
+// above (`:1101-1136`, "Weekly recurring mode: disabled with no
+// range/weekday...") already established -- not a new interaction pattern.
+// ---------------------------------------------------------------------------
+
+function selectWeeklyRangePreset(): void {
+  clickButton(findButtonByText('Weekly recurring') as HTMLButtonElement);
+  const rangeTrigger = getFieldControl('Date range') as HTMLButtonElement;
+  clickButton(rangeTrigger);
+  clickButton(findButtonByText('Next 6 weeks') as HTMLButtonElement);
+}
+
+function checkWeekday(label: string): void {
+  clickButton(getFieldControl(label) as unknown as HTMLButtonElement);
+}
+
+describe('<ScheduleMeetingsDialog /> GAM-445 per-weekday times', () => {
+  it('AC3 mechanism/measurement: with <=1 weekday selected, the DOM contains EXACTLY two labels starting with "Start time"/"End time" (not input[type="time"] -- packet §5 criterion 3 measurement note)', () => {
+    act(() => {
+      root.render(<ScheduleMeetingsDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
+    });
+    selectWeeklyRangePreset();
+    checkWeekday('Tue');
+
+    const labels = Array.from(container.querySelectorAll('label')).map(
+      (el) => el.textContent?.trim() ?? '',
+    );
+    expect(labels.filter((t) => t.startsWith('Start time'))).toHaveLength(1);
+    expect(labels.filter((t) => t.startsWith('End time'))).toHaveLength(1);
+    // No per-day row rendered for a single checked weekday -- byte-identical
+    // single-weekday behaviour (packet §3.3).
+    expect(() => getFieldControl('Tue start time')).toThrow();
+  });
+
+  it('AC1/AC3: checking a SECOND weekday renders exactly N per-day rows in WEEKDAY_OPTIONS order and hides the shared pair', () => {
+    act(() => {
+      root.render(<ScheduleMeetingsDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
+    });
+    selectWeeklyRangePreset();
+    // Checked out of `WEEKDAY_OPTIONS` order (Sun before Tue) -- rows must
+    // still render in `WEEKDAY_OPTIONS` order (Tue, then Sun), not click
+    // order (packet §3.2).
+    checkWeekday('Sun');
+    checkWeekday('Tue');
+
+    // Shared pair is gone -- no label reading exactly "Start time"/"End time".
+    expect(() => getFieldControl('Start time')).toThrow();
+    expect(() => getFieldControl('End time')).toThrow();
+
+    // Exactly two rows (not N-1, not N+1). Astryx's `Field` appends
+    // ` ∙ Required` to every required label's text (confirmed live, e.g.
+    // "Tue start time ∙ Required") -- matched with `includes`, not
+    // `endsWith`, for that reason. The leading space in ' start time' is
+    // deliberate: it is what distinguishes a per-day row ("Tue start time")
+    // from the shared pair's own "Start time" (capitalized, no leading
+    // space, string-initial) -- so this filter cannot accidentally count
+    // the shared pair even if it were still rendered.
+    const labels = Array.from(container.querySelectorAll('label')).map(
+      (el) => el.textContent?.trim() ?? '',
+    );
+    expect(labels.filter((t) => t.startsWith('start time'))).toHaveLength(0); // sanity: case matters.
+    expect(labels.filter((t) => t.includes(' start time'))).toHaveLength(2);
+    expect(labels.filter((t) => t.includes(' end time'))).toHaveLength(2);
+
+    // WEEKDAY_OPTIONS order (Tue = index 1, Sun = index 6): Tue's row
+    // precedes Sun's row in DOM order, even though Sun was checked first.
+    const startTimeLabels = labels
+      .filter((t) => t.includes(' start time'))
+      .map((t) => t.replace(/ ∙ Required$/, ''));
+    expect(startTimeLabels).toEqual(['Tue start time', 'Sun start time']);
+
+    // Both are real, distinguishable controls (packet §3.7 accessible-name
+    // requirement) -- not a fabricated label with no backing input.
+    expect(getFieldControl('Tue start time')).toBeDefined();
+    expect(getFieldControl('Sun start time')).toBeDefined();
+    expect(getFieldControl('Tue end time')).toBeDefined();
+    expect(getFieldControl('Sun end time')).toBeDefined();
+  });
+
+  it("AC1 (P3-shaped, through the real UI): distinct per-day times produce distinct UTC pairs in the payload -- this is this file's own mutation-replay target for the per-day generator", async () => {
+    const onCreateMeetings = vi.fn().mockResolvedValue(undefined);
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          onCreateMeetings={onCreateMeetings}
+          teams={TEST_TEAMS}
+        />,
+      );
+    });
+    selectWeeklyRangePreset();
+    checkWeekday('Tue');
+    checkWeekday('Sun');
+
+    const tueStart = getFieldControl('Tue start time') as HTMLInputElement;
+    const tueEnd = getFieldControl('Tue end time') as HTMLInputElement;
+    const sunStart = getFieldControl('Sun start time') as HTMLInputElement;
+    const sunEnd = getFieldControl('Sun end time') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(tueStart, '6:00 PM'); // 18:00
+    });
+    act(() => {
+      setNativeInputValue(tueEnd, '8:00 PM'); // 20:00
+    });
+    act(() => {
+      setNativeInputValue(sunStart, '3:30 PM'); // 15:30
+    });
+    act(() => {
+      setNativeInputValue(sunEnd, '6:30 PM'); // 18:30
+    });
+
+    const confirmButton = Array.from(document.querySelectorAll('button')).find((button) =>
+      /^Create \d+ meeting/.test(button.textContent?.trim() ?? ''),
+    ) as HTMLButtonElement;
+    expect(confirmButton.disabled).toBe(false);
+
+    clickButton(confirmButton);
+    await flushMicrotasks();
+
+    expect(onCreateMeetings).toHaveBeenCalledTimes(1);
+    const payload = onCreateMeetings.mock.calls[0][0] as CreateMeetingsPayload;
+    expect(payload.sessions.length).toBeGreaterThan(1);
+
+    const byDate = new Map(payload.sessions.map((s) => [s.sessionDate, s]));
+    for (const session of payload.sessions) {
+      const dow = new Date(`${session.sessionDate}T12:00:00.000Z`).getUTCDay();
+      if (dow === 2) {
+        // Tuesday.
+        expect(session.startsAt).toBe(chicagoWallTimeToUtcIso(session.sessionDate, '18:00'));
+        expect(session.endsAt).toBe(chicagoWallTimeToUtcIso(session.sessionDate, '20:00'));
+      } else if (dow === 0) {
+        // Sunday.
+        expect(session.startsAt).toBe(chicagoWallTimeToUtcIso(session.sessionDate, '15:30'));
+        expect(session.endsAt).toBe(chicagoWallTimeToUtcIso(session.sessionDate, '18:30'));
+      } else {
+        throw new Error(`Unexpected weekday ${dow} in payload for ${session.sessionDate}`);
+      }
+    }
+    // The two weekdays' own times are genuinely distinct in the final
+    // payload -- proves the per-day argument was actually threaded through,
+    // not silently collapsed back onto one shared time.
+    const [aDate] = [...byDate.keys()].filter(
+      (d) => new Date(`${d}T12:00:00.000Z`).getUTCDay() === 2,
+    );
+    const [bDate] = [...byDate.keys()].filter(
+      (d) => new Date(`${d}T12:00:00.000Z`).getUTCDay() === 0,
+    );
+    expect(byDate.get(aDate)?.startsAt).not.toBe(byDate.get(bDate)?.startsAt);
+  });
+
+  it('AC7: edit mode is provably unaffected -- weekly + Tue+Thu renders NO per-day input at all, and desiredFutureSessions is exactly what it is today', async () => {
+    const onSaveMeetingSeries = vi.fn().mockResolvedValue(undefined);
+    const futureSession: ExistingMeetingSeriesSession = {
+      sessionId: 'session-future-1',
+      sessionDate: '2026-09-01', // future relative to this file's pinned fake Date (2026-08-06).
+      startsAt: '2026-09-01T23:00:00.000Z',
+      endsAt: '2026-09-02T01:00:00.000Z',
+      status: 'scheduled',
+    };
+    const initialData: EditMeetingSeriesInitialData = {
+      eventId: 'event-445-edit',
+      title: 'GAM-445 Edit Series',
+      teamIds: null,
+      locationName: 'Robotics Lab',
+      description: '',
+      sessions: [futureSession],
+    };
+    act(() => {
+      root.render(
+        <ScheduleMeetingsDialog
+          isOpen
+          onOpenChange={() => {}}
+          teams={TEST_TEAMS}
+          initialData={initialData}
+          onSaveMeetingSeries={onSaveMeetingSeries}
+        />,
+      );
+    });
+    clickButton(findButtonByText('Weekly recurring') as HTMLButtonElement);
+    // A date range is required for weekly mode to generate any dates at all
+    // (unrelated to this task -- true before GAM-445 too); use the same
+    // real "Next 6 weeks" preset interaction the create-mode tests use, so
+    // the pre-existing 2026-09-01 (a Tuesday) session is actually in range.
+    const rangeTrigger = getFieldControl('Date range') as HTMLButtonElement;
+    clickButton(rangeTrigger);
+    clickButton(findButtonByText('Next 6 weeks') as HTMLButtonElement);
+    checkWeekday('Tue');
+    checkWeekday('Thu');
+
+    // The gate `[R1-1]` requires: NO per-day input rendered at all, even
+    // though two weekdays are checked -- a per-day input that is rendered
+    // and then discarded is itself the failure (packet §5 criterion 7).
+    expect(() => getFieldControl('Tue start time')).toThrow();
+    expect(() => getFieldControl('Thu start time')).toThrow();
+    // The shared pair is still exactly what edit mode has always rendered,
+    // and derived from the one pre-existing session's own wall time (T510,
+    // unrelated to this task): 2026-09-01T23:00Z/2026-09-02T01:00Z is
+    // 18:00-20:00 America/Chicago (CDT, -5) in September.
+    expect((getFieldControl('Start time') as HTMLInputElement).value).toBe('6:00 PM');
+    expect((getFieldControl('End time') as HTMLInputElement).value).toBe('8:00 PM');
+
+    const confirmButton = findButtonByText('Save changes');
+    expect(confirmButton).toBeDefined();
+    expect(confirmButton?.disabled).toBe(false);
+    clickButton(confirmButton as HTMLButtonElement);
+    await flushMicrotasks();
+    // Confirmation `AlertDialog` (rule 6) -- same
+    // `dialog[role="alertdialog"]` scoping the "T510 edit mode" describe's
+    // own `findButtonInAlertDialog` uses, reproduced locally here since that
+    // helper is declared inside a sibling describe block.
+    const alertDialog = document.querySelector('dialog[role="alertdialog"]');
+    const alertConfirm = Array.from(alertDialog?.querySelectorAll('button') ?? []).find(
+      (button) => button.textContent?.trim() === 'Save changes',
+    ) as HTMLButtonElement | undefined;
+    expect(alertConfirm).toBeDefined();
+    clickButton(alertConfirm as HTMLButtonElement);
+    await flushMicrotasks();
+
+    expect(onSaveMeetingSeries).toHaveBeenCalledTimes(1);
+    const payload = onSaveMeetingSeries.mock.calls[0][0] as SaveMeetingSeriesPayload;
+
+    // Computed independently, through the SAME unmodified pure functions
+    // this ticket's own packet §3.8 requires stay untouched
+    // (`computeScheduleSessionDates`/`buildEditDesiredFutureSessions`), not
+    // hardcoded -- proves weekly + two checked weekdays in edit mode took
+    // EXACTLY today's single-shared-time path, with no per-day influence at
+    // all. `2026-08-06` is this file's own pinned fake "today"; the preset
+    // range is `[today, today+41]`.
+    const expectedSessionDates = computeScheduleSessionDates({
+      mode: 'weekly',
+      singleDate: undefined,
+      recurringRange: { start: '2026-08-06', end: '2026-09-16' },
+      recurringWeekdays: ['tue', 'thu'],
+      customDates: [],
+    });
+    expect(expectedSessionDates.length).toBeGreaterThan(1);
+    const expectedDesiredFutureSessions = buildEditDesiredFutureSessions(
+      expectedSessionDates,
+      '18:00',
+      '20:00',
+      false,
+      new Map([
+        [
+          '2026-09-01',
+          { startsAt: '2026-09-01T23:00:00.000Z', endsAt: '2026-09-02T01:00:00.000Z' },
+        ],
+      ]),
+    );
+    expect(payload.desiredFutureSessions).toEqual(expectedDesiredFutureSessions);
+    // The pre-existing session's OWN stored time survives untouched (T611,
+    // unrelated to this task).
+    expect(payload.desiredFutureSessions.find((s) => s.sessionDate === '2026-09-01')).toEqual({
+      sessionDate: '2026-09-01',
+      startsAt: '2026-09-01T23:00:00.000Z',
+      endsAt: '2026-09-02T01:00:00.000Z',
+      notes: '',
+    });
+  });
+
+  it("AC8 (the trap criterion): an inverted shared pair set BEFORE the second weekday is checked, then every per-day row fixed, leaves Create enabled -- a build gating on the hidden pair's endTimeError fails this", () => {
+    act(() => {
+      root.render(<ScheduleMeetingsDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
+    });
+    // Setup preconditions (packet §5 criterion 8): title is the default
+    // non-empty 'Team meeting', and the date range is set via the preset --
+    // both required for `isValid` to even reach the per-row term.
+    selectWeeklyRangePreset();
+    checkWeekday('Tue');
+
+    const sharedStart = getFieldControl('Start time') as HTMLInputElement;
+    const sharedEnd = getFieldControl('End time') as HTMLInputElement;
+    // Order matters (packet §3.5 trap, same mechanism the AC4b describe
+    // above already documents): End's own `min` is bound to the CURRENT
+    // Start, so typing an End below Start's value is silently REJECTED, not
+    // committed. Settle a valid low pair first (Start has no `min`), THEN
+    // move Start LATER than the already-settled End -- `min` is only
+    // consulted when End itself is being typed, so this produces a
+    // genuinely inverted, committed pair.
+    act(() => {
+      setNativeInputValue(sharedStart, '12:00 AM'); // 00:00 -- Start has no `min`.
+    });
+    act(() => {
+      setNativeInputValue(sharedEnd, '12:30 AM'); // 00:30 -- in range (min is 00:00).
+    });
+    act(() => {
+      setNativeInputValue(sharedStart, '8:00 PM'); // 20:00 -- now after the settled 00:30 End.
+    });
+    expect(sharedEnd.value).toBe('12:30 AM'); // End's committed value never re-checked.
+    expect(container.textContent).toContain('End time must be after the start time.');
+
+    // Checking the second weekday hides the shared pair and carries its
+    // (inverted) values into both rows.
+    checkWeekday('Thu');
+    expect(() => getFieldControl('Start time')).toThrow();
+
+    const tueStart = getFieldControl('Tue start time') as HTMLInputElement;
+    const tueEnd = getFieldControl('Tue end time') as HTMLInputElement;
+    const thuStart = getFieldControl('Thu start time') as HTMLInputElement;
+    const thuEnd = getFieldControl('Thu end time') as HTMLInputElement;
+    // Both rows inherited the shared pair's inverted values.
+    expect(tueStart.value).toBe('8:00 PM');
+    expect(tueEnd.value).toBe('12:30 AM');
+    expect(thuStart.value).toBe('8:00 PM');
+    expect(thuEnd.value).toBe('12:30 AM');
+
+    const confirmButtonBefore = Array.from(document.querySelectorAll('button')).find((button) =>
+      /^Create \d+ meeting/.test(button.textContent?.trim() ?? ''),
+    ) as HTMLButtonElement;
+    expect(confirmButtonBefore.disabled).toBe(true);
+
+    // Fix EVERY per-day row (each row's own End `min` is bound to that ROW's
+    // own Start, now 20:00, so 22:00 is in range and commits normally).
+    act(() => {
+      setNativeInputValue(tueEnd, '10:00 PM'); // 22:00 -- now after 20:00.
+    });
+    act(() => {
+      setNativeInputValue(thuEnd, '10:00 PM'); // 22:00 -- now after 20:00.
+    });
+
+    const confirmButtonAfter = Array.from(document.querySelectorAll('button')).find((button) =>
+      /^Create \d+ meeting/.test(button.textContent?.trim() ?? ''),
+    ) as HTMLButtonElement;
+    // The trap: a build that still ANDs the hidden shared pair's
+    // `endTimeError` into `isValid` stays disabled here, with no visible
+    // error and no reachable control to fix it (packet §3.5).
+    expect(confirmButtonAfter.disabled).toBe(false);
+    expect(container.textContent).not.toContain('End time must be after the start time.');
+  });
+
+  it("AC9: dropping from two weekdays to one hands generation back to the shared pair, carrying the SURVIVING row's own values (not a stale default)", () => {
+    act(() => {
+      root.render(<ScheduleMeetingsDialog isOpen onOpenChange={() => {}} teams={TEST_TEAMS} />);
+    });
+    selectWeeklyRangePreset();
+    checkWeekday('Tue');
+    checkWeekday('Thu');
+
+    const tueStart = getFieldControl('Tue start time') as HTMLInputElement;
+    const tueEnd = getFieldControl('Tue end time') as HTMLInputElement;
+    act(() => {
+      setNativeInputValue(tueStart, '5:00 PM'); // 17:00 -- deliberately NOT the 6:00 PM default.
+    });
+    act(() => {
+      setNativeInputValue(tueEnd, '7:00 PM'); // 19:00 -- deliberately NOT the 8:00 PM default.
+    });
+
+    // Uncheck Thu -- back to exactly one weekday (Tue).
+    checkWeekday('Thu');
+
+    // Rows are gone; the shared pair is back, and it carries TUE'S row
+    // values -- not the original 6:00-8:00 PM default, and not silently
+    // reset (packet §5 criterion 9 / §7.5's "surviving row's values win").
+    expect(() => getFieldControl('Tue start time')).toThrow();
+    const sharedStart = getFieldControl('Start time') as HTMLInputElement;
+    const sharedEnd = getFieldControl('End time') as HTMLInputElement;
+    expect(sharedStart.value).toBe('5:00 PM');
+    expect(sharedEnd.value).toBe('7:00 PM');
   });
 });
 

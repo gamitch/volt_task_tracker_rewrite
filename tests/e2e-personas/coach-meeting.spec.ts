@@ -247,6 +247,99 @@ test.describe('MTG-02 Schedule meetings dialog', () => {
     expect(event.type).toBe('meeting');
   });
 
+  // GAM-445 (packet §5 criterion 10) -- two-different-times weekly series,
+  // created through the real UI, read back from `event_sessions` and
+  // asserted on BOTH weekdays' own UTC pairs -- not on what the dialog
+  // rendered. Infrastructure named by the packet: `sessionsFor`/
+  // `eventsTitled` above, raw `starts_at`/`ends_at` assertions (mirroring the
+  // single-meeting test above), two-weekday selection (mirroring the test
+  // above this one). The packet notes the e2e picks dates by grid index and
+  // cannot reach 2026-11-01 without month navigation -- the DST pinning
+  // (criterion 2) is a unit test, not this one.
+  test('weekly recurring mode with per-weekday times creates DISTINCT UTC pairs per weekday', async ({
+    page,
+  }) => {
+    const title = 'E2E Per-Day Times Build Nights';
+    await signIn(page, 'coach');
+    const dialog = await openScheduleDialog(page);
+
+    await dialog.getByLabel(/^Title/).fill(title);
+    await dialog
+      .getByRole('radiogroup', { name: 'Schedule mode' })
+      .getByRole('radio', { name: 'Weekly recurring' })
+      .click();
+
+    // "Repeat on" weekday checkboxes and a required date range replace the
+    // single Date field in this mode.
+    await dialog.getByRole('button', { name: 'Tue', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Thu', exact: true }).click();
+
+    await dialog.getByText('Select date range').first().click();
+    // Day cells carry a full-date aria-label ("Tuesday, September 1, 2026").
+    const dayCells = await page.getByRole('button', { name: /^\w+day, \w+ \d+, \d{4}$/ }).all();
+    const selectable: typeof dayCells = [];
+    for (const cell of dayCells) {
+      if (await cell.isEnabled()) selectable.push(cell);
+    }
+    expect(selectable.length).toBeGreaterThan(30);
+    await selectable[2].click();
+    await selectable[2 + 27].click();
+
+    // Two checked weekdays -> per-day rows replace the shared Start/End pair
+    // (packet §3.2). Set genuinely DIFFERENT times per weekday.
+    await dialog.getByLabel(/^Tue start time/).fill('6:00 PM');
+    await dialog.getByLabel(/^Tue end time/).fill('8:00 PM');
+    await dialog.getByLabel(/^Thu start time/).fill('4:30 PM');
+    await dialog.getByLabel(/^Thu end time/).fill('5:45 PM');
+    await capture(page, '15-coach-per-day-times');
+
+    const submit = dialog.locator('button', { hasText: /^Create \d+ meeting/ });
+    await expect(submit).not.toHaveText('Create 0 meetings');
+    const label = await submit.innerText();
+    const plannedCount = Number(/^Create (\d+)/.exec(label)?.[1] ?? '0');
+    expect(plannedCount).toBeGreaterThan(1);
+
+    await submit.click();
+    await expect.poll(() => eventsTitled(title).length, { timeout: 20_000 }).toBe(1);
+
+    const [event] = eventsTitled(title);
+    const sessions = sessionsFor(event.id);
+    expect(sessions).toHaveLength(plannedCount);
+
+    // Read the rows back and assert BOTH weekdays' own UTC pair -- the point
+    // of this criterion, not asserting on what the dialog rendered.
+    for (const session of sessions) {
+      const weekday = new Date(`${session.session_date}T12:00:00Z`).getUTCDay();
+      if (weekday === 2) {
+        // Tuesday: 6:00-8:00 PM America/Chicago.
+        expect(session.starts_at).toContain(`${session.session_date} 23:00:00`);
+        const endDate = new Date(`${session.session_date}T12:00:00Z`);
+        endDate.setUTCDate(endDate.getUTCDate() + 1);
+        expect(session.ends_at).toContain(`${endDate.toISOString().slice(0, 10)} 01:00:00`);
+      } else if (weekday === 4) {
+        // Thursday: 4:30-5:45 PM America/Chicago -- both distinct from Tuesday's.
+        expect(session.starts_at).toContain(`${session.session_date} 21:30:00`);
+        expect(session.ends_at).toContain(`${session.session_date} 22:45:00`);
+      } else {
+        throw new Error(`Unexpected weekday ${weekday} for session ${session.session_date}`);
+      }
+    }
+    // The two weekdays' own wall times are genuinely distinct in the stored
+    // rows -- proves the per-day times actually reached the database, not
+    // just the dialog's own preview state.
+    const tueSession = sessions.find(
+      (s) => new Date(`${s.session_date}T12:00:00Z`).getUTCDay() === 2,
+    );
+    const thuSession = sessions.find(
+      (s) => new Date(`${s.session_date}T12:00:00Z`).getUTCDay() === 4,
+    );
+    expect(tueSession).toBeDefined();
+    expect(thuSession).toBeDefined();
+    expect(tueSession?.starts_at).not.toBe(thuSession?.starts_at);
+
+    await capture(page, '16-coach-per-day-times-created');
+  });
+
   test('a student cannot create a meeting even with a session in hand', async () => {
     // The UI never offers this, so the check that matters is the policy. A
     // cross-user INSERT blocked by RLS raises 42501 rather than writing 0 rows.
