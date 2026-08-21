@@ -158,3 +158,81 @@ State inherited and verified by this run, not assumed:
   round. A REVISE here escalates to the human owner rather than looping.
   **If this line is the last one in this file, the run died holding this
   subagent — for the second time on this row.**
+
+- **11:36Z — `checker-premise` round 2 returned: VERDICT REVISE.** Subagent
+  completed, result in hand, nothing left in flight. It worked in its own
+  worktree `/tmp/gam443-r2` (item 23), removed it, and left the shared tree
+  clean — verified by `git status`.
+
+  **2 MAJOR, 8 MINOR, 1 NIT — no BLOCKER.** It ran rather than only read: it
+  built the entire move again, ran the full suite (2598/2598), and executed both
+  of the packet's prescribed mutations against the *real post-move* `format.ts`.
+
+  - **MAJOR-1 — both mutation counts in criterion 8 are wrong.** Round 1
+    measured them on the **pre-move** tree, where only `MeetingsList.tsx`'s
+    private copy is mutated. Revision 2 wrote those numbers into criteria that
+    tell the worker to mutate the **post-move shared** `format.ts`, which
+    `CalendarPage.tsx` also resolves through. Measured: (a) is **2 red**, not 1
+    — `CalendarPage.test.tsx:301` also asserts the collapsed `'6:00–8:00 PM ·
+    2h'`; (b) is **10 red**, not 9 — plus `CalendarPage.test.tsx:297`. The
+    increase *is the de-duplication working*. Left unfixed this reproduces
+    round 1's BLOCKER shape exactly: a worker measuring 10 against an expected
+    9, told "do not report a red run that did not happen", must stall or
+    fabricate.
+  - **MAJOR-2 — prescription 4 contradicts itself at `endMinutes: 1440`,** so
+    the spec does **not** have "exactly one legal implementation" as claimed.
+    The meridiem bullet says `PM` for `minutes >= 720` and, in the next
+    sentence, that `1440` renders `12 AM`. `1440 >= 720`. A 10 PM–midnight rule
+    renders `Mon 10–12 PM` under the general rule and `Mon 10 PM–12 AM` under
+    the special case — and the first is precisely the "silent lie on screen"
+    the packet's own `RangeError` rationale exists to prevent. No criterion-5
+    case covers `1440`, so the one legal input where the spec is ambiguous is
+    the one input nothing measures. This is the shape GAM-441 freezes.
+  - MINOR ×8 / NIT ×1 — criterion 4's grep is **unsatisfiable as written**
+    (`timeZone: 'America/Chicago'` returns exit 1 on a correct byte-identical
+    move, because the instances read `timeZone: CHICAGO_TIME_ZONE`); the second
+    grep is not grep-scopable; the `dow: 7` test needs a cast the packet never
+    authorizes; the `startMinutes: 1440` fixture violates two rules at once so
+    its message depends on unspecified check order; correction 4's prescribed
+    `@position` sentence **misdescribes `dates.ts`** (it anchors at UTC
+    *midnight*, `:42` — the day boundary exactly; its safety comes from
+    formatting in the same zone, not from the anchor); least-confident entry 6
+    understates the blast radius (`RouteErrorBoundary.tsx:3–8` catches at
+    *route* level, not panel) and ignores three in-repo counter-precedents;
+    `Dow` missing from the export list; `OutreachList.tsx:1633/1645` is an
+    uncited in-repo precedent for the frozen weekday array; the item-20
+    follow-up should also name `OutreachList.tsx:1642` `buildWeekdayChips` as a
+    fourth recurrence-chip copy; `:96–102` truncates mid-sentence (and that doc
+    says "Both" where the file has **three** formatter instances).
+
+  Confirmed exact: all six of criterion 5's expected chip outputs (computed
+  from the spec, not trusted — including the two flagged as most likely wrong),
+  the 2598/102 and 141 baselines, the no-`Date`/no-`Intl` rationale
+  (`Intl…timeZone === 'UTC'`, `TZ` undefined), the `CHICAGO_TIME_ZONE` need at
+  `:409`/`:431`, the export list's completeness, both test files needing no
+  edit, the 16/14 counts, and the PRD title-case/upper-case citations.
+
+- **11:38Z — DECISION: revise to revision 3 and dispatch the worker. No gate
+  round 3.** Item 19a caps the gate at two rounds and both are now spent, so
+  re-submitting is not available; the live question was escalate-to-owner
+  versus proceed. Proceeding, and the reasoning is recorded here so a wrong
+  call is visible rather than silent:
+
+  1. **Nothing is unverified.** 19a exists because *"a plan still failing after
+     two rounds has something wrong with the plan, not the wording."* This plan
+     is not failing — round 2 physically **built every prescription and
+     measured it green** (`tsc` 0, 141/141 with both test files untouched, 0
+     eslint errors) and returned **no BLOCKER**. Both MAJORs are defects in how
+     two criteria are *worded*, not in what the packet asks for.
+  2. **The gate handed over measured replacement text for all 11 findings.**
+     Revision 3 transcribes it. There is no new unchecked prescription for a
+     round 3 to check.
+  3. **The corrections are self-verifying downstream.** The mutation counts are
+     re-measured empirically by the worker under `mutation-replay`, and HEAVY
+     already requires a separate `checker-reviewer`. A transcription error on
+     my part surfaces as a failed criterion, not as a silent defect.
+  4. Escalating two mechanical numeric corrections to the human owner would
+     spend an owner interrupt on something already measured twice.
+
+  **The owner can overrule this**; it is called out in the close-out comment
+  and in PR #223's body rather than buried here.
