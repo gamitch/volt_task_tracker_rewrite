@@ -126,3 +126,16 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   exactly one file and 21 tests; nothing disappeared. The 380 eslint warnings
   are the repo's standing `react-refresh/only-export-components` class — `npx
   eslint` on the two changed files alone emits **zero**.
+- 00:12Z — **Three mutations replayed by the orchestrator, in a detached worktree
+  (item 23 — never the shared tree), each reverted and re-verified green.**
+
+  | Mutation (`SeriesCard.tsx`) | Result |
+  | -- | -- |
+  | `attendancePct === null ? '—'` → `? '0%'` — fabricate a zero where the metric view says nothing | **REDDENED** 21→20 passed, exit 1 (`attendancePct rendering (DATA-01 …)`) |
+  | `MAX_VISIBLE_SCHEDULE_CHIPS = 4` → `999` — remove the cap that wins height invariance | **REDDENED** 21→20 passed, exit 1 (`height invariance > never renders …`, "expected 12 to be 5") |
+  | `onSelect?.({ eventId: model.eventId })` → `{ eventId: model.title }` — raise the frozen focus request with the wrong identifier | **REDDENED** 21→20 passed, exit 1 (`onSelect > is called with exactly …`) |
+
+  The first is the worker's own named mutation; the other two are the
+  orchestrator's, chosen to attack the two claims a green suite is least likely
+  to actually guard — the design's fixed-height promise and the contract a
+  sibling ticket codes against. All three reverted cleanly; worktrees removed.
