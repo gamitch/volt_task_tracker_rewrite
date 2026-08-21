@@ -199,3 +199,35 @@ cannot grow entry reachability. Criterion 5 stands as written and is satisfiable
   that ten modules cite, which is the very thing §9 invokes item 30c to avoid.
 
 Applying the four specified edits now.
+
+## 2026-08-21T20:26Z — four round-2 edits applied; asking the SAME checker to confirm them
+
+MAJOR-A (§3 carve-out for `loaders/meetings.ts` + criterion 6 restated as an
+explicit `git diff --name-only` list), MAJOR-B (new §6b: the module doc is
+redistributed, numbering frozen verbatim, ten external citations named with six
+of them unreachable inside Forbidden files), MINOR-C (§5 destination table —
+values to `coachModel.ts`/`studentModel.ts`, types to `types.ts`), MINOR-D
+(entry-chunk baseline `index-DAfjSJUx.js` 688.21 kB / gzip 202.57 kB, 53 assets),
+MINOR-E (the eight further unexported symbols the builders need, named so the
+worker does not find them one compile error at a time), NIT-F/G/H/I.
+
+**On item 19a's two-round cap — stating this plainly because it is a judgement
+call and it should be visible rather than silent.** Both rounds returned REVISE,
+and item 19 forbids a worker seeing a packet without a DISPATCH verdict. I am
+*not* treating my own revision as self-certifying — that is exactly what item 19
+exists to prevent. Nor am I opening a third full audit: 19a prices a round at
+~105-130K opus tokens and my two rounds came in at 118K and 103K, so a third
+fresh round is the net-negative loop 19a forbids.
+
+Instead I am sending the four specified edits back to **the same round-2 checker,
+in its existing context** (`SendMessage`), to confirm only that they landed as it
+specified. That preserves the property item 19 is actually protecting — checked
+by someone who did not write it — at a fraction of a round's cost. **If it
+returns anything other than a clean confirmation, I escalate to the owner rather
+than attempting a fourth pass.**
+
+Dispatched `run_in_background: false`; blocking on it.
+
+**If this line is the last one in this file, the run died holding this
+confirmation** — the packet is complete and gated to within four verified edits,
+but no worker was ever dispatched and no source file was touched.

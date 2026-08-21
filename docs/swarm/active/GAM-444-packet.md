@@ -52,7 +52,7 @@ Astryx's own `--color-data-categorical-*`, at **tsc exit 0** with `src/theme`
 tests 7/7 green — and with zero invented hex.
 
 **3. What actually blocks is an open owner decision.**
-`docs/swarm/auto-mode-decisions.md:4345-4352`: *"GAM-444 pre-declares eight
+`docs/swarm/auto-mode-decisions.md:4345-4347`: *"GAM-444 pre-declares eight
 `--color-series-N` slots…; the values, and their contrast behaviour in both
 themes, are still open."* Shipping placeholder hues would put a user-visible
 surface on a stub, which item 27 grades `Partial` rather than `Passed`.
@@ -103,7 +103,16 @@ Create / edit:
 
 The issue forbids `ScheduleMeetingsDialog.*`, `src/lib/supabase/**`,
 `LiveConsole.tsx`, `EndMeetingDialog.tsx`, `Kiosk.tsx`,
-`EditMeetingSessionDialog.tsx`. **Three more are added here:**
+`EditMeetingSessionDialog.tsx`.
+
+⚠ **Exception, deliberate:** `src/lib/supabase/loaders/meetings.ts` is carved out
+of `src/lib/supabase/**` and is **Allowed for an import re-point only** (§5).
+Nothing else under `src/lib/supabase/**` may be touched. Without this carve-out
+§2, §3 and criterion 6 contradict each other, and a worker resolving that in
+criterion 6's favour would silently skip the §5 re-point — which is the ticket's
+whole purpose.
+
+**Three more files are added to the forbidden set:**
 
 1. **`src/pages/meetings/StudentMeetingView.tsx` (+ its test).** Singular
    "Meeting" — a *different* module from the `student/StudentMeetingsView.tsx`
@@ -182,7 +191,7 @@ GAM-450.
 
 **`ScheduleRule` — do NOT define it here.** The design contract's table says the
 `buildScheduleChips` *input shape* is "frozen by GAM-444 in `types.ts`", but
-GAM-443 already shipped `ScheduleRule` and `Dow` in `format.ts:202-204`. Two
+GAM-443 already shipped `ScheduleRule` and `Dow` in `format.ts:202` (`Dow`) and `:204-211` (`ScheduleRule`). Two
 definitions is precisely the failure GAM-443 existed to end. **Re-export the
 existing one** so both statements are true and there is exactly one definition:
 
@@ -226,6 +235,14 @@ Once the types live in `src/lib/meetings/types.ts`, re-point both.
   Re-pointing those **changes the module graph**: value imports move across the
   page/lib boundary and Vite re-chunks accordingly.
 
+**Destinations, explicitly** — values cannot live in `types.ts`:
+
+| What | Re-points to |
+| -- | -- |
+| the eight **types** | `src/lib/meetings/types.ts` |
+| `buildCoachMeetingRows` (value) | `src/lib/meetings/coachModel.ts` |
+| `buildStudentMeetingsData` (value) | `src/lib/meetings/studentModel.ts` |
+
 This is not hypothetical here. `loaders/meetings.ts:161-173` and
 `resolveCurrentStudentId.ts:5-44` record that T605 measured exactly this class of
 move as worth *"entry chunk +50.47 kB gz, 18 lazy chunks collapsed."* **Read
@@ -243,6 +260,9 @@ the first draft missed — **`src/app/router.tsx:153`**, which is
 `lazy(() => import('../pages/meetings/MeetingsList'))` and consumes the
 **default** export.
 
+(A twelfth importer, `MeetingsList.test.tsx:56`, is Allowed and handled by
+Stage C — noted so the count is not contradicted by a `grep`.)
+
 ⚠ **`export default MeetingsList` must survive the split.** It is the live route.
 `router.tsx` is neither Allowed nor Forbidden here because it needs no edit —
 but only if the default export stays.
@@ -253,6 +273,42 @@ already established the pattern at `MeetingsList.tsx:1299-1306` — copy it.
 `default`, plus the 6 re-exported from `format.ts`. (The file has 35 line-start
 `export` statements — a worker counting statements will not arrive at 33, which
 is why the number is stated as names.)
+
+## 6b. The 506-line module doc is MOVED, never deleted — and its numbering is frozen
+
+`MeetingsList.tsx:1-506` is a single `/** … */` module doc; imports run
+`:507-621`; the first declaration is at `:627`. Criterion 1 caps the shell at 200
+lines, so roughly **430 lines of documentation must leave the file**. The first
+draft of this packet set that cap without saying where the doc goes, which would
+have driven a worker to delete it.
+
+**It is redistributed, not deleted.** Each numbered section travels with the code
+it documents:
+
+- `#10a` / `#10b` (the pure builders) → `src/lib/meetings/coachModel.ts`
+- `#6` / `#7c` (student scoping and history) → `types.ts` / `studentModel.ts`
+- the T135 Table-migration record → `src/pages/meetings/coach/CoachMeetingsView.tsx`
+- the shell keeps a **short header naming where each numbered section now lives**,
+  so the map survives even though the prose moves.
+
+⚠ **Preserve the numbering verbatim. Do not renumber.** The file carries **84**
+internal `module doc #N` back-references, and **ten citations live outside the
+Allowed set**:
+
+```
+src/pages/home/StudentHome.tsx:187
+src/pages/meetings/StudentMeetingView.tsx:21, :701, :1066   ← FORBIDDEN file
+src/pages/outreach/OutreachList.tsx:434
+src/lib/meetings/format.ts:86, :104, :136                   ← FORBIDDEN file
+src/lib/meetings/resolveCurrentStudentId.ts:92
+src/lib/supabase/loaders/meetings.ts:53
+```
+
+**Six of those sit in files §3 marks Forbidden**, so this ticket *cannot* repair
+them. That is exactly why the numbers are frozen: renumbering silently breaks six
+references the worker is not permitted to fix. §9 invokes item 30c — deleting the
+error deletes the evidence the check happened — and the same logic applies here to
+reasoning ten modules depend on.
 
 ## 7. Staging — three commits, pushed as each lands
 
@@ -299,13 +355,32 @@ Wall-clock insurance. Do them in order; each must leave the tree green.
    **full suite 2623 tests / 104 files; scoped run over
    `src/pages/meetings src/lib/meetings` 374 tests / 9 files.**
 
-   **Chunking is measured, not asserted.** "Lazy-route chunking intact" had no
-   defined measure and §5's re-point legitimately moves code between chunks.
-   Instead: report the `dist/assets` table from `npx vite build` before and
-   after. `MeetingsList` must **remain a lazy chunk**, and the **entry chunk must
-   not grow**. Baseline: `MeetingsList-C3yCdT5f.js 35.60 kB │ gzip: 10.35 kB`.
+   **Chunking is measured, not asserted** — and the gate already measured it, so
+   this is a check you pass in one command rather than an open question.
 
-6. No file in §3 is modified. `git diff --stat` against the merge base proves it.
+   | | baseline at `bdfafcf` | expected after §5 |
+   | -- | -- | -- |
+   | entry `index-DAfjSJUx.js` | 688.21 kB │ gzip 202.57 kB | **unchanged** |
+   | `MeetingsList-C3yCdT5f.js` | 35.60 kB │ gzip 10.35 kB | 35.60 kB │ gzip 10.32 kB |
+   | total assets | 53 | 53 |
+
+   Report the `dist/assets` table from `npx vite build`. `MeetingsList` must
+   **remain a lazy chunk** and the **entry chunk must not grow**. Both were
+   measured green by the premise gate on a real build of the §5 move; if your
+   numbers disagree, something else changed — investigate rather than waive it.
+
+6. **`git diff --name-only` against the merge base contains none of** —
+   an explicit list, not a cross-reference, because the cross-reference version
+   of this criterion contradicted §2:
+
+   `src/pages/meetings/ScheduleMeetingsDialog.*`,
+   `src/pages/meetings/StudentMeetingView.*`,
+   `src/pages/meetings/LiveConsole.tsx`,
+   `src/pages/meetings/EndMeetingDialog.tsx`,
+   `src/pages/meetings/Kiosk.tsx`,
+   `src/pages/meetings/EditMeetingSessionDialog.tsx`,
+   `src/theme/volt.ts`, `src/theme/theme.css`, `src/lib/meetings/format.ts`,
+   **and no path under `src/lib/supabase/` other than `loaders/meetings.ts`.**
 
 7. **No new behaviour**, with one disclosed and measured exception: §5's
    `loaders/meetings.ts` re-point moves two value imports across the page/lib
@@ -361,12 +436,28 @@ check happened, applies to a packet as much as to an issue.*
 5. **Three commits rather than one worker pass.** **The failure I feared is
    real** — `Team` (`:646`) is exactly the type reachable only through the page's
    local scope, and Stage A cannot typecheck without it. §4 now moves it.
-   **Still open:** whether any *other* such symbol exists. Stage A is the proof;
-   if it will not typecheck alone, stop and report rather than merging stages.
-6. **NEW — the chunk-map criterion may be unsatisfiable rather than merely
-   strict.** Criterion 5 requires the entry chunk not to grow while §5
-   deliberately moves two value imports across the page/lib boundary. T605
-   measured that class of move at *+50.47 kB gz* on the entry chunk. If the
-   re-point makes growth unavoidable, the criterion is wrong and the right answer
-   is to report the measured delta and escalate — **not** to skip the re-point,
-   and **not** to quietly pass the criterion.
+   ~~Still open: whether any *other* such symbol exists.~~ **RESOLVED by round 2,
+   and the answer is bigger than I assumed.** The gate extracted all 21 types into
+   `types.ts` in a worktree and ran `npx tsc --noEmit` → **exit 0**, so `types.ts`
+   needs nothing beyond `Team` + `Role`. **But Stage A also moves the two
+   builders, and those need eight further unexported symbols** — do not discover
+   these one compile error at a time:
+
+   `FixtureEvent` (`:657`), `FixtureEventSession` (`:674`),
+   `FixtureAttendanceRecord` (`:691`), `FixtureRsvpRecord` (`:701`),
+   `FixtureStudent` (`:709`), `teamScopeLabel` (`:1019`),
+   `summarizeAttendance` (`:1027`), `meetingEventIdsOf` (`:1041`).
+
+   The `FIXTURE_*` constants (`~:845-1013`) feeding `defaultLoadCoachMeetingsData`
+   (`:1265`) and `defaultLoadStudentMeetingsData` (`:1280`) must move with them —
+   criterion 1's 200-line budget requires it regardless.
+6. ~~**NEW — the chunk-map criterion may be unsatisfiable rather than merely
+   strict.**~~ **RESOLVED by round 2 — my fear was unfounded, and it was measured
+   rather than argued.** The gate built the §5 move and ran `npx vite build`
+   twice: entry chunk **688.21 kB / gzip 202.57 kB before and after**, 53 assets
+   both ways, `MeetingsList` still lazy and 0.03 kB gz *smaller*. My error was
+   reading T605's *+50.47 kB gz, 18 lazy chunks collapsed* as symmetric: it
+   measured an **eager** entry module value-importing the loader, which dragged
+   two lazy pages *into* entry. §5 goes the other way — it removes a
+   `lib → page` value edge — so it cannot grow entry reachability. Criterion 5
+   stands as written and now ships with the measured expectation.
