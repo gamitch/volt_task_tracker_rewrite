@@ -135,3 +135,25 @@ a placeholder would ship a stub surface under item 27. Cut kept, ground replaced
 
 Revising now and re-gating — item 19 requires a DISPATCH verdict before any
 worker sees this packet, and 19a caps the gate at two rounds.
+
+## 2026-08-21T20:05Z — packet revised; DISPATCHING checker-premise round 2 (final round under 19a)
+
+All twelve round-1 findings addressed in `GAM-444-packet.md`: BLOCKER-1
+(`SeriesCardModel` now cites `VOLT_Portal_PRD.md:303-313` with
+`attendancePct: number | null` and the DATA-01 passthrough rule in the field's
+own TSDoc), MAJOR-1 (§5 now separates the type-only re-point from the two
+*value* imports, and cites T605's measured +50.47 kB gz), MAJOR-2 (`Team` :646
+added as a 21st moved type; `Role`-from-`src/app/guards` accepted and explained),
+MAJOR-3 (criterion 2 replaced with a `--reporter=json` `fullName`-superset check
+plus `gate-run` baselines 2623 full / 374 scoped), MAJOR-4 (new §8b: the
+orchestrator, not the worker, repairs `SKILL.md:31` and `:156` in this PR).
+MINOR-1/2 (eleven importers incl. `router.tsx:153`; 40 preserved names, not 33),
+MINOR-3 (§0b reasoning rebuilt), MINOR-4 (duplicate type homes disclosed), NITs
+1–4. §9's struck entries are kept rather than deleted — item 30c's rule that
+deleting the error deletes the evidence the check happened.
+
+Dispatched `run_in_background: false`; blocking on it.
+
+**If this line is the last one in this file, the run died holding this subagent** —
+round 2 never returned, no worker was ever dispatched, and no source file was
+touched. The packet and this log are the whole deliverable in that case.
