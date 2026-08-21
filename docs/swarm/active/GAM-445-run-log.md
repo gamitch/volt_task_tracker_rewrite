@@ -286,3 +286,23 @@ the next reader has to infer.
   This is why it was opened as a draft at minute 6 rather than at the end: the
   work is on the branch and the PR exists. What remains is one paste and one
   click by the owner or a scoped session.
+- **21:02Z (real) — three item 20 follow-ups FILED**, to `Backlog` carrying
+  `unreviewed` (never straight to `Todo` — GAM-382: a row created there is never
+  dispatched, and promotion is the owner's signal). Written via the
+  `linear-task-writing` skill rather than from memory (item 30), each leading
+  with the defect and carrying a defended priority:
+  - **GAM-467** — create-only per-weekday times; a coach cannot edit a series
+    into the shape they just created it in. HEAVY: a write path against rows
+    that already exist. This is MINOR-1, the row the checker blocked the undraft
+    on.
+  - **GAM-468** — every `TimeInput` has a ~20px tap target at 375px vs a 44px
+    minimum. App-wide, not this ticket's doing.
+  - **GAM-469** — the N→N+1 stale seed.
+- **21:05Z (real) — final PR body written** to
+  `docs/swarm/active/GAM-445-pr-body.md`, declaration re-validated.
+  **Gate-block honesty check before quoting it:** the branch has advanced past
+  the gated SHA `0160aa7`, so I checked whether that invalidates the block rather
+  than quoting it and hoping. The only change since is markdown under
+  `docs/swarm/active/`, and `format:check` is scoped to `src/**/*.{ts,tsx}` plus
+  root `*.{ts,js,json,html}` — no source file has changed, so the block still
+  describes this tree. Stated that way in the body.
