@@ -207,3 +207,16 @@ mid-chain, the last line names what the run was holding when it died.
     disclosed); and a stale line in my own packet's Allowed-files list still
     naming `:246`. **The third is fixed in this commit** — the packet no longer
     contradicts itself.
+- **23:34 — PR #233 draft flag cleared**, ~6 minutes inside the credential wall.
+  The ordering held: no `gh pr ready` until the checker had reported.
+- **23:36 — close-out posted; GAM-446 moved `Todo → In Progress → In Review`,
+  never `Done`** (item 28e — the merge closes it, not the author). Read-back
+  confirms `In Review`, `tier/heavy`. Close-out comment carries the six-gate
+  block, the two cuts with their reasons, and GAM-471/472.
+- **23:37 — cross-referenced GAM-460** with what it still needs
+  (`SeriesCardModel` has no `gradedMarksCt` slot; `buildSeriesCardModel` does
+  not exist), so its implementer does not rediscover where the data now comes
+  from. No new row filed — that work is already inside GAM-460's own scope.
+- **23:38 — CI: `Linear declaration` pass, Edge Function tests pass, skill
+  script tests pass; typecheck/lint/test/build and SQL suites still running.**
+  Waiting on them rather than declaring green.
