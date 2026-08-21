@@ -339,7 +339,8 @@ function KpiStripContent({
  * existing `--color-background-*` custom properties (`theme.css:203-205`) --
  * never a hardcoded hex literal. */
 const KPI_TILE_GRADIENT_STYLE: CSSProperties = {
-  background: 'linear-gradient(180deg, var(--color-background-card), var(--color-background-muted))',
+  background:
+    'linear-gradient(180deg, var(--color-background-card), var(--color-background-muted))',
 };
 
 /** The "% toward season goal" tile only -- module doc #7. `--color-accent-
