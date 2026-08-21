@@ -217,3 +217,17 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   PR #232 therefore stays a **draft** with a description written at 22:59Z;
   `docs/swarm/active/GAM-447-pr-body.md` on this branch is the finished body and
   says so in its own first paragraph. A human pastes it and clears the draft flag.
+- 23:45Z — **Close-out.** Comment posted on GAM-447 (`**Run log · claude ·
+  close-out · 2026-08-21**`) carrying the six-gate block with exit codes, the
+  declared item-19 deviation, the three deferrals with their new row ids, and
+  the two disclosed gaps. Issue moved `In Progress → In Review` and **read back**
+  (`state.name = "In Review"`, `tier/standard` still applied). Never `Done` —
+  item 28e: the merge closes it, not the author.
+- 23:45Z — **State at end of run.** Branch `claude/gam-447-series-card` pushed
+  through `52362d3` (source) plus run-log/PR-body commits. PR **#232 is open as a
+  DRAFT with a 22:59Z description**; the finished body is
+  `docs/swarm/active/GAM-447-pr-body.md` on the branch and cannot be published
+  from here — the credential is 401 and does not come back. **A human pastes that
+  file over the PR description and clears the draft flag; nothing else is
+  outstanding.** No subagent is in flight, and every dispatch line above has a
+  matching verdict line.
