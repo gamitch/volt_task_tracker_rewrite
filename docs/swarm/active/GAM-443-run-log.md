@@ -431,3 +431,30 @@ State inherited and verified by this run, not assumed:
   rule is not softened by this — it is reinforced**, because the single
   operation you most need late (writing the body) is the one the fallback
   cannot do.
+
+- **12:54Z — close-out posted to GAM-443 and the issue moved `Todo → In
+  Progress → In Review`,** read back as `In Review`. Not `Done` — item 28e, the
+  merge closes it, not the author. The comment carries the six-gate block, the
+  mutation counts, the four follow-up ids, the item-19a decision flagged for the
+  owner to overrule, and the one-paste PR-body fix.
+
+- **12:57Z — CI green on PR #223, watched to completion rather than assumed.**
+  `Typecheck, Lint, Format, Test, Build, Bundle Size` **pass** (2m44s),
+  `SQL suites (RLS denial, metric views, migration guards)` **pass**,
+  `Skill script tests (mutation-replay, gate-run parsers)` **pass**,
+  `Edge Function tests (Deno)` **pass**, `Linear declaration` **pass**.
+  `gh pr checks --watch --fail-fast` exit 0.
+
+## Run 2 close-out
+
+Three subagents dispatched, **three verdicts recorded, none left in flight** —
+`checker-premise` round 2 (REVISE), `worker-implementer` (`b7e9b1d`),
+`checker-reviewer` (PASS). Every one was dispatched with
+`run_in_background: false` and waited on. Compare run 1, whose last line was a
+dispatch with no verdict; that signature is what this log was written to make
+unmistakable, and it is what let run 2 start from a revision-2 packet.
+
+**Left undone, deliberately and disclosed:** PR #223's body still shows the
+early draft text. The finalized body is on the branch at
+`docs/swarm/active/GAM-443-pr-body.md` and needs one paste. Nothing else in the
+run is incomplete.
