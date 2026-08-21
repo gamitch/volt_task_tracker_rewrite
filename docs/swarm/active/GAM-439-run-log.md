@@ -85,3 +85,25 @@ holding that subagent.*
   than looping.
   *If this line is the last one in this file, the run died holding this
   subagent.*
+- **05:46Z — `checker-premise` round 2 VERDICT: DISPATCH.** 3 MINOR, 3 NIT; no
+  BLOCKER, no MAJOR. The gate did not merely read: it **implemented D5 and the
+  editor in its own worktree** and ran the full suite — `103 files / 2602 tests
+  passed, exit 0`, with all 101 `CoachHome.test.tsx` tests **unmodified**. That
+  measures criterion A8 rather than asserting it, and it settles §8 entry 4,
+  the one place revision 2 was predicting rather than measuring: the success
+  state does render (`hasSuccess=true`, `hasSkeleton=false`), and `loadData`
+  and `loadDashboardData` drop back to one call each from revision 1's two.
+  - **F1 (MINOR, measured) is a real defect D5 introduced** and is exactly the
+    falsifier §8.1 asked to be hunted — just not where I expected it. Because
+    `CoachHomeContent` no longer unmounts on a season change, `useMilestoneToasts`
+    state survives, and toast ids carry no `seasonId`, so on a genuine season
+    switch React logs `Encountered two children with the same key,
+    'team-hours-goal-25'` and "reached 25%" renders twice. Fix is one token —
+    `key={season.id}` on `<CoachHomeContent>` — which the gate verified fixes
+    the collision without costing the success state.
+  - F2-F6: disclose that a failed post-save refresh now replaces the dashboard
+    with the season-error banner; "four other `useActiveSeason` consumers" is
+    really eight; `Button isDisabled` was prescribed but missing from the
+    verified-props list; three ranges off by a line or two.
+  - 33 of 33 changed citations landed on the construct named.
+  Gate closed at round 2 of 2. No escalation needed.
