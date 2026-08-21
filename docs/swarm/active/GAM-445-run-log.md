@@ -41,3 +41,19 @@ the next reader has to infer.
 - **19:20Z — claimed.** `Todo → In Progress` via `issueUpdate`, then re-read
   (item 28c): `state.name = "In Progress"`. Claim held, not hoped.
 - **19:21Z — branch created**, run log is the first file write on it.
+- **19:23Z — draft PR #231 opened** at minute ~6, per wall 3. PR body artifact
+  `docs/swarm/active/GAM-445-pr-body.md` written *before* the API call and
+  validated by `.claude/skills/pr-body/scripts/check.mjs` (exit 0,
+  `declaration closes GAM-445`).
+- **19:25Z — claim comment posted** to GAM-445 (`commentCreate` success), lead
+  line `**Run log · claude (Opus 5) · claim · 2026-08-21**` per `AGENTS.md`.
+- **19:34Z — packet written** to `docs/swarm/active/GAM-445-packet.md`. HEAVY
+  shape: verified-state table with every line number read from working tree
+  `967170c` rather than copied from the issue (item 19c), Allowed/Forbidden file
+  list checked against wall 1 at packet time (no `.github/workflows/**` in it),
+  seven acceptance criteria, and the item 19d **Least confident decisions** list
+  (five entries). Two facts the issue did not carry are in the packet: the
+  `TimeInput` pair at `:1428-1454` is shared by all three modes, and edit mode
+  has a separate build path (`buildEditDesiredFutureSessions`, `:829-857`) that
+  knows nothing about per-day times — decision 3 asks the gate to attack exactly
+  that as a possible data-corruption path.
