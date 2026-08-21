@@ -157,3 +157,45 @@ Dispatched `run_in_background: false`; blocking on it.
 **If this line is the last one in this file, the run died holding this subagent** —
 round 2 never returned, no worker was ever dispatched, and no source file was
 touched. The packet and this log are the whole deliverable in that case.
+
+## 2026-08-21T20:17Z — VERDICT round 2: **REVISE**, 0 BLOCKER, 0 round-1 findings unfixed
+
+The subagent returned; the run did not die holding it. Both experiment worktrees
+(`/tmp/gam444-exp`, `/tmp/gam444-tc`) removed, shared tree confirmed clean.
+
+**All twelve round-1 findings verified genuinely fixed**, and the gate re-measured
+every citation my revision introduced — PRD `:303-313`, `format.ts:168-169` and
+`:180-183`, `Team` `:646`, `Role` `:537`, `router.tsx:153`, `theme.css:294-295`,
+the 40-names/35-statements count, `:1299-1306`, `SKILL.md:31`/`:156`, and all
+three baselines. **None was wrong.** No new false claim was introduced.
+
+**§9 decision 6 settled by measurement, and my fear was unfounded.** The gate
+built the §5 move in its own worktree and ran `npx vite build` twice:
+
+| chunk | baseline | after §5 move | delta |
+| -- | -- | -- | -- |
+| entry `index-DAfjSJUx.js` | 688.21 kB / gzip 202.57 kB | 688.21 kB / gzip 202.57 kB | **0 / 0** |
+| `MeetingsList-*.js` | 35.60 kB / gzip 10.35 kB | 35.60 kB / gzip **10.32** kB | −0.03 kB gz |
+| assets | 53 | 53 | 0 |
+
+My reasoning error: T605's `+50.47 kB gz, 18 lazy chunks collapsed` measured the
+**opposite direction** — an *eager* entry module value-importing the loader, which
+dragged two lazy pages into entry. §5 *removes* a `lib → page` value edge, so it
+cannot grow entry reachability. Criterion 5 stands as written and is satisfiable.
+
+**Two new MAJORs, both real, both pre-existing text round 1 never reached:**
+
+- **MAJOR-A — §2/§3/criterion 6 contradict each other.** §3 forbids
+  `src/lib/supabase/**` wholesale while §2 Allows `loaders/meetings.ts` and §5
+  *requires* editing it. `git diff --stat` therefore fails criterion 6 on correct
+  work — and a worker resolving the conflict the other way would **silently skip
+  the §5 re-point**, which is the ticket's whole purpose.
+- **MAJOR-B — the 506-line module doc has nowhere to go.** `MeetingsList.tsx:1-506`
+  is one doc block; criterion 1 caps the shell at 200 lines, so ~430 lines must
+  leave and the packet never said where. It carries 84 internal `module doc #N`
+  back-references, and **ten citations live outside the Allowed set** — six of
+  them inside files §3 marks Forbidden, so the worker could not repair them even
+  if it noticed. As written, criterion 1 forces deletion of verified reasoning
+  that ten modules cite, which is the very thing §9 invokes item 30c to avoid.
+
+Applying the four specified edits now.
