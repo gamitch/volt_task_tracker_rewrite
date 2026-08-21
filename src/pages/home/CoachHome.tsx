@@ -714,6 +714,7 @@ import { loadLeaderboardData } from '../../lib/supabase/loaders/leaderboard';
 import { loadPrivacySetting } from '../../lib/supabase/loaders/leaderboard_privacy';
 import {
   Leaderboard,
+  roundForDisplay,
   type LoadLeaderboardDataFn,
   type LoadPrivacySettingFn,
 } from '../outreach/Leaderboard';
@@ -2073,7 +2074,7 @@ function TeamHoursRowItem({
           style={COACH_HOME_PROGRESS_BAR_MAX_WIDTH_STYLE}
         />
       }
-      endContent={<Text type="supporting">{`${entry.confirmedHours}h`}</Text>}
+      endContent={<Text type="supporting">{`${roundForDisplay(entry.confirmedHours)}h`}</Text>}
     />
   );
 }
@@ -2105,7 +2106,7 @@ function TopEventRowItem({
           />
         </VStack>
       }
-      endContent={<Text type="supporting">{`${entry.totalHours}h`}</Text>}
+      endContent={<Text type="supporting">{`${roundForDisplay(entry.totalHours)}h`}</Text>}
     />
   );
 }

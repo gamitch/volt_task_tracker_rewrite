@@ -1632,6 +1632,25 @@ describe('<CoachHome /> T124 hours by team', () => {
     );
     expect(ravensIndex).toBeLessThan(titansIndex);
   });
+
+  it('GAM-455: confirmedHours is rounded via roundForDisplay, not printed as a raw float', async () => {
+    renderAsUser(COACH_USER, {
+      loadData: fixtureLoadData,
+      loadDashboardData: async (seasonId: string) => {
+        const base = await fixtureLoadDashboardData();
+        return {
+          ...base,
+          teamHours: [
+            { teamId: 't1', teamName: 'Ravens', seasonId, confirmedHours: 3.999998805 },
+          ],
+        };
+      },
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+    expect(container.textContent).toContain('4h');
+    expect(container.textContent).not.toContain('3.999998805');
+  });
 });
 
 describe('<CoachHome /> T124 goal projection', () => {
@@ -1782,6 +1801,33 @@ describe('<CoachHome /> T124 top events by student hours', () => {
     expect(container.textContent).toContain('30h');
     expect(container.textContent).toContain('Community Food Bank Sort');
     expect(container.textContent).toContain('16h');
+  });
+
+  it('GAM-455: totalHours is rounded via roundForDisplay, not printed as a raw float', async () => {
+    renderAsUser(COACH_USER, {
+      loadData: fixtureLoadData,
+      loadDashboardData: async (seasonId: string) => {
+        const base = await fixtureLoadDashboardData();
+        return {
+          ...base,
+          topEvents: [
+            {
+              eventId: 'e1',
+              seasonId,
+              title: 'Summer STEM Camp',
+              startsOn: '2026-01-01',
+              endsOn: '2026-01-01',
+              studentCount: 3,
+              totalHours: 3.999998805,
+            },
+          ],
+        };
+      },
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+    });
+    await flushMicrotasks();
+    expect(container.textContent).toContain('4h');
+    expect(container.textContent).not.toContain('3.999998805');
   });
 });
 
