@@ -315,3 +315,44 @@ this run's permission boundary** (`.claude/**` is not writable here), so the
 correction is handed over on GAM-466 rather than done. This is the same shape as
 `AGENTS.md` wall 1: an undeliverable half, named in the PR body rather than
 buried. The stale `SKILL.md:156` citation is folded into the same row.
+
+## 2026-08-21T21:57Z — VERDICT checker-reviewer: **PASS** (3 MINOR, 2 NIT; no BLOCKER, no MAJOR)
+
+The subagent returned; the run did not die holding it. Its worktree was removed
+and the shared tree confirmed clean.
+
+**Behavior preservation proved byte-level, not asserted.** It diffed each moved
+block against the merge base: both view components, both props interfaces and all
+eleven pure functions **byte-identical** apart from an added `export` keyword and
+changed import depth. 79 top-level declarations in the base file, **0 missing**.
+Test bodies: 15 differing lines, all import/`vi.mock` path depth, **zero
+assertion text lost**. It also resolved all 40-odd re-exported names through a
+scratch module in its own worktree (`tsc` exit 0).
+
+**Frozen contracts clean.** `attendancePct: number | null` with MTG-01a's
+DATA-01 sentence quoted verbatim on the field including the item-3 warning;
+`MeetingsFocusRequest` exactly as frozen; `Dow`/`ScheduleRule` re-exported not
+redefined; `OverlapIndex` a type alias only, `overlap.ts` absent and
+`buildOverlapIndex` unwritten (GAM-450's file, correctly untouched). No
+percentage math in either model module.
+
+**Three MINORs, all real, none blocking:**
+1. The page's re-export surface is **38 names, not 40** — `CoachMeetingsViewProps`
+   and `StudentMeetingsViewProps` now live only in their own view files. Measured
+   impact zero (nothing imports them from the page path; all eleven external
+   importers resolve), and arguably the better home, but §6 said "every name".
+2. §6b's section-to-file *map* was not followed — the worker took the coarser
+   route it disclosed. The load-bearing half holds: doc moved not deleted,
+   numbering byte-identical, all ten external citations still resolve. But
+   section `#6` is now duplicated verbatim in both view files, and two copies
+   can drift.
+3. The shell's `MeetingsListProps` TSDoc was condensed, dropping prop-level
+   citations its own header claims it kept (`#7a/#7b/#7c`, T510, T605, T189).
+   Repo-wide back-references fall 84 → 79. No numbering changed, and the T189
+   rationale survives at `loaders/students.ts:1008` — but this is prose deleted
+   rather than moved, against item 30c's posture.
+
+Both NITs graded acceptable: the `useLoadState`/`BadgeVariant` duplication is the
+repo's established per-page convention (17+ files already do it), and
+`ChildSwitcherOption` was correctly declared locally with a disclosure rather than
+smuggled into `types.ts` as an unratified "frozen" type.
