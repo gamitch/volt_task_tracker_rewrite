@@ -371,3 +371,82 @@ on the same grounds.
   accepted and **not** fixed: A0 is measurably its guard, the checker confirmed
   A0 reddens first, and re-opening a 16/16 suite to re-assert something already
   covered is churn. Logged here, which is what a NIT gets.
+
+- **11:59Z — PR #222 marked ready for review**, ~10 minutes inside the
+  credential window measured at minute 1. Body updated from
+  `docs/swarm/active/GAM-442-pr-body.md`.
+
+- **12:02Z — orchestrator's own gate run on the FINAL commit.** The worker's
+  block described `8d84b05`; I then changed a SQL comment and two Markdown
+  files, and `format:check` can move on Markdown — so quoting the worker's
+  block would have described a commit that no longer exists on this branch.
+  Re-run with `--require-clean`:
+
+  ```
+  GATE RUN — 06a47cc on claude/gam-442-event-attendance-view — tree clean
+
+    1 tsc              exit 0  PASS
+    2 vite build       exit 0  PASS
+    3 format:check     exit 0  PASS
+    4 eslint           exit 0  PASS       0 errors, 380 warnings
+    5 vitest (full)    exit 0  PASS       102 files / 2598 tests  baseline 2598 (+0)
+    6 vitest (scoped)      –  SKIP
+                              no scope given and none derivable from the diff
+
+  VERDICT: PASS — 5 of 6 gates. NOT all six: 1 skipped.
+  ```
+
+  **Five of six, and this log says five.** Gate 6 has no defensible scope: the
+  diff contains no `src/**` file. Baseline 2598 was measured by the worker at
+  the merge base `e1c49b8`, not assumed. These figures now agree across three
+  independent runs — worker, `checker-reviewer`, and this orchestrator — which
+  is the only thing that makes agreement mean anything.
+
+- **12:05Z — item 20 follow-ups FILED, not left as comments.** Written through
+  the `linear-task-writing` skill (item 30), every citation re-verified against
+  `main` while filing rather than copied from the worker's report:
+
+  - **GAM-458** — `run_t205_anon_grant.sh` exits 1 on `main`; its
+    default-privileges line (`:29`) names `service_role`, which
+    `calendar_feed_platform_stub.sql` (`:8`, `:11`) never creates.
+    `run_t503_widen_rsvp_read.sh:27-45` already carries the fix. tier/fast.
+  - **GAM-459** — `scratch-postgres`'s `start.sh:58` `chown`s as a non-root
+    user and aborts. tier/fast. Note it lives under `.claude/`, which workers
+    may not edit, so it is the orchestrator's or the owner's to change.
+  - **GAM-460** — the consuming SeriesCard must render `graded_marks_ct`
+    beside `attendance_pct`, or D014's inverted failure mode ships. This is
+    packet §8.1(1)'s disclosed risk turned into a triaged row. tier/standard,
+    priority High, `meetings-redesign`.
+
+  GAM-460 is **linked as `related` to GAM-447 (build the SeriesCard) and
+  GAM-446 (the loaders)**, and GAM-442 to GAM-460 — structural links rather
+  than a comment, so the implementer meets the constraint without depending on
+  anyone reading one. It should be closed by GAM-447's own acceptance criteria,
+  not by separate work.
+
+  The checker had flagged that the PR body claimed these were "tracked" when
+  nothing in the repo showed it. That claim is now true, and the body names the
+  three ids.
+
+- **12:07Z — closed out.** GAM-442 moved `In Progress → In Review` (item 28e —
+  never `Done`; the merge closes it, not this agent), close-out comment posted
+  with the six-gate block and the follow-up ids.
+
+## Outcome
+
+**Delivered.** `v_event_attendance` ships as one additive migration plus a
+test-only assertion suite and runner, at `06a47cc` on PR #222.
+
+The premise this run was told to check held, and was checked rather than
+assumed: no view aggregated attendance per event, and the constitution's item 3
+/ DATA-01 bar on client-side metric math is real. The one place the issue's
+framing was wrong — it proposed STANDARD, and it claimed PRD 8.4 had a formula
+to copy when 8.2/8.4 define nothing at per-event grain — was corrected in the
+packet, gated, and recorded in the PR rather than worked around.
+
+What actually earned the HEAVY tier was not the topic sounding important. It was
+that the premise gate, by *running* four candidate views instead of reading one,
+found a join fan-out that reports `held_ct = 5` for an event with 2 held
+sessions while leaving `attendance_pct` correct — a number that would have
+appeared on a coach's card, wrong, with all four of the packet's original
+acceptance criteria green.
