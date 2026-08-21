@@ -138,3 +138,47 @@ Append-only. One line per milestone, committed and pushed as it happens.
   Figures match the worker's dirty-tree run exactly (independent agreement,
   per the skill's own "every agent runs it themselves" rule) — no
   discrepancy found. **STANDARD-tier work accepted.**
+- **e2e-personas dispatched** (`general-purpose` subagent) to satisfy the
+  issue's own stated "## Verification" method (real browser, coach + admin,
+  the inner-scroll-container trap it names explicitly) — jsdom unit tests
+  can't see real CSS/computed style, and the H1's `2.875rem` literal is only
+  actually 46px if the page's real root font-size is 16px, which is exactly
+  the kind of thing worth checking live rather than assuming. Dispatched
+  with `run_in_background: false`. If this line is the last one in this
+  file, the run died holding this subagent.
+- **e2e-personas verdict: 7/7 real-browser assertions passed.** Wrote
+  `tests/e2e-personas/gam456-coach-home-panel-consistency.spec.ts`. Measured
+  live (not assumed): root font-size 16px, H1 computed 46px/800, eyebrow
+  computed `text-transform: uppercase`, `font-weight: 800`,
+  `color: rgb(168, 86, 10)` (the light-theme branch of `--color-accent`,
+  correct — the harness's persona project runs `colorScheme: 'light'`, not
+  dark as this run's dispatch prompt assumed; not a defect, a corrected
+  premise in my own dispatch). All six sections (`Next up`, `Activity feed`,
+  `Hours by team`, `Goal projection · confirmed + planned`,
+  `Top events by student hours`, `Season Volunteer Leaderboard`) confirmed
+  `.astryx-card` ancestors, live. Admin "Season setup" card confirmed absent
+  under current seed data (`teams.length === 0` gate is false with 3 seeded
+  teams) — matches GAM-438's own spec comment, not a regression. Coach-side
+  "Season setup" absence re-confirmed (unchanged by this fix). The real
+  scroll-container trap was worse than stated: `.astryx-layout-content`
+  matches **two** elements on this route (the app-chrome shell's own Layout,
+  ~125px overflow, and `CoachHome.tsx`'s own nested Layout, ~1425px
+  overflow) — resolved via the descendant combinator
+  `.astryx-layout-content .astryx-layout-content`, verified live before
+  trusting it, not assumed from the issue's single-container description.
+  `stop.sh` confirmed run (cluster + `.env.e2e` deleted).
+- **One pre-existing, unrelated finding surfaced incidentally** while
+  screenshotting the now-panelled sections: `CoachHome.tsx:2128,2160`
+  (`TeamHoursRowItem`/`TopEventRowItem`) render raw unrounded floats
+  (`"3.99999708h"`) where the same file's `GoalProjectionRowItem` (`:2188`)
+  already formats via `.toFixed(1)`. Not in this row's scope (module doc
+  #17 only wraps sections and restores header styling) and not something
+  this run is fixing under GAM-456. Per the e2e-personas skill's own "a
+  report is not a record" rule and constitution item 20, filed rather than
+  left in prose: `docs/swarm/inbox/claude-gam-456-coach-dashboard-panel-
+  consistency-findings.json`, dry-run verified against
+  `scripts/linear-file-findings.mjs` then executed — **GAM-461** filed to
+  `Backlog`, `tier/unreviewed`, `provenance/e2e-personas`, `area/w1`.
+  Filing is not dispatching (item 28a); left for the owner to promote.
+- New spec, 7 screenshots, and the findings JSON committed
+  (`5b78120`) — nothing left uncommitted from this verification pass.
