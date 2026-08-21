@@ -47,3 +47,19 @@ judgment needed at claim time).
   against the live reference app rather than trusted from the issue text.
   If this line is the last one in this file, the run died after writing
   the packet, before dispatching the worker.
+- 2026-08-21: **Dispatched** `worker-implementer` (`run_in_background:
+  false`) on the packet above, foreground, waiting for its result before
+  continuing. If this line is the last one in this file, the run died
+  holding this subagent.
+- 2026-08-21: **Worker verdict received.** Commit `266290d` on this branch.
+  tsc clean, targeted vitest 116/116 green, full suite 2594/2594 green,
+  eslint 0 errors. Worker deviated from the packet's `xstyle` instruction
+  and used `Card`'s `style` prop instead, citing a pre-existing repo
+  finding (F-2, `VOLT_UX_Craft_PRD_v3.md:55-60`) that `xstyle`/StyleX is
+  nonfunctional in this app (no StyleX Babel plugin wired into
+  `vite.config.ts`) — disclosed, not silent, and reproduced with a runtime
+  probe. Independently verifying that claim and replaying the BEH-01
+  milestone-tick + admin-gate mutations is the next step before this goes
+  to draft-PR-ready. If this line is the last one in this file, the run
+  died after receiving the worker's verdict, before independent
+  verification.
