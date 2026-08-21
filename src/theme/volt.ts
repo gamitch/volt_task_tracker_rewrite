@@ -99,5 +99,39 @@ export const voltTheme = defineTheme({
         '--color-accent': 'light-dark(#6E3300, #f79a4a)',
       },
     },
+    // GAM-437: side nav labels ship at the base 14px text size, which reads
+    // too small once the nav is collapsible and icons are its only other
+    // visual weight. `SideNavItem` DOES have a `size` prop (`'sm' | 'md' |
+    // 'lg'`, `NavItemSize`,
+    // node_modules/@astryxdesign/core/dist/NavItem/navItemStyles.stylex.d.ts:15)
+    // -- this is NOT the "no size prop exists" case. Checked against the
+    // compiled CSS (node_modules/@astryxdesign/core/dist/astryx.css, the
+    // `--size-element-{sm,md,lg}` / `--spacing-{1,2}` rules) that `size`
+    // only maps to `height` / `padding-inline`; it has no effect on font
+    // size at all, so there is no size lever to reach for here. A
+    // component-level `fontSize` override is the correct DES-21 escalation
+    // step (component prop -> theme token -> xstyle -> custom CSS) once the
+    // component itself has no matching lever. `--font-size-base` is
+    // deliberately left untouched -- that resizes every base-sized element
+    // in the app, not just the nav.
+    //
+    // Key is `'side-nav-item'`, not the naively-lowercased `sidenavitem` --
+    // verified against the installed package source
+    // (`node_modules/@astryxdesign/core/dist/SideNav/SideNavItem.js`, both
+    // `themeProps('side-nav-item', ...)` call sites), which is what actually
+    // determines the rendered `.astryx-side-nav-item` class the generated
+    // CSS selector below has to match. `astryx theme build`'s own
+    // `KNOWN_COMPONENTS` typo-check list
+    // (`node_modules/@astryxdesign/cli/src/commands/build-theme.mjs`) has no
+    // entry for this component at all (new/undocumented in that list, same
+    // category as the other CLI/doc gaps already on record in this file and
+    // in `SideNav.tsx`'s module doc) -- confirmed the naive `sidenavitem` key
+    // silently emits a selector, `.astryx-sidenavitem`, that never matches
+    // real markup, while `side-nav-item` does.
+    'side-nav-item': {
+      base: {
+        fontSize: '16px',
+      },
+    },
   },
 });
