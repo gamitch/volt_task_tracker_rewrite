@@ -58,8 +58,10 @@
  *      | `href` | `string` | -- | Navigation URL. |
  *      | `endContent` | `ReactNode` | -- | Right-side content such as
  *        badges or counts. |
- *    (`icon`/`selectedIcon` also appear in this output but are
- *    deliberately omitted -- see icon note below.)
+ *      | `icon` | `IconType` | -- | Icon displayed in the outline
+ *        (unselected) variant. |
+ *    (`selectedIcon` also appears in this output -- deliberately unused, see
+ *    icon note below.)
  *
  *    `npm run astryx -- component SideNavSection` (verbatim, relevant
  *    rows):
@@ -93,11 +95,45 @@
  * is omitted entirely (not rendered with a fabricated `0`) whenever the hook
  * returns `null` (unknown/loading/error/staff role).
  *
- * Icons: deliberately omitted. None of `Icon`'s built-in semantic names is
- * a clean match for these 7 items, and the dependency allowlist
- * (constitution item 9) does not include an icon package (the doc's own
- * `SideNavItem` icon examples use `@heroicons/react`, not authorized here).
- * The SideNav Anatomy table marks "Product icon and name" as not required.
+ * Icons (GAM-437): each item now renders a real icon via `SideNavItem`'s
+ * `icon` prop, so a collapsed nav (the `collapsible` prop above) still has
+ * something to show besides an empty rail. `icon`/`selectedIcon` are real,
+ * non-hallucinated `SideNavItem` props (constitution item 2), verified two
+ * ways: `npm run astryx -- component SideNavItem --json` lists both (type
+ * `IconType`, "See `npx astryx docs icons` for valid semantic names") and
+ * the installed package source itself,
+ * `node_modules/@astryxdesign/core/dist/SideNav/SideNavItem.d.ts` --
+ * `icon?: ReactNode | IconType` / `selectedIcon?: ReactNode | IconType`,
+ * where `IconType = ComponentType<SVGProps<SVGSVGElement>>`
+ * (`node_modules/@astryxdesign/core/dist/Icon/Icon.d.ts`). A rendered lucide
+ * element (`<House aria-hidden="true" />`, a `ReactNode`) is a valid value
+ * for that union -- the *rendered element* is passed at the JSX call site
+ * below, not the bare component reference (`NAV_ITEMS` itself still stores
+ * the bare component per entry, as data).
+ *
+ * None of `Icon`'s own ~26 built-in semantic names is a clean match for all
+ * 7 items (Home/Meetings/Outreach/Roster/Reports have no equivalent) --
+ * dispute-log D021 records this gap and allowlists `lucide-react` (^1.33.0,
+ * constitution item 9) as the resolution, since `Icon`'s own props table in
+ * astryx-api.md directs callers to lucide/heroicons for anything outside
+ * that built-in set. Each of the 7 exports used below (`House`, `Users`,
+ * `Megaphone`, `CalendarDays`, `ClipboardList`, `ChartColumn`, `Settings`)
+ * was confirmed as a real, exported `lucide-react` symbol before use (not
+ * just named by the source issue) via
+ * `node_modules/lucide-react/dist/lucide-react.d.ts`.
+ *
+ * `selectedIcon` is deliberately NOT passed: lucide ships outline-only
+ * icons, so there is no filled variant to hand the "selected" slot --
+ * faking one (e.g. reusing the same outline icon) would misrepresent what
+ * `selectedIcon`'s own doc says it does ("Icon displayed when the item is
+ * selected (filled variant)"). This is the disclosed divergence dispute-log
+ * D021 already records, not an oversight.
+ *
+ * The SideNav Anatomy table marks "Product icon and name" as not required,
+ * which is why this was previously omitted entirely -- GAM-437 revisits that
+ * because a *collapsed* nav has nothing else to render per item once labels
+ * disappear, which the Anatomy table's "not required" framing didn't
+ * account for.
  *
  * `document.title` scope: only the 7 NAV-03 items (and their sub-routes via
  * the prefix match below) drive `document.title` here. `/login`,
@@ -105,9 +141,18 @@
  * `/kiosk/:sessionId` (no NAV-03 entry) are out of scope by design, not an
  * oversight.
  */
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, type ComponentType, type ReactNode, type SVGProps } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Badge, SideNav as AstryxSideNav, SideNavItem, SideNavSection } from '@astryxdesign/core';
+import {
+  House,
+  Users,
+  Megaphone,
+  CalendarDays,
+  ClipboardList,
+  ChartColumn,
+  Settings,
+} from 'lucide-react';
 import { routePaths } from '../../app/router';
 import { useAuth } from '../../app/guards';
 import { useOutreachBadgeCount, type UseOutreachBadgeCountOptions } from './useOutreachBadgeCount';
@@ -117,17 +162,21 @@ interface NavItemConfig {
   route: string;
   /** Roster/Reports only -- see NAV-03 table (Admin/Coach only). */
   staffOnly: boolean;
+  /** Bare lucide component reference -- see icon note in the module doc
+   * above. Rendered as `<icon aria-hidden="true" />` at the call site below,
+   * never stored pre-rendered here. */
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
 }
 
 /** NAV-03's full 7-item table, verbatim route mapping via `routePaths`. */
 const NAV_ITEMS: readonly NavItemConfig[] = [
-  { label: 'Home', route: routePaths.dashboard, staffOnly: false },
-  { label: 'Meetings', route: routePaths.meetings, staffOnly: false },
-  { label: 'Outreach', route: routePaths.outreach, staffOnly: false },
-  { label: 'Calendar', route: routePaths.calendar, staffOnly: false },
-  { label: 'Roster', route: routePaths.roster, staffOnly: true },
-  { label: 'Reports', route: routePaths.reports, staffOnly: true },
-  { label: 'Settings', route: routePaths.settings, staffOnly: false },
+  { label: 'Home', route: routePaths.dashboard, staffOnly: false, icon: House },
+  { label: 'Meetings', route: routePaths.meetings, staffOnly: false, icon: Users },
+  { label: 'Outreach', route: routePaths.outreach, staffOnly: false, icon: Megaphone },
+  { label: 'Calendar', route: routePaths.calendar, staffOnly: false, icon: CalendarDays },
+  { label: 'Roster', route: routePaths.roster, staffOnly: true, icon: ClipboardList },
+  { label: 'Reports', route: routePaths.reports, staffOnly: true, icon: ChartColumn },
+  { label: 'Settings', route: routePaths.settings, staffOnly: false, icon: Settings },
 ];
 
 export interface SideNavProps {
@@ -169,6 +218,7 @@ export function SideNav({ outreachBadgeCountOptions }: SideNavProps = {}): React
             href={item.route}
             as={Link}
             isSelected={activeItem?.route === item.route}
+            icon={<item.icon aria-hidden="true" />}
             endContent={
               // BEH-04: neutral, never-red badge slot -- see module doc
               // "Badge-slot resolution" above. NAV-07: Meetings and

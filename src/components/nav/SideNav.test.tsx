@@ -27,6 +27,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AuthProvider, type AuthUser } from '../../app/guards';
+import { routePaths } from '../../app/router';
 import { SeasonProvider, type LoadActiveSeasonFn } from '../../app/SeasonProvider';
 import type { SeasonRow } from '../../lib/supabase/types';
 import { LoginAs } from '../../test-utils/authHarness';
@@ -354,4 +355,93 @@ describe('<SideNav /> Outreach badge (GAM-301, BEH-04)', () => {
     await flushMicrotasks();
     expect(outreachBadge()).toBeNull();
   });
+});
+
+// ---------------------------------------------------------------------------
+// GAM-437: real icons + 16px label so a collapsed nav stays usable.
+// ---------------------------------------------------------------------------
+
+/** `route -> lucide className` for every NAV-03 item, per the packet's table. */
+const ICON_CLASS_BY_ROUTE: ReadonlyArray<readonly [string, string]> = [
+  [routePaths.dashboard, 'lucide-house'],
+  [routePaths.meetings, 'lucide-users'],
+  [routePaths.outreach, 'lucide-megaphone'],
+  [routePaths.calendar, 'lucide-calendar-days'],
+  [routePaths.roster, 'lucide-clipboard-list'],
+  [routePaths.reports, 'lucide-chart-column'],
+  [routePaths.settings, 'lucide-settings'],
+];
+
+function navLink(route: string): HTMLAnchorElement | null {
+  return container.querySelector(`a[href="${route}"]`);
+}
+
+/** Built-in `SideNavCollapseButton` this task's `AstryxSideNav collapsible`
+ * (uncontrolled mode) renders automatically -- default label is literally
+ * "Collapse sidebar" / "Expand sidebar" (`SideNavCollapseButton.js`). */
+function collapseToggleButton(): HTMLButtonElement | undefined {
+  return Array.from(container.querySelectorAll('button')).find(
+    (button) => button.getAttribute('aria-label') === 'Collapse sidebar',
+  );
+}
+
+describe('<SideNav /> icons (GAM-437)', () => {
+  it('renders every visible item with its mapped lucide icon, decorative (aria-hidden)', async () => {
+    renderSideNav(ADMIN_USER, async () => REAL_SEASON, FIXTURE_OPTIONS);
+    await flushMicrotasks();
+    for (const [route, iconClass] of ICON_CLASS_BY_ROUTE) {
+      const link = navLink(route);
+      expect(link, `no link found for route ${route}`).not.toBeNull();
+      const icon = link!.querySelector(`svg.${iconClass}`);
+      expect(icon, `no ${iconClass} icon found for route ${route}`).not.toBeNull();
+      expect(icon?.getAttribute('aria-hidden')).toBe('true');
+    }
+  });
+
+  it('does not render icons for staffOnly items to a non-staff (student) viewer', async () => {
+    renderSideNav(STUDENT_USER, async () => REAL_SEASON, FIXTURE_OPTIONS);
+    await flushMicrotasks();
+    expect(navLink(routePaths.roster)).toBeNull();
+    expect(navLink(routePaths.reports)).toBeNull();
+    // The 5 items a non-staff viewer does see still get their icon.
+    const homeIcon = navLink(routePaths.dashboard)?.querySelector('svg.lucide-house');
+    expect(homeIcon).not.toBeNull();
+  });
+
+  it(
+    'accessible name (query by role/label, not the decorative icon): expanded mode carries ' +
+      "the item's visible label text as its accessible name, with no aria-label override needed",
+    async () => {
+      renderSideNav(ADMIN_USER, async () => REAL_SEASON, FIXTURE_OPTIONS);
+      await flushMicrotasks();
+      const homeLink = navLink(routePaths.dashboard);
+      expect(homeLink?.getAttribute('aria-label')).toBeNull();
+      expect(homeLink?.textContent?.trim()).toBe('Home');
+      const settingsLink = navLink(routePaths.settings);
+      expect(settingsLink?.getAttribute('aria-label')).toBeNull();
+      expect(settingsLink?.textContent?.trim()).toBe('Settings');
+    },
+  );
+
+  it(
+    "accessible name survives collapse: toggling the nav's own collapse control still " +
+      "renders each item's real `aria-label` (equal to `label`), so the aria-hidden icon " +
+      'never leaves the item nameless',
+    async () => {
+      renderSideNav(ADMIN_USER, async () => REAL_SEASON, FIXTURE_OPTIONS);
+      await flushMicrotasks();
+      const toggle = collapseToggleButton();
+      expect(toggle, 'no built-in collapse toggle button found').toBeDefined();
+      act(() => {
+        toggle!.click();
+      });
+      await flushMicrotasks();
+      const homeLink = navLink(routePaths.dashboard);
+      expect(homeLink?.getAttribute('aria-label')).toBe('Home');
+      const rosterLink = navLink(routePaths.roster);
+      expect(rosterLink?.getAttribute('aria-label')).toBe('Roster');
+      // The icon underneath is still present and still decorative.
+      expect(homeLink?.querySelector('svg.lucide-house')?.getAttribute('aria-hidden')).toBe('true');
+    },
+  );
 });
