@@ -40,7 +40,7 @@ back to per-date custom entry across seven months, roughly 56 dates per series.
 | `chicagoWallTimeToUtcIso` probes the offset **per call** | `:478-482`, `:449-474` | confirmed — **with the caveat in §5 criterion 2**, which is a real limit, not a nicety |
 | `event_sessions` rows carry their own `starts_at`/`ends_at` — **no schema change** | `:310-316`, `supabase/migrations/20260717000000_scheduling_attendance.sql:53-63` | confirmed |
 | Payload `{ event, sessions }` is an explicit session list | `:318-321` | confirmed |
-| **`onCreateMeetings` needs no loader change** — `MeetingsList.tsx:2200` → `createMeetings` → `insertSessions` maps `s.startsAt`/`s.endsAt` per session | `src/lib/supabase/loaders/meetings.ts:1103-1116`, `:1130` | confirmed by round 1, following the data to its real sink |
+| **`onCreateMeetings` needs no loader change** — `MeetingsList.tsx:2200` → `createMeetings` → `insertSessions` maps `s.startsAt`/`s.endsAt` per session | `src/lib/supabase/loaders/meetings.ts:1102-1115`, `:1130` | confirmed by round 1, following the data to its real sink |
 | **Weekly mode IS reachable in edit mode, in two clicks** | see BLOCKER below | **`[R1-1]` corrects this packet's round-1 claim** |
 | **Eight tests name weekly mode**, not one: `test.tsx:236-311` (six), `:338-348`, and the DOM-level `:979-1014` | | **`[R1-2]` corrects "only ONE"** |
 | Baseline: **94 tests green** in `ScheduleMeetingsDialog.test.tsx` | | `[R1-2]` |
@@ -74,7 +74,7 @@ opening mode. It is not a guard.**
 `WEEKDAY_OPTIONS.value` strings (`'mon'`…`'sun'`, `:330-338`); do not invent a
 second weekday vocabulary and do not reorder `WEEKDAY_OPTIONS`.
 
-**Import `Dow` from `src/lib/meetings/format.ts:201`** and use it for the
+**Import `Dow` from `src/lib/meetings/format.ts:202`** and use it for the
 weekday index. `WEEKDAY_OPTIONS.dayIndex` is already `Dow`-compatible, so this
 is nearly free. Importing is allowed and is not a §4 violation: `src/lib/meetings/**`
 is forbidden **to edit**, and being frozen is exactly what makes it importable.
@@ -181,7 +181,7 @@ deliberately, not a proven defect.
 
 **3.6 Payload shape is frozen.** Keep `onCreateMeetings`'s `{ event, sessions }`
 shape (`:318-321`). Round 1 followed it to `insertSessions`
-(`loaders/meetings.ts:1103-1116`) and confirmed per-session times already flow
+(`loaders/meetings.ts:1102-1115`) and confirmed per-session times already flow
 through untouched — **no loader change is needed**. If you nonetheless conclude
 the shape must change, **STOP** and say so on GAM-445; a sibling ticket owns the
 loader.
@@ -284,6 +284,11 @@ than at push time); `docs/swarm/**` and `.claude/**` (orchestrator-owned).
    **not** be disabled. A build where `isValid` still reads the hidden pair's
    `endTimeError` fails this. Nothing in criteria 1-7 catches that build —
    criterion 5 is green on it.
+
+   **Setup preconditions, stated so this cannot produce a false negative:** the
+   title and the date range must ALSO be filled, because `:1107` gates on all
+   three terms. A checker who omits them measures `disabled=true` on a *correct*
+   build and misreads it as a failure.
 9. **Un-checking back to one weekday `[R2-3]`.** When the coach drops from two
    weekdays to one, generation hands back to the shared pair. **The surviving
    single weekday's row values win: write them into the shared pair as the rows
@@ -339,7 +344,11 @@ before touching anything under `src/pages/meetings/**`.
    written back into the shared pair. **What would make this wrong, and it is
    still open:** stale per-day times surviving a weekday being unchecked and
    **re-checked** could resurrect a time the coach believed they had removed.
-   Criterion 9 covers N→1, not N→1→N.
+   Criterion 9 covers N→1, not N→1→N. **A third open sibling, surfaced by round
+   3 and left deliberately unspecified:** after criterion 8's sequence the shared
+   pair still holds the stale inverted values, so checking a *third* weekday
+   would seed row 3 from that stale pair rather than from anything the coach has
+   since fixed. Handle it if it is cheap; disclose it in the PR if it is not.
 
 ## 8. Follow-up to file before the PR opens (item 20)
 

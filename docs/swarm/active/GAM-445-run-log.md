@@ -172,3 +172,25 @@ the next reader has to infer.
   `run_in_background: false`; opus pin self-applying.
   **If this line is the last one in this file, the run died holding this
   subagent.**
+- **20:19Z — `checker-premise` round 3 VERDICT: DISPATCH.** Subagent returned;
+  the run did not die holding it. 35K tokens, 11 tool uses, ~2 min — a quarter
+  the cost of a full round, which is what "scoped confirmation, not re-audit"
+  was supposed to buy. **Item 19 is now satisfied: the packet has a DISPATCH
+  verdict and may reach a worker.** No escalation to the human owner is needed,
+  and the commitment made at 20:15Z was not called on.
+
+  All six confirmation items landed. The one that mattered most was item 6, the
+  integration read no earlier round had done: §3.2 (hide the pair), §3.5 (replace
+  the validity term), criterion 3 (exactly two time fields at ≤1 weekday),
+  criterion 8 (the trap) and criterion 9 (N→1 write-back) were checked as **one
+  implementation** and found mutually consistent — including that
+  `test.tsx:979-1014` selects Mon only, so it survives unedited exactly as
+  criterion 3 requires.
+
+  Round 3 parked four notes rather than blocking on them. I folded two into the
+  packet because they are cheap and one prevents a false negative: criterion 8
+  now names its setup preconditions (title + date range must be filled, since
+  `:1107` gates on all three terms — a checker omitting them would measure
+  `disabled=true` on a *correct* build and call it a failure), and §7.5 now
+  carries the 1→N→N+1 stale-seed sibling. Two NIT citation fixes applied
+  (`Dow` is at `format.ts:202`, not `:201`; `insertSessions` is `:1102-1115`).
