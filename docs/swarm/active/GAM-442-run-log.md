@@ -263,3 +263,34 @@ on the same grounds.
   deaths at the same dispatch as evidence about the dispatch, not about the
   packet. The packet needs no further gating; `supabase/` would still be
   untouched.
+
+- **11:38Z — `worker-implementer` VERDICT: work delivered, two commits.**
+  Returned, waited on, read in full. **Run 1's loss is recovered.** The worker
+  ran a real PostgreSQL 16.15 cluster with all 24 applicable migrations and
+  returned SQL + real terminal output for every §6 proof rather than a
+  description of one.
+
+  - `fc202ef` — the substantive commit: all three §2 files, 1127 insertions.
+  - `8d84b05` — assertions file only (+29/-1), so `replay.py` can parse a
+    tally line; disclosed by the worker as a tooling constraint, not a
+    requirements change.
+
+  Shape 1 taken (`count(distinct es.id)` + `count(a.id)`), stated in the
+  migration header as §4.1 requires. Headline results: (a) E1 = **75.0**
+  hand-computed and measured; (a2) `held_ct` 2/1/20 cross-checked against a
+  direct `count(*)` on `event_sessions`; (b) both NULL cases NULL, not `0.0`;
+  (c) zero-session event yields exactly 1 row; (d) weak-owner run returned
+  **0** and flipping `security_invoker` moved it 0 → 6 → 0, localising the
+  cause; (e) the exact three-row acl shape the packet predicted; (f) row counts
+  `1 | 3 | 1 | 1` with byte-identical sha256 before/after; (g) all three
+  mutants red at exit 3, with (b1)/(b2)/(c) staying **green** under mutant 3
+  exactly as the gate predicted — which is the proof (a2) is the sole guard on
+  `held_ct`; (h) five of six gates PASS, gate 6 legitimately skipped, and the
+  worker says five rather than rounding up.
+
+  (b3) reported under a **Known Risk** heading with all four numbers, not as a
+  passing criterion. Both pre-existing `main` defects reproduced on a virgin
+  cluster and **not** repaired — they are item 20 follow-ups for this
+  orchestrator, recorded below.
+
+  No dispute filed. Worker did not self-certify. `checker-reviewer` next.
