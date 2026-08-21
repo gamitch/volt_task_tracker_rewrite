@@ -63,3 +63,45 @@ judgment needed at claim time).
   to draft-PR-ready. If this line is the last one in this file, the run
   died after receiving the worker's verdict, before independent
   verification.
+- 2026-08-21: **Independent verification complete.** Read the full diff
+  (`27dbd9a..266290d`) line by line: exactly the two Allowed Files touched,
+  `GOAL_MILESTONES` logic byte-identical (only relocated),
+  `showSeasonSetupCard` gate absent from the diff entirely. Cross-checked
+  the worker's F-2 (`xstyle` nonfunctional) claim independently —
+  confirmed `vite.config.ts` plugins are `[react()]` only, no StyleX
+  plugin — and confirmed `Card`'s `style` prop is real
+  (`node_modules/@astryxdesign/core/dist/Card/Card.d.ts`), not
+  hallucinated. Replayed two mutations directly on this branch (commit
+  first, mutate, revert, re-verify per item 26's fast-tier rule): (1)
+  forcing `showSeasonSetupCard` to `false` turned the two `HOME-04`
+  admin-gate tests red (`expected 'Fixture Active Season...' to contain
+  'Season setup'`); (2) renaming `GOAL_MILESTONES[0]` from 25 to 26 turned
+  the BEH-01 toast test red. Both reverted clean, both green again after.
+  `npm ci` baseline measured properly: spun up a disposable worktree at
+  the branch's merge-base `a5d6909`, ran the full suite there —
+  102 files / 2594 tests — which exactly matches the worker's own
+  post-change count (no tests added or lost). Ran `gate-run
+  --require-clean`: format:check FAILED first pass (worker's diff wasn't
+  Prettier-clean) — fixed with `npx prettier --write` on the same two
+  files (whitespace-only), re-ran, all six gates PASS at `a7d0440`. Then
+  ran `e2e-personas`: wrote
+  `tests/e2e-personas/gam438-coach-home-restructure.spec.ts`, stood up the
+  harness (`sudo bash tests/e2e-harness/start.sh` — plain `chown
+  postgres`/`su postgres` need root in this container, `sudo` supplied
+  it), built+served the real bundle, and it passed against the real
+  browser — full-width goal panel with 25/50/75/100 ticks, 8-tile
+  secondary grid, no Season setup card for coach. Screenshot committed at
+  `tests/e2e-personas/screenshots/438-coach-dashboard.png`. Deliberately
+  did NOT exercise the admin-sees-the-card branch live: `hasGoalsConfigured`
+  is hardcoded `true` in the real loader (schema-guaranteed via
+  `default_goal_hours not null`), so reaching it live means
+  `teams.length === 0`, and `students.team_id references teams(id) on
+  delete restrict` — emptying `teams` in this seed isn't a safe,
+  reversible mutation the way the other harness specs' deletes are. That
+  branch stays covered by `CoachHome.test.tsx`'s `HOME-04` block plus the
+  mutation replay above. Harness torn down (`sudo bash
+  tests/e2e-harness/stop.sh`), tree clean. Final gate run at `d77a347`:
+  all six PASS, baseline 2594 (+0) full / 116 baseline, 228 actual (+112)
+  scoped. If this line is the last one in this file, the run died after
+  verification, before finalizing the PR body and moving the issue to
+  In Review.
