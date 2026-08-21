@@ -220,3 +220,24 @@ holding that subagent.*
     write-then-read-back of all four columns) was reserved for the
     orchestrator, and the 768px header measurement was moot because it took
     the packet's **pre-approved own-row fallback** placement.
+- **16:48Z — PR #221 body finalized-but-for-evidence and the draft flag
+  cleared, 30 minutes ahead of the credential deadline.** This inverts AGENTS.md
+  wall 3's usual ordering ("finalize the body before clearing the draft flag")
+  and the reason is measured, not stylistic: the only remaining
+  credential-bound action was `gh pr ready`, the credential dies at
+  `17:18:28Z`, and the next step is a **blocking** `checker-reviewer` of unknown
+  runtime. Clearing now strictly dominates — if the credential outlives the
+  checker I still edit the body; if it does not, the outcome is an open,
+  non-draft PR carrying a substantively complete body plus this log and the
+  packet on the branch, instead of a PR stranded in draft forever. The body's
+  Verification section says plainly that the evidence blocks are pending, so
+  nothing is being claimed that has not happened.
+  `.claude/skills/pr-body/scripts/check.mjs` → `OK declaration closes GAM-439`,
+  exit 0.
+- **16:49Z — DISPATCHED `checker-reviewer` (opus pin), `run_in_background:
+  false`.** Grading `79b74ee` against packet §6's nine acceptance criteria and
+  the constitution. Told explicitly that it must inspect the artifact rather
+  than the worker's summary, and must re-run the six gates itself rather than
+  quote the worker's figures.
+  *If this line is the last one in this file, the run died holding this
+  subagent.*
