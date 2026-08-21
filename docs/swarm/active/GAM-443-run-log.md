@@ -236,3 +236,20 @@ State inherited and verified by this run, not assumed:
 
   **The owner can overrule this**; it is called out in the close-out comment
   and in PR #223's body rather than buried here.
+
+- **11:36Z — packet revision 3 pushed.** All 11 findings transcribed: both
+  mutation counts corrected to their post-move measurements with an explicit
+  "pre-move it is 1/9 — reporting that means you mutated the wrong copy"; the
+  `1440` meridiem rule rewritten so the general branch cannot swallow it, plus
+  the missing criterion-5 case; criterion 4's unsatisfiable grep replaced; the
+  `dow: 7` cast authorized; the `startMinutes: 1440` assertion narrowed to
+  `toThrow(RangeError)`; the `@position` sentence about `dates.ts` corrected;
+  least-confident 6 and 7 amended with what the gate actually found.
+
+- **11:37Z — dispatching `worker-implementer` on packet revision 3,
+  `run_in_background: false`, on its pinned default model (sonnet).** No item-18
+  override: this touches no migration, no RLS or `security definer`, no
+  metric-view SQL, and no auth/session/role logic. Item 25's second obligation
+  is explicit that a topic sounding important is not a trigger, and the HEAVY
+  process tier is a separate axis from the worker model tier. **If this line is
+  the last one in this file, the run died holding this subagent.**
