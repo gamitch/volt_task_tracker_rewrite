@@ -104,3 +104,21 @@ last line says what the run was holding when it died.
   0 eslint errors.
 
 - **05:34Z — revising the packet (round 2 of the 19a two-round cap).**
+
+- **05:40Z — packet revision 2 written**, incorporating all 9 findings: the
+  BLOCKER criterion replaced with the gate's measured 9-tests-red mutation and
+  an explicit "do not attempt the impossible one, and do not report a red run
+  that did not happen"; the `dates.ts` relationship decided and required in
+  `format.ts`'s `@position` block; `buildScheduleChips` fully specified
+  (`((h+11)%12)+1`, `endMinutes` 1..1440, `RangeError` on malformed input,
+  midnight-spanning explicitly out of scope, no `Date`/`Intl` at all); the
+  count corrected to 16/14; an explicit export list; `MeetingsList.tsx`'s four
+  lying doc sites named; gate baselines 2598/102 and 141 written in. Two
+  least-confident items closed by the gate's citations, two new ones declared.
+
+- **05:41Z — dispatching `checker-premise` round 2, SCOPED (item 19b), model
+  opus, `run_in_background: false`.** Scoped rather than a full re-audit
+  because round 1 physically built and measured the prescription green, so
+  re-auditing settled ground is what 19b says not to spend a round on. Round 2
+  attacks only what revision 2 newly wrote. **If this line is the last one in
+  this file, the run died holding this subagent.**
