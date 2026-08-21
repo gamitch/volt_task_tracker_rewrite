@@ -34,7 +34,13 @@ export type EventType = 'meeting' | 'outreach' | 'competition';
 export const EVENT_TYPE_BADGE = {
   meeting: { variant: 'purple', label: 'Meeting' }, // Meeting Violet
   outreach: { variant: 'blue', label: 'Outreach' }, // Circuit Blue
-  competition: { variant: 'orange', label: 'Competition' }, // Comp Orange
+  // D020 (GAM-436): was `orange` ("Comp Orange", DES-04). Orange is now the
+  // BRAND accent, so an orange badge reads as "selected" rather than as a
+  // category -- the one consequence D020 puts inside its own scope. Teal is
+  // the furthest remaining hue from meeting-purple and outreach-blue, and
+  // unlike red/green/yellow it carries no DES-05 status meaning (those map to
+  // error/success/warning for Absent/Present/Late).
+  competition: { variant: 'teal', label: 'Competition' }, // Comp Teal
 } as const satisfies Record<EventType, { variant: BadgeVariant; label: string }>;
 
 /**

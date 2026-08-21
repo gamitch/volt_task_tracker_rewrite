@@ -245,10 +245,13 @@ describe('buildDisplayRows -- row-count and per-type signup-null cross-checks', 
 });
 
 describe('EVENT_TYPE_BADGE / SESSION_STATUS_BADGE -- DES-04 / status variant mappings', () => {
-  it('DES-04: meeting=purple, outreach=blue, competition=orange', () => {
+  // D020 (GAM-436): competition was DES-04's `orange`. Orange is now the brand
+  // accent, so an orange badge reads as "selected" rather than as a category;
+  // D020 puts the reassignment in its own scope. Meeting and outreach unchanged.
+  it('DES-04 as amended by D020: meeting=purple, outreach=blue, competition=teal', () => {
     expect(EVENT_TYPE_BADGE.meeting).toEqual({ variant: 'purple', label: 'Meeting' });
     expect(EVENT_TYPE_BADGE.outreach).toEqual({ variant: 'blue', label: 'Outreach' });
-    expect(EVENT_TYPE_BADGE.competition).toEqual({ variant: 'orange', label: 'Competition' });
+    expect(EVENT_TYPE_BADGE.competition).toEqual({ variant: 'teal', label: 'Competition' });
   });
 
   it('session status: scheduled=info, completed=success, canceled=error (canceled visually distinct)', () => {

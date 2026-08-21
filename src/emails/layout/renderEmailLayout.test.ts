@@ -29,9 +29,11 @@ describe('renderEmailLayout (EML-01 shared branded layout)', () => {
     expect(html).toContain('volt-wordmark');
   });
 
-  it('uses the violet accent color (light mode literal + dark-mode override)', () => {
-    expect(ACCENT_LIGHT).toBe('#5B2EE5');
-    expect(ACCENT_DARK).toBe('#9B7BFF');
+  // D020 (GAM-436): was the violet accent. These pin the email layer to
+  // `volt.ts`'s accent tokens by hand -- `constants.ts` states that invariant.
+  it('uses the Tracker Orange accent color (light mode literal + dark-mode override)', () => {
+    expect(ACCENT_LIGHT).toBe('#A8560A');
+    expect(ACCENT_DARK).toBe('#f79a4a');
     expect(html).toContain(ACCENT_LIGHT);
     expect(html).toContain(ACCENT_DARK);
     expect(html).toContain('prefers-color-scheme: dark');
