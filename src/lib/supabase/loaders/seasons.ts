@@ -286,6 +286,41 @@ export function makeUpdateSeason(
 export const updateSeason: OnUpdateSeasonFn = makeUpdateSeason();
 
 /**
+ * GAM-439: the goal-only write path. Deliberately touches ONE column, so a
+ * caller holding a stale copy of the season cannot revert `name`,
+ * `starts_on` or `ends_on` -- the corruption GAM-439 was filed for.
+ * Same single-column discipline `makeTogglePrivacy`
+ * (`./leaderboard_privacy.ts`) already uses on this table, and the
+ * write-side counterpart of `makeUpdateSeason`'s own "never touches
+ * `is_active`" rule above.
+ *
+ * NOT a replacement for `updateSeason`: `SeasonSettings` edits all four
+ * fields from a form that shows all four, and its full-row write is correct
+ * there.
+ */
+export interface UpdateSeasonGoalPayload {
+  id: string;
+  defaultGoalHours: number;
+}
+
+export type OnUpdateSeasonGoalFn = (payload: UpdateSeasonGoalPayload) => Promise<void>;
+
+export function makeUpdateSeasonGoal(
+  getClient: () => SupabaseClient = getSupabaseClient,
+): OnUpdateSeasonGoalFn {
+  return runMutation<UpdateSeasonGoalPayload, void>(
+    (client, payload) =>
+      client
+        .from('seasons')
+        .update({ default_goal_hours: payload.defaultGoalHours })
+        .eq('id', payload.id),
+    getClient,
+  );
+}
+
+export const updateSeasonGoal: OnUpdateSeasonGoalFn = makeUpdateSeasonGoal();
+
+/**
  * `SeasonSettings.tsx`'s own default `onSetActiveSeason` -- module doc's own
  * Trap #1 section above documents the two-step contract and its disclosed
  * partial-failure risk in full; this is that implementation. `deactivate`/

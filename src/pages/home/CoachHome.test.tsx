@@ -2250,3 +2250,235 @@ describe('<CoachHome /> T203 -- Leaderboard CSS-nesting fix, jsdom-provable stru
     expect(section!.closest('.astryx-card')).not.toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// GAM-439: inline admin-only editor for the active season's default goal
+// hours, writing through the new column-scoped `updateSeasonGoal` loader
+// (`../../lib/supabase/loaders/seasons.ts`). Covers acceptance criteria
+// A4 (role gating), A5 (all four write states), A6 (a successful save
+// re-fetches the active season), and A8 (D5 does not disturb the pre-existing
+// season-status literals -- see the unmodified describe block above this
+// one, `<CoachHome /> T155 -- season-status literals (criterion 3)`, whose
+// tests are NOT touched by this task; that IS the A8 proof).
+//
+// `getFieldControl`/`setNativeInputValue` mirror `AttendancePanel.test.tsx`'s
+// own helpers (that file's own comment: "proven there to resolve
+// `CheckboxInput`/`NumberInput`'s real `<label htmlFor>` pairs").
+// ---------------------------------------------------------------------------
+
+/** Locates a labeled input via Astryx `Field`'s real `<label htmlFor>` --
+ * same helper `AttendancePanel.test.tsx`/`MarkDayCompleteDialog.test.tsx`
+ * already established. */
+function getFieldControl(labelText: string): HTMLElement {
+  const labels = Array.from(container.querySelectorAll('label'));
+  const label = labels.find((el) => el.textContent?.trim().startsWith(labelText));
+  if (!label) {
+    throw new Error(
+      `No label found for "${labelText}". Labels present: ${labels.map((l) => l.textContent).join(' | ')}`,
+    );
+  }
+  const forId = label.getAttribute('for');
+  if (!forId) throw new Error(`Label "${labelText}" has no htmlFor`);
+  const control = document.getElementById(forId);
+  if (!control) throw new Error(`No control found for id "${forId}"`);
+  return control;
+}
+
+function setNativeInputValue(input: HTMLInputElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+  setter?.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function seasonGoalInput(): HTMLInputElement {
+  return getFieldControl('Default season goal') as HTMLInputElement;
+}
+
+/** `startsWith`, not exact equality: while `isLoading`, `Button` (Astryx
+ * `Button.tsx`) appends a live-region "Loading" announcement inside the
+ * SAME button element, so `textContent` becomes `"SaveLoading"` -- the
+ * button itself is never unmounted/replaced (same DOM node throughout),
+ * only its own accessible content changes. */
+function seasonGoalSaveButton(): HTMLButtonElement {
+  const button = Array.from(container.querySelectorAll('button')).find((b) =>
+    b.textContent?.trim().startsWith('Save'),
+  );
+  if (!button) throw new Error('Save button not found');
+  return button as HTMLButtonElement;
+}
+
+describe('<CoachHome /> GAM-439 -- admin-only season-goal editor role gating (A4)', () => {
+  it('does NOT render for a coach', async () => {
+    renderAsUser(COACH_USER, { loadData: fixtureLoadData, nowFn: () => FIXTURE_REFERENCE_NOW });
+    await flushMicrotasks();
+    expect(container.textContent).not.toContain('Default season goal');
+  });
+
+  it('renders for an admin, with the IDENTICAL data (isolates the role variable)', async () => {
+    renderAsUser(ADMIN_USER, { loadData: fixtureLoadData, nowFn: () => FIXTURE_REFERENCE_NOW });
+    await flushMicrotasks();
+    expect(seasonGoalInput().value).toBe(String(FIXTURE_ACTIVE_SEASON.defaultGoalHours));
+    expect(container.textContent).toContain(
+      'Applies to every student unless overridden in Roster.',
+    );
+  });
+});
+
+describe('<CoachHome /> GAM-439 -- season-goal editor write states (A5)', () => {
+  it('idle/populated: seeded from the real defaultGoalHours, Save disabled while unchanged', async () => {
+    renderAsUser(ADMIN_USER, { loadData: fixtureLoadData, nowFn: () => FIXTURE_REFERENCE_NOW });
+    await flushMicrotasks();
+    expect(seasonGoalInput().value).toBe(String(FIXTURE_ACTIVE_SEASON.defaultGoalHours));
+    expect(seasonGoalSaveButton().hasAttribute('disabled')).toBe(true);
+  });
+
+  it('in-flight: Button isLoading (aria-busy + disabled) and NumberInput isDisabled while the write is pending', async () => {
+    let resolveUpdate: (() => void) | null = null;
+    const pending = new Promise<void>((resolve) => {
+      resolveUpdate = resolve;
+    });
+    const updateSeasonGoalSpy = vi.fn(() => pending);
+    renderAsUser(ADMIN_USER, {
+      loadData: fixtureLoadData,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+      updateSeasonGoal: updateSeasonGoalSpy,
+    });
+    await flushMicrotasks();
+
+    act(() => {
+      setNativeInputValue(seasonGoalInput(), '150');
+    });
+    act(() => {
+      seasonGoalSaveButton().dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+
+    expect(updateSeasonGoalSpy).toHaveBeenCalledWith({
+      id: FIXTURE_ACTIVE_SEASON.id,
+      defaultGoalHours: 150,
+    });
+    expect(seasonGoalSaveButton().getAttribute('aria-busy')).toBe('true');
+    expect(seasonGoalSaveButton().hasAttribute('disabled')).toBe(true);
+    expect(seasonGoalInput().hasAttribute('disabled')).toBe(true);
+
+    // Settle the pending write so it doesn't leak into another test.
+    await act(async () => {
+      resolveUpdate?.();
+      await pending;
+    });
+  });
+
+  it('error: the Banner shows hand-authored save copy (never the raw/loader message), and the typed value is preserved', async () => {
+    const updateSeasonGoalSpy = vi.fn(async () => {
+      // Real shape of a rejected SupabaseLoaderError (a plain object, not
+      // an Error instance -- module doc #17's own disclosed trap), same
+      // literal shape the pre-existing 'error' season-status test above
+      // already throws.
+      throw { code: '500', message: 'raw db message the UI must not show', cause: null };
+    });
+    renderAsUser(ADMIN_USER, {
+      loadData: fixtureLoadData,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+      updateSeasonGoal: updateSeasonGoalSpy,
+    });
+    await flushMicrotasks();
+
+    act(() => {
+      setNativeInputValue(seasonGoalInput(), '150');
+    });
+    act(() => {
+      seasonGoalSaveButton().dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain("Couldn't save the season goal");
+    // The round-1 trap this packet named: `SupabaseLoaderError.message` is
+    // fixed LOAD copy, and the raw underlying message is never DES-16-safe
+    // -- neither may reach the DOM under this SAVE title.
+    expect(container.textContent).not.toContain('raw db message the UI must not show');
+    expect(container.textContent).not.toContain("Couldn't load this data");
+    // The typed value survives the error -- the admin does not retype it.
+    expect(seasonGoalInput().value).toBe('150');
+    expect(seasonGoalSaveButton().hasAttribute('disabled')).toBe(false);
+  });
+
+  it('success: shows a confirmation, reachable only because D5 keeps CoachHomeContent mounted across the post-save refresh', async () => {
+    const updateSeasonGoalSpy = vi.fn(async () => {});
+    renderAsUser(ADMIN_USER, {
+      loadData: fixtureLoadData,
+      nowFn: () => FIXTURE_REFERENCE_NOW,
+      updateSeasonGoal: updateSeasonGoalSpy,
+    });
+    await flushMicrotasks();
+
+    act(() => {
+      setNativeInputValue(seasonGoalInput(), '150');
+    });
+    act(() => {
+      seasonGoalSaveButton().dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('Season goal saved');
+    // D5 in effect: the rest of the dashboard is still rendered, not the
+    // skeleton, across the post-save refresh this same click triggered.
+    expect(container.textContent).toContain('Events in next 7 days');
+    expect(container.textContent).not.toContain('Loading Home');
+  });
+});
+
+describe('<CoachHome /> GAM-439 -- a successful save re-fetches the active season (A6)', () => {
+  it('calls the injected loadActiveSeason a second time (1 -> 2) after a successful save', async () => {
+    let loadActiveSeasonCalls = 0;
+    const loadActiveSeason: LoadActiveSeasonFn = async () => {
+      loadActiveSeasonCalls += 1;
+      return FIXTURE_ACTIVE_SEASON;
+    };
+    const updateSeasonGoalSpy = vi.fn(async () => {});
+    renderAsUser(
+      ADMIN_USER,
+      {
+        loadData: fixtureLoadData,
+        nowFn: () => FIXTURE_REFERENCE_NOW,
+        updateSeasonGoal: updateSeasonGoalSpy,
+      },
+      loadActiveSeason,
+    );
+    await flushMicrotasks();
+    expect(loadActiveSeasonCalls).toBe(1);
+
+    act(() => {
+      setNativeInputValue(seasonGoalInput(), '150');
+    });
+    act(() => {
+      seasonGoalSaveButton().dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+
+    expect(loadActiveSeasonCalls).toBe(2);
+  });
+});
+
+describe('<CoachHome /> GAM-439 -- A1: the default write seam is the real updateSeasonGoal export', () => {
+  it('with no injected updateSeasonGoal, a save attempt reaches the real (unconfigured-in-jsdom) loader and surfaces this control\'s own error state -- proof the default is wired to a real write, not a fixture that would silently "succeed"', async () => {
+    renderAsUser(ADMIN_USER, { loadData: fixtureLoadData, nowFn: () => FIXTURE_REFERENCE_NOW });
+    await flushMicrotasks();
+
+    act(() => {
+      setNativeInputValue(seasonGoalInput(), '150');
+    });
+    act(() => {
+      seasonGoalSaveButton().dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushMicrotasks();
+
+    // The real `updateSeasonGoal` (`../../lib/supabase/loaders/seasons.ts`)
+    // calls the real, unconfigured-in-jsdom `getSupabaseClient()`, which
+    // throws `SupabaseNotConfiguredError` -- normalized by `runMutation`
+    // into a rejected `SupabaseLoaderError`, landing on this control's own
+    // error banner. A stub/fixture default would have resolved successfully
+    // instead and shown "Season goal saved" here.
+    expect(container.textContent).toContain("Couldn't save the season goal");
+    expect(container.textContent).not.toContain('Season goal saved');
+  });
+});

@@ -668,8 +668,71 @@
  *     accent-tinted border on the one goal-related tile per row) without
  *     hand-copying production's own raw hex values, which are that app's
  *     palette, not this one's.
+ *
+ * -----------------------------------------------------------------------
+ * 17. GAM-439 -- inline admin-only editor for the active season's default
+ *     goal hours, writing through a NEW column-scoped loader.
+ *
+ * `updateSeason` (`../../lib/supabase/loaders/seasons.ts`) is a full-row
+ * write (`name`, `starts_on`, `ends_on`, `default_goal_hours`), and this
+ * page's own `activeSeason.season` is cached once per mount by
+ * `SeasonProvider` -- reusing `updateSeason` from here would silently revert
+ * `name`/`starts_on`/`ends_on` to whatever this tab last loaded, last-write-
+ * wins, the exact corruption GAM-439 was filed for. `SeasonGoalEditor` below
+ * instead writes through `updateSeasonGoal` (new, same file), which touches
+ * ONLY `default_goal_hours` -- the write-side counterpart of
+ * `makeUpdateSeason`'s own "never touches `is_active`" discipline, applied
+ * to the three columns this control has no business writing. `updateSeason`
+ * is untouched; `SeasonSettings.tsx`'s full-row write from its own
+ * all-four-fields form remains correct there.
+ *
+ * Admin-only: rendered only when `user.role === 'admin'` (the `user` prop
+ * `CoachHomeContent` already receives -- no second `useAuth()` call, same
+ * `user.role === 'admin' && …` gate module doc #6's HOME-04 card already
+ * uses). `/settings/season` withholds this capability from coaches today;
+ * adding it on the dashboard without a gate would be a silent privilege
+ * expansion. This is a UI-only consistency choice, not a claimed security
+ * control -- RLS (`staff_all` on `seasons`) already permits any staff writer.
+ * `RequireRole` is deliberately NOT used here (it would eject a coach from
+ * the whole dashboard merely for the control's presence, per
+ * `AdminToggles.tsx`'s own governing precedent); rendering nothing for a
+ * non-admin viewer is the correct shape for an embedded widget.
+ *
+ * D5 -- stale-while-revalidate retention, so the write's own success state is
+ * reachable at all. `SeasonProvider.refresh()` always re-enters
+ * `status: 'loading'`, which previously meant `CoachHomeContent` unmounted on
+ * every refresh -- a save's own success confirmation would be destroyed in
+ * the tick it was created, and every save would double every dashboard
+ * fetch. `CoachHome` (outer wrapper, below) now retains the last `'ready'`
+ * season in a ref and, once one has been seen this mount, keeps rendering
+ * `CoachHomeContent` with that retained season instead of the skeleton while
+ * a refresh is in flight -- `refresh()` itself is unchanged, so every other
+ * `useActiveSeason()` consumer (eight of them, unmodified) keeps its current
+ * behavior exactly; this retention is local to this file. First mount is
+ * unchanged -- no ready season has been seen yet, so the skeleton still
+ * shows. The `'none'` and `'error'` branches are unchanged. Both the
+ * retained and the live branches render `CoachHomeContent` via one shared
+ * `renderContent` helper (same element type/position either way, so the
+ * retained branch never remounts the subtree it exists to keep alive), and
+ * `key={season.id}` is mandatory on it: retention spans a *refresh*, not a
+ * *change* -- without the key, a genuine season switch would leave
+ * `useMilestoneToasts`' internal state (its toast ids carry no `seasonId`)
+ * stale across seasons and collide; the key does not change on a same-season
+ * refresh, so this costs D5 nothing. Disclosed consequence: a failed
+ * post-save refresh now replaces a working dashboard with the `'error'`
+ * banner (previously that banner was reachable only via its own Retry
+ * button) -- the save itself has already committed, and Retry recovers.
+ *
+ * `SeasonGoalEditor`'s own four DES-12 states: idle (current value),
+ * in-flight (`Button isLoading`, `NumberInput isDisabled`), error (a
+ * `Banner status="error"` with hand-authored copy -- `SupabaseLoaderError
+ * .message` is fixed LOAD copy, `"Couldn't load this data..."`, wrong under
+ * a SAVE title, so it is never passed through -- with the typed value left
+ * in the input so the user does not retype it), and success (a dismissable
+ * `Banner status="success"`, then `onSeasonChanged()` -- reachable only
+ * because of D5 above).
  */
-import { useEffect, useId, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Badge,
@@ -685,6 +748,7 @@ import {
   LayoutContent,
   List,
   ListItem,
+  NumberInput,
   ProgressBar,
   Skeleton,
   Text,
@@ -712,6 +776,8 @@ import {
 import { loadCoachHomeData } from '../../lib/supabase/loaders/coachHome';
 import { loadLeaderboardData } from '../../lib/supabase/loaders/leaderboard';
 import { loadPrivacySetting } from '../../lib/supabase/loaders/leaderboard_privacy';
+import { updateSeasonGoal, type OnUpdateSeasonGoalFn } from '../../lib/supabase/loaders/seasons';
+import type { SeasonRow } from '../../lib/supabase/types';
 import {
   Leaderboard,
   type LoadLeaderboardDataFn,
@@ -1986,6 +2052,115 @@ function KpiCard({
   );
 }
 
+// ---------------------------------------------------------------------------
+// GAM-439 (module doc #17): inline admin-only editor for the active season's
+// default goal hours.
+// ---------------------------------------------------------------------------
+
+/** Hand-authored SAVE copy (module doc #17) -- `SupabaseLoaderError.message`
+ * is fixed LOAD copy (`loader.ts`'s own `DEFAULT_LOADER_ERROR_MESSAGE`) and
+ * must never be passed through under this SAVE title. */
+const SEASON_GOAL_SAVE_ERROR_DESCRIPTION =
+  'Something went wrong saving the season goal. Check your connection and try again.';
+
+interface SeasonGoalEditorProps {
+  seasonId: string;
+  defaultGoalHours: number;
+  updateSeasonGoal: OnUpdateSeasonGoalFn;
+  /** Wired to `activeSeason.refresh` by the outer `CoachHome` wrapper --
+   * called once a save has succeeded (module doc #17 / D5). */
+  onSeasonChanged: () => void;
+}
+
+type SeasonGoalSaveState =
+  { kind: 'idle' } | { kind: 'saving' } | { kind: 'error' } | { kind: 'success' };
+
+/**
+ * GAM-439: writes through `updateSeasonGoal` -- a column-scoped mutation
+ * touching ONLY `default_goal_hours` (module doc #17) -- never the full-row
+ * `updateSeason` `SeasonSettings.tsx` uses. Rendered only for
+ * `user.role === 'admin'` by the caller (D3, module doc #17); this
+ * component itself does not re-check role.
+ */
+function SeasonGoalEditor({
+  seasonId,
+  defaultGoalHours,
+  updateSeasonGoal: onUpdateSeasonGoal,
+  onSeasonChanged,
+}: SeasonGoalEditorProps): ReactNode {
+  const [value, setValue] = useState<number | null>(defaultGoalHours);
+  const [saveState, setSaveState] = useState<SeasonGoalSaveState>({ kind: 'idle' });
+
+  const isSaving = saveState.kind === 'saving';
+  const isUnchanged = value === defaultGoalHours;
+  const isInvalid = value === null || value < 0;
+  const isSaveDisabled = isSaving || isUnchanged || isInvalid;
+
+  async function handleSave(): Promise<void> {
+    if (isSaveDisabled || value === null) {
+      return;
+    }
+    setSaveState({ kind: 'saving' });
+    try {
+      await onUpdateSeasonGoal({ id: seasonId, defaultGoalHours: value });
+      // Success is what D5 (module doc #17) exists to make reachable: this
+      // component does not unmount when `onSeasonChanged()` triggers a
+      // season refresh, so the confirmation below genuinely renders instead
+      // of being destroyed in the same tick it was created.
+      setSaveState({ kind: 'success' });
+      onSeasonChanged();
+    } catch {
+      // Trap (module doc #17): `SupabaseLoaderError` is a plain object, not
+      // an `Error` instance, and its own `.message` is fixed LOAD copy --
+      // neither is used here. The typed value is deliberately left in
+      // `value` (not reset), so the admin does not have to retype it.
+      setSaveState({ kind: 'error' });
+    }
+  }
+
+  return (
+    <VStack gap={2}>
+      <HStack gap={3} vAlign="end" wrap="wrap">
+        <NumberInput
+          label="Default season goal"
+          value={value}
+          onChange={setValue}
+          isRequired
+          min={0}
+          units="hrs"
+          isDisabled={isSaving}
+          onEnter={handleSave}
+          status={saveState.kind === 'error' ? { type: 'error' } : undefined}
+        />
+        <Button
+          label="Save"
+          onClick={handleSave}
+          isLoading={isSaving}
+          isDisabled={isSaveDisabled}
+        />
+      </HStack>
+      <Text type="supporting" color="secondary">
+        Applies to every student unless overridden in Roster.
+      </Text>
+      {saveState.kind === 'error' && (
+        <Banner
+          status="error"
+          title="Couldn't save the season goal"
+          description={SEASON_GOAL_SAVE_ERROR_DESCRIPTION}
+        />
+      )}
+      {saveState.kind === 'success' && (
+        <Banner
+          status="success"
+          title="Season goal saved"
+          isDismissable
+          onDismiss={() => setSaveState({ kind: 'idle' })}
+        />
+      )}
+    </VStack>
+  );
+}
+
 // T138: `EVENT_TYPE_BADGE` now lives in `../../lib/eventTypeBadge` (imported
 // above), shared with `EventsTab.tsx`/`CalendarPage.tsx` instead of each
 // declaring its own copy. History: T080 corrected this file's mapping
@@ -2195,6 +2370,13 @@ export interface CoachHomeProps {
   /** Injectable clock for the 60-minute check-in boundary / 7-day window /
    * relative-time formatting (module doc #5). Defaults to the real clock. */
   nowFn?: () => Date;
+  /** GAM-439 (module doc #17): injectable seam for the inline admin-only
+   * season-goal editor's write. Defaults to the REAL `updateSeasonGoal`
+   * (`../../lib/supabase/loaders/seasons`) -- same "prop defaults to the
+   * real loader" convention every other seam on this interface already
+   * establishes (constitution item 27: the default must be the real
+   * export, not a fixture). */
+  updateSeasonGoal?: OnUpdateSeasonGoalFn;
 }
 
 /**
@@ -2252,6 +2434,18 @@ function CoachHomeLoadingSkeleton(): ReactNode {
  * called unconditionally before either conditional return, satisfying
  * Rules of Hooks the same way `KpiStrip`'s own module doc #1 describes for
  * its own two hooks.
+ *
+ * GAM-439 (D5, module doc #17): `lastReadySeasonRef` retains the last
+ * `'ready'` `SeasonRow` seen this mount. While `activeSeason.status ===
+ * 'loading'` AND a ready season has already been seen (a *refresh*, not the
+ * first mount), `renderContent` is called with the RETAINED season instead
+ * of returning the skeleton, so `CoachHomeContent` never unmounts across a
+ * post-save refresh -- see module doc #17 for the full rationale, including
+ * why this is confined to this file and does not touch `SeasonProvider`.
+ * `renderContent` is the single call site both the `'loading'` (retained)
+ * and `'ready'` (live) branches use, so they render `CoachHomeContent` as
+ * the same element type at the same position -- required for the retention
+ * to actually keep the subtree (and its in-flight save state) alive.
  */
 export function CoachHome({
   loadData = loadCoachHomeData,
@@ -2259,9 +2453,11 @@ export function CoachHome({
   loadLeaderboardData: loadLeaderboardDataProp = loadLeaderboardData,
   loadLeaderboardPrivacySetting: loadLeaderboardPrivacySettingProp = loadPrivacySetting,
   nowFn = () => new Date(),
+  updateSeasonGoal: updateSeasonGoalProp = updateSeasonGoal,
 }: CoachHomeProps = {}): ReactNode {
   const { user } = useAuth();
   const activeSeason = useActiveSeason();
+  const lastReadySeasonRef = useRef<SeasonRow | null>(null);
 
   if (user === null) {
     return (
@@ -2275,8 +2471,40 @@ export function CoachHome({
     );
   }
 
+  // Narrowed once, outside the closure below: a nested `function` declaration
+  // does not retain the `user === null` narrowing TypeScript performed above
+  // (closures over `function`-declared helpers are not narrowing-aware the
+  // way inline reads are), so `authedUser` re-states it as a `const` of the
+  // already-narrow `AuthUser` type for `renderContent` to close over.
+  const authedUser: AuthUser = user;
+
+  function renderContent(season: SeasonRow): ReactNode {
+    return (
+      <CoachHomeContent
+        key={season.id}
+        user={authedUser}
+        seasonId={season.id}
+        seasonName={season.name}
+        loadData={loadData}
+        loadDashboardData={loadDashboardDataProp}
+        loadLeaderboardData={loadLeaderboardDataProp}
+        loadLeaderboardPrivacySetting={loadLeaderboardPrivacySettingProp}
+        defaultGoalHours={season.defaultGoalHours}
+        updateSeasonGoal={updateSeasonGoalProp}
+        onSeasonChanged={activeSeason.refresh}
+        nowFn={nowFn}
+      />
+    );
+  }
+
   switch (activeSeason.status) {
     case 'loading':
+      // D5: stale-while-revalidate only for a REFRESH (a ready season has
+      // already been seen this mount) -- first mount still shows the
+      // skeleton, unchanged.
+      if (lastReadySeasonRef.current !== null) {
+        return renderContent(lastReadySeasonRef.current);
+      }
       return <CoachHomeLoadingSkeleton />;
     case 'none':
       return (
@@ -2300,19 +2528,8 @@ export function CoachHome({
         </VStack>
       );
     case 'ready':
-      return (
-        <CoachHomeContent
-          user={user}
-          seasonId={activeSeason.season.id}
-          seasonName={activeSeason.season.name}
-          loadData={loadData}
-          loadDashboardData={loadDashboardDataProp}
-          loadLeaderboardData={loadLeaderboardDataProp}
-          loadLeaderboardPrivacySetting={loadLeaderboardPrivacySettingProp}
-          defaultGoalHours={activeSeason.season.defaultGoalHours}
-          nowFn={nowFn}
-        />
-      );
+      lastReadySeasonRef.current = activeSeason.season;
+      return renderContent(activeSeason.season);
   }
 }
 
@@ -2339,6 +2556,15 @@ interface CoachHomeContentProps {
   loadLeaderboardPrivacySetting: LoadPrivacySettingFn;
   defaultGoalHours: number;
   nowFn: () => Date;
+  /** GAM-439 (module doc #17): injectable write seam for the inline
+   * season-goal editor. */
+  updateSeasonGoal: OnUpdateSeasonGoalFn;
+  /** GAM-439 (module doc #17): wired to the outer wrapper's
+   * `activeSeason.refresh` -- called after a successful goal save.
+   * `CoachHomeContent` does NOT call `useActiveSeason()` itself (would
+   * violate the "do not call the context hook twice" rule this same file
+   * already follows for `user`/D3). */
+  onSeasonChanged: () => void;
 }
 
 function CoachHomeContent({
@@ -2351,6 +2577,8 @@ function CoachHomeContent({
   loadLeaderboardPrivacySetting: loadLeaderboardPrivacySettingProp,
   defaultGoalHours,
   nowFn,
+  updateSeasonGoal: updateSeasonGoalProp,
+  onSeasonChanged,
 }: CoachHomeContentProps): ReactNode {
   const navigate = useNavigate();
   const loadState = useLoadState(() => loadData(seasonId), [loadData, seasonId]);
@@ -2516,6 +2744,20 @@ function CoachHomeContent({
                   />
                 </HStack>
               </HStack>
+
+              {/* GAM-439 (module doc #17): admin-only inline editor for the
+                  active season's default goal hours, own row directly
+                  beneath the header (the pre-approved fallback placement --
+                  the header `HStack` above already carries a title and two
+                  action buttons at `wrap="wrap"`). */}
+              {user.role === 'admin' && (
+                <SeasonGoalEditor
+                  seasonId={seasonId}
+                  defaultGoalHours={defaultGoalHours}
+                  updateSeasonGoal={updateSeasonGoalProp}
+                  onSeasonChanged={onSeasonChanged}
+                />
+              )}
 
               {stubNotice !== null && (
                 <Banner
