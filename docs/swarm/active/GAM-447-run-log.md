@@ -51,3 +51,16 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   Dispatched with `run_in_background: false`; the orchestrator is blocking on it
   now. **If this line is the last one in this file, the run died holding this
   subagent.**
+- 23:11Z — **`checker-premise` VERDICT: REVISE** (round 1 of the two item-19a
+  rounds). Three MAJOR, four MINOR, one NIT — all actionable, none a BLOCKER,
+  and it confirmed all three §3 blocker claims in substance. The ones that
+  changed the packet: (MAJOR-1) §1's "keep the props as-is" made §6.4's four
+  DES-12 states unsatisfiable — `SeriesCard` has **no callers anywhere**, so
+  additive optional props break nothing; (MAJOR-2) `Card` extends `BaseProps`
+  and spreads `...props`, so `style`/`data-*`/`aria-*` on `<Card>` are
+  authorized (precedent `CoachHome.tsx:643-670`) rather than item-2 findings;
+  (MAJOR-3) `xstyle` is **nonfunctional in this app** (F-2 — no StyleX plugin,
+  `stylex.create()` throws), and my "`pixel`/`proportional` idiom" sentence was
+  false — those are `TableColumn` width helpers. (MINOR-4) my
+  `MeetingsList.tsx:2019` citation was pre-rebase; that file is now 193 lines
+  and the seam is at `:120`.
