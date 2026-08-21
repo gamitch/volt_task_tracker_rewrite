@@ -87,3 +87,10 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
 - 23:25Z — **RE-DISPATCHED `checker-premise` (round 2, fresh agent, delta-scoped)**
   after the 529. Blocking on it with `run_in_background: false`. **If this line
   is the last one in this file, the run died holding this subagent.**
+- 23:27Z — **Round-2 re-dispatch ALSO died on `529 Overloaded`**, this time before
+  doing any work at all. Two independent 529s in seven minutes: the API is
+  overloaded right now, and this is infrastructure, not the packet. Item 19's
+  DISPATCH verdict is therefore **unobtainable on this run**, and I am not going
+  to invent one. Trying the worker dispatch next — if that also 529s, the
+  orchestrator implements directly (a declared item-26 deviation) or the run
+  stops and hands off, whichever the clock allows.
