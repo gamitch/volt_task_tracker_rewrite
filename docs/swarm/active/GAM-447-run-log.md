@@ -68,3 +68,14 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   the delta to the SAME `checker-premise` agent (its context is intact, so the
   round-2 re-check is a delta verification rather than a fresh audit).
   **If this line is the last one in this file, the run died holding that subagent.**
+- 23:20Z — **`checker-premise` round 2 FAILED without a verdict** — the agent
+  terminated on `API Error: 529 Overloaded`, a server-side fault, after
+  re-reading the revised packet but before emitting VERDICT. This is not a
+  REVISE and not a DISPATCH; it is a *missing* gate round, and it is recorded as
+  such rather than rounded up to a pass. Round 1's verdict stands as the last
+  real one: REVISE, all eight findings applied.
+- 23:21Z — Deadline arithmetic, done rather than guessed: PR credential dies
+  23:40:44Z (~19 min). `git push` survives it (long-lived PAT in the
+  extraheader) and so do Linear writes (`LINEAR_API_KEY`); `gh pr edit` and
+  `gh pr ready` do not. Updating the PR body on GitHub NOW, before the work is
+  finished, so the PR is informative even if the credential dies mid-run.
