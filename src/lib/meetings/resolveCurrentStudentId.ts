@@ -36,20 +36,17 @@
  * `vi.mock('.../loaders/meetings', ...)`) are unaffected -- all of them keep
  * importing from `../../lib/supabase/loaders/meetings` exactly as before.
  *
- * `CurrentViewerIdentity`/`ResolveCurrentStudentIdFn` are `import type` only
- * from `MeetingsList.tsx` -- erased at runtime, so this module creates no
- * bundle edge into that (lazy) page component, the same "type-only cross
- * reference into a page module is safe" precedent `loaders/students.ts`
- * already established for its own `LoadStudentHomeDataFn`/
- * `ResolveStudentScopeFn` type imports from `StudentHome.tsx`.
+ * GAM-444 §5 update: `CurrentViewerIdentity`/`ResolveCurrentStudentIdFn` now
+ * come from `./types` (`src/lib/meetings/types.ts`), not `MeetingsList.tsx`
+ * -- this closes the `lib -> pages` inversion the paragraph above used to
+ * describe. Still `import type` only, still erased at runtime; the
+ * `lib -> lib` edge this creates is not a cycle and carries no page-module
+ * bundle weight either way.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createLoader, type LoaderQueryResult } from '../supabase/loader';
 import { getSupabaseClient } from '../supabase/client';
-import type {
-  CurrentViewerIdentity,
-  ResolveCurrentStudentIdFn,
-} from '../../pages/meetings/MeetingsList';
+import type { CurrentViewerIdentity, ResolveCurrentStudentIdFn } from './types';
 
 interface StudentIdDbRow {
   id: string;

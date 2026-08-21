@@ -165,6 +165,21 @@
  * `vi.mock('.../loaders/meetings', ...)`) is unaffected -- see that new
  * file's own module doc for the full reasoning (measured bundle cost of NOT
  * relocating it: entry chunk +50.47 kB gz, 18 lazy chunks collapsed).
+ *
+ * -----------------------------------------------------------------------
+ * GAM-444 §5 update: the REST of this file's own `lib -> pages` inversion
+ * (unlike `resolveCurrentStudentId` above, this one really was a value
+ * import, not type-only) is now closed too. `buildCoachMeetingRows`/
+ * `buildStudentMeetingsData` and the eight types this file imports below now
+ * come from `../../meetings/coachModel`, `../../meetings/studentModel` and
+ * `../../meetings/types` -- not `../../../pages/meetings/MeetingsList` --
+ * per GAM-444's own packet §5, which measured this exact re-point (entry
+ * chunk unchanged, `MeetingsList` still a lazy chunk) before prescribing it.
+ * Every reference to `MeetingsList.tsx` elsewhere in this file's own module
+ * doc above is a historical record of where this logic was BUILT (T096/T122/
+ * T510/T605), not a claim about where it lives today -- left as-is per
+ * constitution item 30c rather than rewritten out from under the reasoning
+ * it recorded.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
@@ -174,18 +189,18 @@ import {
   type LoaderQueryResult,
 } from '../loader';
 import { getSupabaseClient } from '../client';
-import {
-  buildCoachMeetingRows,
-  buildStudentMeetingsData,
-  type AttendanceStatus,
-  type CancelMeetingSessionFn,
-  type CoachMeetingsData,
-  type EventType,
-  type LoadCoachMeetingsDataFn,
-  type LoadStudentMeetingsDataFn,
-  type SessionStatus,
-  type StudentMeetingsData,
-} from '../../../pages/meetings/MeetingsList';
+import type {
+  AttendanceStatus,
+  CancelMeetingSessionFn,
+  CoachMeetingsData,
+  EventType,
+  LoadCoachMeetingsDataFn,
+  LoadStudentMeetingsDataFn,
+  SessionStatus,
+  StudentMeetingsData,
+} from '../../meetings/types';
+import { buildCoachMeetingRows } from '../../meetings/coachModel';
+import { buildStudentMeetingsData } from '../../meetings/studentModel';
 import {
   computeMeetingSeriesReconcilePlan,
   type CreateMeetingsPayload,
