@@ -1,0 +1,25 @@
+{
+  "source": "e2e-personas",
+  "branch": "claude/gam-456-coach-dashboard-panel-consistency",
+  "commit": "8a52627",
+  "measuredAt": "2026-08-21T11:55:43Z",
+  "findings": [
+    {
+      "findingKey": "e2e-personas/coach-home-hours-by-team-top-events-unrounded",
+      "title": "Coach dashboard's \"Hours by team\" and \"Top events by student hours\" rows show raw unrounded float hours",
+      "severity": "MINOR",
+      "area": "w1",
+      "evidence": [
+        { "file": "src/pages/home/CoachHome.tsx", "line": 2128,
+          "quote": "endContent={<Text type=\"supporting\">{`${entry.confirmedHours}h`}</Text>}" },
+        { "file": "src/pages/home/CoachHome.tsx", "line": 2160,
+          "quote": "endContent={<Text type=\"supporting\">{`${entry.totalHours}h`}</Text>}" }
+      ],
+      "observed": "\"3.99999708h\" rendered for both the Volt Robotics 9911 row in Hours by team and the Library STEM Night row in Top events by student hours (tests/e2e-personas/screenshots/456-coach-dashboard-scroll-3.png, captured while running this GAM-456 spec against the real seeded harness data)",
+      "expected": "A rounded value, e.g. \"4.0h\" -- the same file's own GoalProjectionRowItem (CoachHome.tsx:2188) already formats the analogous confirmed/planned/goal hours with `.toFixed(1)` a few hundred lines below these two call sites",
+      "verifiedBy": "browser",
+      "reproduction": "bash tests/e2e-harness/start.sh && NODE_OPTIONS=--dns-result-order=ipv4first npx playwright test -c tests/e2e-harness/playwright.personas.config.ts tests/e2e-personas/gam456-coach-home-panel-consistency.spec.ts -- then open tests/e2e-personas/screenshots/456-coach-dashboard-scroll-3.png",
+      "proposedScope": "Round at the format boundary only (`.toFixed(1)`, matching GoalProjectionRowItem's own precedent in the same file) for both `endContent` lines. Not GAM-456's own scope -- GAM-456 (module doc #17 in this file) only wraps these sections in `Card` and restores the H1/eyebrow styling; this float-formatting gap pre-dates that fix and was only noticed as a side effect of screenshotting these now-panelled sections for this ticket's E2E spec. Same defect class as the already-filed StudentHome.tsx raw-float finding (T808), a different file/call-site, not a duplicate."
+    }
+  ]
+}

@@ -1,0 +1,452 @@
+# GAM-442 — run log
+
+Issue: <https://linear.app/gamitch/issue/GAM-442>
+Branch: `claude/gam-442-event-attendance-view`
+Runtime: Claude (dispatched run), 2026-08-21.
+
+PR credential (`ghs_`) decoded at minute 1: `iat 2026-08-21T05:02:29Z`,
+`exp 2026-08-21T06:02:29Z`. Draft PR must be open well before that.
+
+---
+
+- **05:03Z — claimed.** Read `AGENTS.md` § "Where work comes from" and
+  `docs/swarm/constitution.md` (items 3, 10, 18, 19, 22, 26, 28) first.
+  Fetched GAM-442 live from Linear. State was `Todo`; labels
+  `tier/unreviewed`, `meetings-redesign`, `Improvement`; no `gate/human`,
+  no `executor/*` route → legacy Claude-only path, claimable by this
+  runtime (item 28b).
+
+  **Tier judged before the move (item 28d): `tier/heavy`.** The issue text
+  proposes STANDARD. That is wrong under item 26, whose HEAVY trigger list
+  names "a migration or metric-view SQL" — this change is *both*: one new
+  file under `supabase/migrations/` creating a view containing metric math
+  (PRD 8.4 / DATA-01 territory). Item 26 also says take the heavier tier
+  when two are arguable, and item 1 puts the constitution above issue text.
+  Item 18 independently forces `model: "opus"` on the worker for the same
+  two triggers. Label swapped `tier/unreviewed` → `tier/heavy`, state moved
+  `Todo → In Progress`, and **read back**: state `In Progress`, label
+  `heavy` (item 28c). Claim held.
+
+  Intent: author a HEAVY packet for one additive migration creating
+  `v_event_attendance`, gate it through `checker-premise`, dispatch one
+  opus `worker-implementer`, then `checker-reviewer`. Known-unresolved at
+  claim time: whether the `attendance` / `event_sessions` column shapes and
+  the `20260806000000_met01_explicit_marks.sql` denominator convention the
+  issue cites are actually as described — to be measured before the packet
+  is written, not assumed from the issue.
+
+- **05:07Z — draft PR open.** `docs/swarm/active/GAM-442-pr-body.md` written and
+  validated (`check.mjs` → `OK declaration closes GAM-442`), PR
+  [#222](https://github.com/gamitch/volt_task_tracker_rewrite/pull/222) opened
+  as a draft at roughly minute 3 of the credential's 60. Claim comment posted to
+  Linear.
+
+- **05:16Z — packet written.** `docs/swarm/active/GAM-442-worker-packet.md`.
+  Premise re-measured against `main` at `789e58b` **before** writing it
+  (item 19c), and the measurement contradicted the issue in three places, all
+  recorded in packet §3:
+
+  1. **PRD 8.2 defines no per-event attendance metric** (MET-01…05 are
+     student/team, season-scoped), so item 3 has **no 8.4 verbatim SQL to copy**
+     for this view. `dispute-log.md:1873-1878` supplies the operative test
+     instead: an entry is required when an 8.3 grant or an 8.4 formula *moves*.
+     Neither moves here. That conclusion is the gate's first target.
+  2. **Two attendance conventions coexist on `main`.** T509 moved
+     `v_student_participation`/`v_team_participation` to explicit marks + NULL
+     but left `v_season_attendance_rate` on the old eligibility cross-product
+     with `greatest(count(*),1)` (`20260723000001_dashboard_views.sql:197-222`).
+     Pre-existing, out of scope, explicitly not to be "fixed" here.
+  3. **`held_ct` counts sessions while every other count counts marks** — two
+     different things the issue's column list runs together.
+
+  Packet deviates from the issue's "exactly one new file" to three (migration +
+  assertions + runner), stated in §2 rather than done silently: the issue makes
+  `scratch-postgres` mandatory, and `run_t509_explicit_marks.sh`'s own header
+  records that shipping assertions without a runner was T509's defect.
+
+  Five least-confident decisions declared (§8, item 19d).
+
+- **05:18Z — `checker-premise` DISPATCHED** (round 1 of the two-round cap,
+  item 19a), `run_in_background: false`, orchestrator blocking on the result.
+  Target: packet §8's five least-confident decisions first (its charter §0),
+  then §3's premise table, then §5.1's authority argument. Told to *run* a
+  scratch cluster, not merely read — item 26: "a gate that only reads is worth
+  much less than one that runs."
+
+  **If this line is the last one in this file, the run died holding this
+  subagent** — the packet was never gated, no worker was ever dispatched, and
+  nothing under `supabase/` was written. Resume by re-running the premise gate
+  against `docs/swarm/active/GAM-442-worker-packet.md`.
+
+- **05:27Z — `checker-premise` round 1 VERDICT: `REVISE`.** Returned, waited on,
+  read. It stood up PostgreSQL 16.15 in its own worktree, applied all 25
+  migrations, **wrote four candidate versions of the view**, and ran every §6
+  criterion against them. Two BLOCKERs, three MAJORs, three MINORs, one NIT.
+
+  **BLOCKER-1 — the packet walked the worker into a fan-out, and none of its own
+  acceptance criteria would have caught it.** §4 defined `held_ct` as completed
+  sessions and `graded_marks_ct` as marks on those sessions, then mandated
+  `left join`s from `events`. In the single join chain a held session with *n*
+  marks appears *n* times, so `held_ct` counts sessions once per mark. Measured
+  on the §6(a) fixture: `held_ct = 5` where the truth is 2, and `2` where the
+  truth is 1. `attendance_pct` stays **correct**, so nothing looks wrong — and
+  `held_ct` is the "across 21 held" half of the card's own headline. All four
+  of §6's criteria passed on the corrupted view. Prescribed fix:
+  `count(distinct es.id)` + `count(a.id)` (never `count(*)`), following
+  `v_event_student_hours` (`20260723000001_dashboard_views.sql:269-291`), which
+  is the same join and already solves this — plus a new criterion (a2) and a
+  third mutant that asserts it.
+
+  **BLOCKER-2 — §8 declared the wrong doubt.** Decision 2 worried about MET-01
+  rollup consistency; the gate found that is *not* the live risk
+  (`CoachHome.tsx:1168-1170` already ships a deliberately divergent ratio with a
+  comment saying so — divergence is house practice). The real risk is the
+  inverted failure mode **D014 itself records**: since T508, "no attendance row"
+  is the *normal* shape for an unmarked student, so forgetting to mark someone
+  **inflates** the percentage. Measured: 5-student roster, 20 held sessions,
+  coach marks only the 2 who turned up each night → `attendance_pct = 100.0`.
+  That is item 26's own tier test ("lie to a user about their own data") landing
+  on this task. D014's stated mitigation is that the counts stay visible, and
+  `20260806000000_met01_explicit_marks.sql:107-112` says verbatim that if they
+  stop being shown, D014 must be revisited.
+
+  Three MAJORs, all "this criterion passes for the wrong reason": §6(e) is
+  vacuous and §6(d) is *unpassable* in the harness §6 prescribed (measured —
+  `authenticated` is denied on **every** view in a bare scratch cluster, and
+  `anon` has no privilege to revoke, so the runner must prepend T205's
+  `alter default privileges` line); §6(f) diffs four empty result sets on an
+  unseeded cluster; §8-4's fallback is already filed as **GAM-389** and shipping
+  the revoke pre-empts it in one direction.
+
+  Gate also found `run_t205_anon_grant.sh` is **red on `main` today**
+  (`ERROR: role "service_role" does not exist`) and that the `scratch-postgres`
+  skill's `start.sh` **cannot run in this container** (non-root `chown` refusal)
+  — both pre-existing, neither caused here, both needed by the worker.
+
+  Decisions 1, 3, 5 upheld; 4 upheld with a corrected justification (the view is
+  `is_updatable = NO`, so T205's DELETE rationale does not transfer, and item 25
+  forbids writing this up as a security finding); 2 overturned and re-declared.
+  **No `gate/human` required for the SQL itself** — the one question that could
+  have stopped work today is settled: PRD 8.2 defines no per-event metric, so no
+  8.4 formula moves and no dispute-log entry is owed.
+
+  Cluster stopped, data directory deleted, worktree removed — confirmed by the
+  gate and by an empty `git status` in the shared tree.
+
+  Round 2 of 2 (item 19a cap) now: revising the packet against all six
+  prioritized revisions. A third REVISE escalates to the owner rather than
+  looping.
+
+- **05:38Z — packet revision 2 written**, all six prioritized revisions applied:
+  §4.1 added (the fan-out, with the gate's measured output and
+  `v_event_student_hours` named as the shape to copy); §5.3 added (D014's
+  inverted failure mode carried forward, with the 100.0% measurement); §6.0
+  added (the three harness facts — `start.sh` non-root failure, the T509 loop,
+  and T205's `alter default privileges` line without which (d) is unpassable and
+  (e) vacuous); criteria (a2) and (b3) added; (d)(e)(f) rewritten; a third
+  mutant added to (g); §8 rewritten with the gate's verdict on each of the five
+  original decisions plus three fresh doubts; MINOR citation fixes folded in.
+
+- **05:39Z — `checker-premise` round 2 DISPATCHED**, `run_in_background: false`,
+  orchestrator blocking. Same agent context continued via `SendMessage` so it
+  grades its own findings rather than re-deriving them from scratch.
+
+  **If this line is the last one in this file, the run died holding this
+  subagent** — revision 2 of the packet was never gated and no worker was ever
+  dispatched. `supabase/` is still untouched. Resume by re-gating
+  `docs/swarm/active/GAM-442-worker-packet.md` at revision 2.
+
+- **05:46Z — `checker-premise` round 2 VERDICT: `REVISE`, scoped to §6(f).**
+  Returned, waited on, read. It re-stood a cluster (PostgreSQL 16.15, port
+  55443, all 25 migrations) rather than grading on paper.
+
+  **Both round-1 BLOCKERs RESOLVED, and re-measured rather than argued.** It
+  wrote a view to revision 2's §4 + §4.1 spec and got `held_ct = 2` where the
+  round-1 fan-out gave 5; it wrote criterion (a2) exactly as §6 words it and
+  confirmed the new third mutant turns it **RED while leaving (a), (b1), (b2)
+  and (c) green** — which is the precise proof that (a2) is the sole guard on
+  `held_ct`, exactly as §8.1(3) claims. MAJOR-1, MAJOR-3 and all three MINORs
+  and the NIT also resolved.
+
+  **But the revision introduced two new MAJORs of its own, both measured, both
+  in the one paragraph I rewrote (§6(f)):**
+
+  - **NEW-1 — my seed recipe cannot satisfy my own pass rule.** §6(f) says a
+    view returning 0 rows on both sides is "not a pass"; the recipe I wrote
+    leaves `v_student_hours` at exactly 0, because that view needs a *completed*
+    session carrying a *present/late* mark on an outreach event, not merely the
+    event's existence (`20260804000000_volunteer_hours_outreach_only.sql:44-59`).
+    A worker obeying the packet literally would produce a correct red run for a
+    packet-authoring reason.
+  - **NEW-2 — §6(f) prescribes `start.sh --skip-last 1` while §6.0(i) says that
+    script cannot run in this container.** Directly contradictory; the worker
+    could not obey both. The gate noted this one is half its own fault — it
+    supplied the `--skip-last` citation in round 1, before the non-root finding
+    existed.
+
+  Three MINORs and a NIT besides: §4 forbids `count(*)` outright while §4.1
+  permits a CTE shape in which `count(*)` is correct (measured byte-identical),
+  so a correct implementation could be graded non-compliant; (b3)'s "well below"
+  is not gradeable; §2's three-file cap needs one sentence about inlining;
+  §5.3's "8.4-adjacent" invents a category §5.1 does not have.
+
+  **This is not a third gate round.** The gate stated explicitly that every
+  remaining fix is a verbatim text swap needing no new measurement, and that no
+  re-gate is required. Item 19a's cap is not at risk: applying prescribed edits
+  is not a loop.
+
+- **05:52Z — packet revision 3 written and GATED.** All of NEW-1…NEW-5 and the
+  NIT applied verbatim as the gate prescribed them. §6(f) now names the
+  `completed`-session-with-a-`present`-mark clause `v_student_hours` actually
+  requires, and splits the migration loop inside the runner following
+  `run_t503_widen_rsvp_read.sh:50-61` instead of the unusable
+  `start.sh --skip-last 1`. §2 gained the inline-or-stop sentence. §4.1 now
+  states that "never `count(*)`" is scoped to the left-joined row set so the
+  permitted CTE shape is not graded non-compliant. (b3) asserts four exact
+  numbers instead of "well below". §5.3's "8.4-adjacent" replaced.
+
+- **05:53Z — `worker-implementer` DISPATCHED**, `model: "opus"` per item 18
+  (two triggers: a file under `supabase/migrations/`, and a SQL view containing
+  metric math), `run_in_background: false`, orchestrator blocking on the result.
+
+  **If this line is the last one in this file, the run died holding this
+  subagent.** The packet is complete and gated at revision 3; nothing under
+  `supabase/` was written. Resume by dispatching a worker against
+  `docs/swarm/active/GAM-442-worker-packet.md` — it needs no further gating.
+
+---
+
+## Run 2 — resumed 2026-08-21 11:10Z
+
+**The line above is the last line run 1 wrote, and it is a dispatch with no
+verdict.** Run 1 died holding its `worker-implementer`, exactly as it predicted
+in writing. Its instruction to the next reader was correct and is what this run
+is executing. Nothing is being re-derived: the packet is gated at revision 3 and
+run 1's own gate said in terms that no re-gate is required.
+
+Measured on resume rather than assumed:
+
+- `git diff --stat main...HEAD -- supabase/` is **empty** — run 1's worker
+  produced nothing that survived, confirming the loss.
+- Branch already carries run 1's three artifacts (run log, PR body, packet,
+  828 lines) and **draft PR [#222] is already open** — so wall 3's early-PR
+  requirement is already satisfied and this run inherits it.
+- **This run's own PR credential**: `iat 2026-08-21T11:09:33Z`,
+  `exp 2026-08-21T12:09:33Z` (decoded from the live `GH_TOKEN`, not assumed).
+  Run 1's died at `06:02:29Z`; this is a fresh hour.
+
+Claim re-confirmed against Linear on resume: GAM-442 read back `In Progress`
+at `2026-08-21T11:10:26.152Z`. Tier judgement **unchanged and independently
+re-derived** before reading run 1's log: HEAVY, because item 26's trigger list
+names "a migration or metric-view SQL" and this is both, and because item 26
+requires the heavier of two arguable tiers. Run 1 reached the same conclusion
+on the same grounds.
+
+- **11:1xZ — resume recorded and pushed.** No new gate round is being opened;
+  item 19a's two-round cap was spent by run 1 and its round-2 verdict closed
+  with "no re-gate is required."
+
+- **11:16Z — packet read and independently re-verified before dispatch.**
+  Revision 3 read end to end. Spot-checked its load-bearing citations against
+  the live tree rather than trusting run 1: `v_event_student_hours` is at
+  `20260723000001_dashboard_views.sql:269-291` and does use `count(distinct …)`;
+  `20260806000000_met01_explicit_marks.sql:107-112` carries the
+  "INVERTS the failure mode" text §5.3 quotes; `run_t503_widen_rsvp_read.sh:50-61`
+  does hold a migration back for a before-snapshot. Packet dispatched as-is.
+
+- **11:17Z — `worker-implementer` DISPATCHED (run 2's first worker),
+  `model: "opus"` per item 18, `run_in_background: false`, orchestrator
+  blocking on the result and not ending its turn.**
+
+  **If this line is the last one in this file, run 2 died holding this subagent
+  exactly as run 1 did** — and the next reader should treat two consecutive
+  deaths at the same dispatch as evidence about the dispatch, not about the
+  packet. The packet needs no further gating; `supabase/` would still be
+  untouched.
+
+- **11:38Z — `worker-implementer` VERDICT: work delivered, two commits.**
+  Returned, waited on, read in full. **Run 1's loss is recovered.** The worker
+  ran a real PostgreSQL 16.15 cluster with all 24 applicable migrations and
+  returned SQL + real terminal output for every §6 proof rather than a
+  description of one.
+
+  - `fc202ef` — the substantive commit: all three §2 files, 1127 insertions.
+  - `8d84b05` — assertions file only (+29/-1), so `replay.py` can parse a
+    tally line; disclosed by the worker as a tooling constraint, not a
+    requirements change.
+
+  Shape 1 taken (`count(distinct es.id)` + `count(a.id)`), stated in the
+  migration header as §4.1 requires. Headline results: (a) E1 = **75.0**
+  hand-computed and measured; (a2) `held_ct` 2/1/20 cross-checked against a
+  direct `count(*)` on `event_sessions`; (b) both NULL cases NULL, not `0.0`;
+  (c) zero-session event yields exactly 1 row; (d) weak-owner run returned
+  **0** and flipping `security_invoker` moved it 0 → 6 → 0, localising the
+  cause; (e) the exact three-row acl shape the packet predicted; (f) row counts
+  `1 | 3 | 1 | 1` with byte-identical sha256 before/after; (g) all three
+  mutants red at exit 3, with (b1)/(b2)/(c) staying **green** under mutant 3
+  exactly as the gate predicted — which is the proof (a2) is the sole guard on
+  `held_ct`; (h) five of six gates PASS, gate 6 legitimately skipped, and the
+  worker says five rather than rounding up.
+
+  (b3) reported under a **Known Risk** heading with all four numbers, not as a
+  passing criterion. Both pre-existing `main` defects reproduced on a virgin
+  cluster and **not** repaired — they are item 20 follow-ups for this
+  orchestrator, recorded below.
+
+  No dispute filed. Worker did not self-certify. `checker-reviewer` next.
+
+- **11:44Z — orchestrator's own independent verification of the worker's work
+  (item 21: existence is verified, not assumed).**
+  `git diff --name-only main...HEAD` returns exactly the three §2 source files
+  plus this run's three orchestrator-owned `docs/swarm/active/` artifacts —
+  **no existing migration, no `src/**`, no `.github/workflows/**`.**
+  `git cat-file -p HEAD:supabase/migrations/20260821000000_…sql | wc -l` → 234,
+  so the change is in the **committed blob** and not merely in the worktree.
+  `git ls-tree` confirms the runner is mode `100755`. I also read the migration
+  in full and checked it against §4 by hand: `count(distinct es.id)` for
+  `held_ct`, `count(a.id)` everywhere else, `count(*)` absent from the view
+  body, `es.status='completed'` in the JOIN condition rather than a WHERE (so a
+  left join cannot drop the event row), and the `case … then null` branch with
+  no `greatest(...,1)` floor.
+
+- **11:46Z — PR body filled and pushed to PR #222 while the credential is
+  alive**, deliberately *before* the checker rather than after. Wall 3's real
+  variable is when the credential is *called*, and the checker round could run
+  past `12:09:33Z`. Doing it in this order means a credential death can cost at
+  most the draft flag, never the evidence.
+  `check.mjs` → `OK declaration closes GAM-442`.
+
+- **11:47Z — `checker-reviewer` DISPATCHED**, `model: "opus"` (item 18: it is
+  grading metric-view SQL and must be able to out-reason the worker),
+  `run_in_background: false`, orchestrator blocking on the result and not
+  ending its turn.
+
+  **If this line is the last one in this file, run 2 died holding this
+  subagent.** Unlike run 1's death, the work itself is safe: the migration is
+  committed at `fc202ef`/`8d84b05`, pushed, and PR #222 already carries the
+  full evidence body. What would be missing is only the independent grade, and
+  a resuming run should dispatch `checker-reviewer` against §4/§6 of the packet
+  and then close out — it must **not** re-run the worker.
+
+- **11:54Z — `checker-reviewer` VERDICT: `PASS`.** Returned, waited on, read in
+  full. One MINOR, two NITs, **no BLOCKER and no MAJOR**.
+
+  It did not grade on the worker's paste. It stood up its own PostgreSQL 16.15
+  cluster, re-ran the suite (16/16, exit 0), **re-ran all three mutants itself**
+  (each exit 3, with (b1)/(b2)/(c) staying green under mutant 3), re-ran the
+  gate block, and reproduced every figure in the worker's report independently.
+  It also ran a probe the packet never asked for: the suite against a
+  **migrations-only database with the fixture never loaded** → `13 failed`,
+  exit 3, with `A0` reporting *"every assertion below may be vacuous"*. That
+  answers the question the premise gate's BLOCKER-1 was really about — this
+  suite fails loudly rather than passing on an empty fixture.
+
+  On my highest-value question — does (a2) genuinely constrain `held_ct`, or
+  could it pass a broken view — the verdict is that it is a **real guard,
+  proven by mutation rather than by reading**: two of its three assertions
+  cross-check the view against a direct `count(*)` on `event_sessions` rather
+  than a hard-coded literal, and all three go red under mutant 3.
+
+  Item 10 confirmed (six `A` lines, zero `M`/`D`/`R`), item 6 confirmed
+  (fabricated names, `@example.invalid`), item 27 explicitly addressed rather
+  than skipped: no `src/**` in the diff, the view reads real base tables, so
+  Partial-vs-Passed does not bite and the item-27 exposure belongs to the
+  consuming SeriesCard ticket.
+
+- **11:57Z — MINOR fixed in place, and why that is not an item-10 violation.**
+  The checker measured that the D014 quote lives at
+  `20260806000000_met01_explicit_marks.sql:95-100`, not the `:107-112` the
+  packet had propagated into shipped code (`:107-112` is the body of the
+  `marked` CTE). **I verified this myself** with `sed -n '93,113p'` before
+  acting: the "THE KNOWN COST … INVERTS the failure mode" block is at 95-100.
+  Corrected in the migration comment and in the PR body.
+
+  Item 10 forbids editing an **applied** migration. `20260821000000_…` has
+  never been applied to any database — it is new and unmerged in this very PR —
+  so correcting it now is strictly better than shipping a comment that points a
+  future reader at the wrong twelve lines plus a follow-up migration to fix a
+  comment. The checker's own follow-up #1 proposed either route.
+
+  The checker's NIT-2 (`(b-guard)` has no non-vacuity floor of its own) is
+  accepted and **not** fixed: A0 is measurably its guard, the checker confirmed
+  A0 reddens first, and re-opening a 16/16 suite to re-assert something already
+  covered is churn. Logged here, which is what a NIT gets.
+
+- **11:59Z — PR #222 marked ready for review**, ~10 minutes inside the
+  credential window measured at minute 1. Body updated from
+  `docs/swarm/active/GAM-442-pr-body.md`.
+
+- **12:02Z — orchestrator's own gate run on the FINAL commit.** The worker's
+  block described `8d84b05`; I then changed a SQL comment and two Markdown
+  files, and `format:check` can move on Markdown — so quoting the worker's
+  block would have described a commit that no longer exists on this branch.
+  Re-run with `--require-clean`:
+
+  ```
+  GATE RUN — 06a47cc on claude/gam-442-event-attendance-view — tree clean
+
+    1 tsc              exit 0  PASS
+    2 vite build       exit 0  PASS
+    3 format:check     exit 0  PASS
+    4 eslint           exit 0  PASS       0 errors, 380 warnings
+    5 vitest (full)    exit 0  PASS       102 files / 2598 tests  baseline 2598 (+0)
+    6 vitest (scoped)      –  SKIP
+                              no scope given and none derivable from the diff
+
+  VERDICT: PASS — 5 of 6 gates. NOT all six: 1 skipped.
+  ```
+
+  **Five of six, and this log says five.** Gate 6 has no defensible scope: the
+  diff contains no `src/**` file. Baseline 2598 was measured by the worker at
+  the merge base `e1c49b8`, not assumed. These figures now agree across three
+  independent runs — worker, `checker-reviewer`, and this orchestrator — which
+  is the only thing that makes agreement mean anything.
+
+- **12:05Z — item 20 follow-ups FILED, not left as comments.** Written through
+  the `linear-task-writing` skill (item 30), every citation re-verified against
+  `main` while filing rather than copied from the worker's report:
+
+  - **GAM-458** — `run_t205_anon_grant.sh` exits 1 on `main`; its
+    default-privileges line (`:29`) names `service_role`, which
+    `calendar_feed_platform_stub.sql` (`:8`, `:11`) never creates.
+    `run_t503_widen_rsvp_read.sh:27-45` already carries the fix. tier/fast.
+  - **GAM-459** — `scratch-postgres`'s `start.sh:58` `chown`s as a non-root
+    user and aborts. tier/fast. Note it lives under `.claude/`, which workers
+    may not edit, so it is the orchestrator's or the owner's to change.
+  - **GAM-460** — the consuming SeriesCard must render `graded_marks_ct`
+    beside `attendance_pct`, or D014's inverted failure mode ships. This is
+    packet §8.1(1)'s disclosed risk turned into a triaged row. tier/standard,
+    priority High, `meetings-redesign`.
+
+  GAM-460 is **linked as `related` to GAM-447 (build the SeriesCard) and
+  GAM-446 (the loaders)**, and GAM-442 to GAM-460 — structural links rather
+  than a comment, so the implementer meets the constraint without depending on
+  anyone reading one. It should be closed by GAM-447's own acceptance criteria,
+  not by separate work.
+
+  The checker had flagged that the PR body claimed these were "tracked" when
+  nothing in the repo showed it. That claim is now true, and the body names the
+  three ids.
+
+- **12:07Z — closed out.** GAM-442 moved `In Progress → In Review` (item 28e —
+  never `Done`; the merge closes it, not this agent), close-out comment posted
+  with the six-gate block and the follow-up ids.
+
+## Outcome
+
+**Delivered.** `v_event_attendance` ships as one additive migration plus a
+test-only assertion suite and runner, at `06a47cc` on PR #222.
+
+The premise this run was told to check held, and was checked rather than
+assumed: no view aggregated attendance per event, and the constitution's item 3
+/ DATA-01 bar on client-side metric math is real. The one place the issue's
+framing was wrong — it proposed STANDARD, and it claimed PRD 8.4 had a formula
+to copy when 8.2/8.4 define nothing at per-event grain — was corrected in the
+packet, gated, and recorded in the PR rather than worked around.
+
+What actually earned the HEAVY tier was not the topic sounding important. It was
+that the premise gate, by *running* four candidate views instead of reading one,
+found a join fan-out that reports `held_ct = 5` for an event with 2 held
+sessions while leaving `attendance_pct` correct — a number that would have
+appeared on a coach's card, wrong, with all four of the packet's original
+acceptance criteria green.
