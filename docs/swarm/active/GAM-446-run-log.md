@@ -82,3 +82,32 @@ mid-chain, the last line names what the run was holding when it died.
   existing RSVP `expectedCt`) and a five-entry Least-confident-decisions list.
 - **23:09 — DISPATCHING `checker-premise` (item 19), blocking, `run_in_background: false`.**
   *If this line is the last one in this file, the run died holding this subagent.*
+- **23:19 — `checker-premise` VERDICT: REVISE (round 1 of item 19a's two).**
+  2 BLOCKER, 4 MAJOR, 6 MINOR, 1 NIT. The gate RAN rather than read: it built
+  its own worktree, applied the packet's own prescription, and measured the
+  result. **Two of this ticket's three deliverables have failed premises.**
+  - **BLOCKER 1 — the packet as written cannot go green.** Applying its 7th
+    query verbatim turned `src/pages/meetings/MeetingsList.test.tsx:182` red
+    (a `fromSpy` table whitelist that throws on any unlisted table) — and that
+    file is on the packet's own Forbidden list. Measured: baseline 42/42 exit
+    0, after the patch 3 failed / 2630 passed, exit 1.
+  - **BLOCKER 2 / MAJOR — `rosterCt` has no authority and no data.** MTG-01a
+    (`VOLT_Portal_PRD.md:303-313`) lists the card's contents exhaustively and
+    contains **no roster count**; GAM-447's own packet §3a already ruled
+    "N on roster" off the card; `student_teams` has **no writer on `main`**
+    (its writer is PR #192/GAM-340, still open) so the count would be wrong
+    for every student added since the backfill; and computing it in TS
+    conflicts with DATA-01.
+  - **MAJOR — `listGuardianChildren` already exists.**
+    `makeLoadLinkedStudents`/`loadLinkedStudents`
+    (`src/lib/supabase/loaders/checkin.ts:517-547`) already returns
+    `{ studentId, displayName }[]` from `guardian_links` in `created_at`
+    ascending order, display names joined client-side, green-tested at
+    `checkin.test.ts:237`. Building a second one is the "two competing
+    contracts" hazard my own packet warned about, turned on itself.
+  - My five Least-confident decisions scored: #1 partly wrong, #2 **wrong**,
+    #3 sound-but-insufficient, #4 sound, #5 **wrong** (a coach-parent is
+    possible and the shortcut would silently deny them their children).
+  - Useful negative: PR #232 is docs-only today, so no `types.ts` conflict;
+    and adding six optional fields to `CoachMeetingRow` is genuinely additive
+    (`tsc --noEmit` exit 0 with them applied).
