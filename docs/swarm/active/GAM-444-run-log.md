@@ -96,3 +96,42 @@ it is in flight.
 
 **If this line is the last one in this file, the run died holding this subagent** —
 the packet was never gated, no worker ran, and nothing below this point happened.
+
+## 2026-08-21T19:57Z — VERDICT round 1: **REVISE** (1 BLOCKER, 4 MAJOR, 4 MINOR, 3 NIT)
+
+The subagent returned; the run did not die holding it. Gate ran experiments in
+its own worktree (item 23) and removed it; shared tree verified clean.
+
+**It confirmed every measurement in packet §0** — 2910 lines, role switch
+:2857–2910, 106 tests (and 106 *unique* `fullName`s), 2997 exact at `0138bfc`,
+`b7e9b1d` net −87, and it independently reproduced the theme blocker:
+`TS2353 ... '--color-series-1' does not exist in type
+'Partial<Record<TokenName, TokenValue>>'`, exit 2.
+
+**BLOCKER-1 — and this one I had wrong.** §9 decision 3 claimed `SeriesCardModel`
+had no spec. False: `docs/swarm/VOLT_Portal_PRD.md:303-313` (MTG-01a) specifies
+it, and item 1 puts the PRD *above* the design skill. My paraphrase dropped the
+constraint that matters — attendance % is **DATA-01 passthrough, `number | null`,
+null renders `—`, never computed in TypeScript**. Freezing `attendancePct: number`
+would have handed five tickets a type that cannot represent "—", forcing GAM-445
+to fabricate a `0`; constitution item 3 grades a TS-side metric computation a
+BLOCKER. This is exactly the failure item 19 exists to catch, caught one step
+before a worker.
+
+**MAJOR-1** `loaders/meetings.ts:177-188` imports two **values**
+(`buildCoachMeetingRows`, `buildStudentMeetingsData`), not only types — so §5's
+"no logic, no behaviour" is false and Stage A moves code between chunks.
+**MAJOR-2** `interface Team` (`:646`) is local, unexported, and required by
+`CoachMeetingsData` — Stage A cannot typecheck without it, which is precisely the
+failure §9 decision 5 feared. **MAJOR-3** criterion 2 was self-contradicting and
+blind to a deleted test. **MAJOR-4** the design skill's own table promises tokens
+this ticket will now not ship, and the worker may not edit `.claude/skills/**`.
+
+**Cuts upheld, one on corrected grounds.** §0b's outcome stands but its reasoning
+was wrong: a `theme.css` `@layer app` route *is* a legal DES-21 step-4 escalation
+and the gate measured it green with zero invented hex. The real blocker is that
+the **hues are an open owner decision** (`auto-mode-decisions.md:4345-4352`), and
+a placeholder would ship a stub surface under item 27. Cut kept, ground replaced.
+
+Revising now and re-gating — item 19 requires a DISPATCH verdict before any
+worker sees this packet, and 19a caps the gate at two rounds.
