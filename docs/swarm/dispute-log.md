@@ -1975,3 +1975,132 @@ No rework of the route. No owner gate. No item-3 exemption entry. No change to
 failing the worker, and its reading of `PRD:611` is textually sound. It was wrong
 only in believing the rejected route answered the question, which nobody had
 measured until this ruling.
+
+## D020 - The brand accent changes from Volt Violet to Tracker Orange, on the owner's ruling (the D002/D013/D014 pattern)
+
+**Filed by the orchestrator 2026-08-21**, before any code, because **constitution item 1** puts PRD
+requirement IDs above agent judgment and **DES-04 calls its palette "the only brand colors."** This entry
+is what makes the change authorised rather than a violation.
+
+### What the PRD says, and what replaces it
+
+`VOLT_Portal_PRD.md:201`, **DES-04**, normative:
+
+> | Volt Violet | `#5B2EE5` / `#9B7BFF` | Accent: primary buttons, active nav, progress toward goal, the Bolt |
+
+**It becomes Tracker Orange:** `--color-accent` `['#A8560A', '#f79a4a']` (light, dark) and
+`--color-on-accent` `['#FFFFFF', '#081310']`. The dark values are **the production app's own**
+`--accent` and `--accent-ink`, read from its deployed stylesheet (`styles-B5BNo3Jc.css`), not invented
+here. Every other DES-04 row is untouched — Circuit Blue still marks outreach, Meeting Violet still
+marks meetings.
+
+### The authority
+
+`auto-mode-decisions.md`, **"2026-08-21 — George rules on the brand accent and on `lucide-react`"**. The
+option he chose stated the DES-04 deviation in its own text, so the cost was named in the question.
+
+### Why this is not a preference
+
+The portal replaces an app the team uses today. Users do not experience a rewrite as a new product;
+they experience it as their app changing. Carrying the accent across makes the rewrite read as a
+continuation rather than a replacement, and that continuity is worth more than a palette the users
+have never seen. Volt Violet was chosen in the PRD before the production app was surveyed
+(`current-app-capability-map.md`, 2026-07-20) — it is not a decision that was made *against* orange.
+
+### The consequence this ruling must carry: Comp Orange has to move
+
+DES-04 assigns orange to competition badges. Once orange is the brand accent, an orange competition
+badge no longer reads as a category — it reads as *selected*, because that is what accent means
+everywhere else on the page. **A replacement hue for the competition badge is inside this ruling's
+scope, not a later surprise.** It is not chosen yet; the accent task picks it and measures it. If it
+ships without one, this ruling has been implemented incorrectly.
+
+### The measured cost: light mode needed a different orange
+
+Production is `color-scheme: dark` only, so it supplies **no light-mode value** — and DES-06 requires
+*both* modes clear WCAG AA, with `checker-accessibility` verifying. Measured 2026-08-21:
+
+| Pairing | Ratio | |
+|---|---|---|
+| `#f79a4a` on `--bg` `#111318` | 8.56:1 | passes |
+| `#f79a4a` on `--panel` `#181c24` | 7.86:1 | passes |
+| `#081310` ink on `#f79a4a` | 8.71:1 | passes (button label) |
+| `#f79a4a` on light card `#FEFBFF` | **2.11:1** | **fails** |
+| `#f79a4a` on light body `#F3EFF8` | **1.91:1** | **fails** |
+
+So the light value is **derived here, not inherited**: `#A8560A` gives 5.11:1 on the light card and
+5.25:1 for white-on-swatch, clearing AA both directions with margin. **These numbers must be
+re-measured against the regenerated `theme.css`, not trusted from this table** — the surface tokens
+they were measured against are the current ones and the accent change does not move them, but that is
+an assumption, not a proof.
+
+### A separate pin that will otherwise make this ruling look broken
+
+`theme.css` sets `.astryx-progressbar.accent { --color-accent: #0074e2 }` — the goal bar is **blue
+today and independent of `--color-accent`**. Swapping the accent alone leaves a blue progress bar under
+an orange theme, which will read as a bug in the implementation of this ruling. Decide it explicitly.
+
+### Same shape as D002, D013 and D014
+
+The PRD text is **deliberately not amended**. This entry plus the decision record are the authority.
+For checkers: a `volt.ts` whose accent does not match DES-04 is **expected** from this task onward, and
+the exemption covers **the accent and its on-accent pair only** — not the type-badge palette beyond the
+competition-hue reassignment this entry requires, and nothing outside `--color-accent` /
+`--color-on-accent`.
+
+## D021 - `lucide-react` joins the dependency allowlist, on the owner's ruling; the icon set Astryx ships cannot name four of seven nav destinations
+
+**Filed by the orchestrator 2026-08-21**, before any code, because **constitution item 9** requires
+recorded approval for any dependency outside the allowlist.
+
+### The measured gap
+
+`Icon`'s own props table in `astryx-api.md` enumerates the complete semantic set:
+
+> close, chevronDown, chevronLeft, chevronRight, check, success, error, warning, info, calendar, clock,
+> externalLink, menu, moreHorizontal, search, arrowUp, arrowDown, arrowsUpDown, funnel, eyeSlash,
+> viewColumns, copy, checkDouble, wrench, stop, microphone
+
+Of the seven side-nav destinations — Home, Meetings, Outreach, Calendar, Roster, Reports, Settings —
+**only Calendar has a match.** No `home`, no `users`, no `chart`, no `gear`. The same props table
+directs callers outward for anything else: *"For any icon not in this list, pass an SVG component
+directly (e.g. import from lucide-react or @heroicons/react)."* So the library the docs name is the
+library item 9 forbids.
+
+This is not a one-off: `CheckinResult.tsx:480` already hand-rolls an inline SVG for the same reason.
+
+### The authority
+
+`auto-mode-decisions.md`, **"2026-08-21 — George rules on the brand accent and on `lucide-react`"**. He
+raised the amendment himself rather than being asked for it.
+
+### Why lucide rather than heroicons or a local set
+
+- **lucide** is 24px grid / 2px round stroke — the same geometry the production app renders
+  (`svg{stroke-width:2px;stroke-linecap:round}`) and the same the rest of this UI already uses.
+  Tree-shakeable, so only the imported icons ship.
+- **heroicons** ships matched outline/solid pairs, which fits `SideNavItem`'s `icon` + `selectedIcon`
+  literally, but its outline is 1.5px and would read lighter than everything around it.
+- **A local set** needs no approval and was the standing plan until George raised the amendment. It was
+  rejected as the durable answer, not as the cheap one: seven icons is fine, and the next seven are
+  hand-drawn too.
+
+### The disclosed divergence, recorded so it is not read as an oversight
+
+lucide is **outline-only**. `SideNavItem`'s `selectedIcon` therefore goes unused, and SideNav's own
+Best Practices — *"Pair outline and filled icon variants so the selected state is visually distinct"* —
+are **deliberately not followed**. The active row is distinguished by `--panel-2` background plus accent
+colour, two signals it already carried. A checker finding an unused `selectedIcon` has found this
+ruling, not a defect.
+
+### One verification still open at filing time
+
+`SideNavItem`'s own props subsection in `astryx-api.md` is `undefined` — the same doc gap
+`CoachHome.tsx` module doc #12 records for `Heading` and `ListItem`. `icon`/`selectedIcon` are read from
+the **SideNav Example block**, not from a props table, so per item 2 they must be cross-checked with
+`npm run astryx -- component SideNavItem --json` before the nav work relies on them. Not yet run.
+
+### Where this is recorded, given the ledger is frozen
+
+Item 9 says "recorded in the ledger." `task-ledger.md` is **frozen** (item 29), so the record is this
+entry plus the decision record plus the Linear row — not a new ledger line.
