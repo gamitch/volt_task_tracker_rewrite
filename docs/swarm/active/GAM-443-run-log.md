@@ -46,3 +46,17 @@ last line says what the run was holding when it died.
 - **05:08Z — reading the real code to verify the issue's citations** before
   writing the HEAVY packet (item 19c: roughly half of a gate's round-1 findings
   are the author's own unverified line numbers).
+
+- **05:18Z — packet written** (`docs/swarm/active/GAM-443-packet.md`), carrying
+  three corrections the orchestrator measured against the tree rather than
+  inheriting from the issue: (1) the cited range 1278–1399 over-reaches by six
+  lines and would drag `formatPastAttendanceSummary` along; (2) the move list
+  omits `sessionDurationHours` (:1334), which shares `computeDurationMinutes`;
+  (3) the acceptance criterion "no duplicate formatter bodies remain anywhere
+  under `src/pages/`" is **not achievable** in the issue's own Allowed Files —
+  `parseDateOnly` has 14 definitions under `src/` and `splitMeridiem` a third
+  copy in `LiveConsole.tsx:746`. Criterion narrowed; item-20 follow-up owed.
+
+- **05:19Z — dispatching `checker-premise` (round 1) on the packet**, model
+  opus, `run_in_background: false`. **If this line is the last one in this
+  file, the run died holding this subagent.**
