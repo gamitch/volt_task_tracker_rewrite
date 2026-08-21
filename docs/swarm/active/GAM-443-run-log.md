@@ -60,3 +60,47 @@ last line says what the run was holding when it died.
 - **05:19Z — dispatching `checker-premise` (round 1) on the packet**, model
   opus, `run_in_background: false`. **If this line is the last one in this
   file, the run died holding this subagent.**
+
+- **05:33Z — `checker-premise` round 1 returned: VERDICT REVISE.** Subagent
+  completed and its result is in hand; nothing was left in flight. It worked in
+  its own detached worktree `/tmp/gam443wt` (item 23), removed it, and left the
+  shared tree clean — verified.
+
+  **1 BLOCKER, 2 MAJOR, 5 MINOR, 1 NIT.** The gate ran rather than only read,
+  which is why it found the BLOCKER:
+
+  - **BLOCKER — acceptance criterion 8(b) is impossible.** The packet told the
+    worker to mutate `WEEKDAY_DATE_FORMATTER`'s `timeZone` to `'UTC'` and watch
+    a test go red. The gate mutated it in *both* files and ran the full suite:
+    **2598/2598 still green**. The reason is structural — `parseDateOnly`
+    anchors to **noon UTC** (`MeetingsList.tsx:1304`) precisely so the calendar
+    day cannot shift, and noon UTC is 06:00/07:00 in Chicago, the same calendar
+    day always. It then proved this rather than asserted it: **0 divergences
+    across 800 consecutive days.** My criterion asked a worker to demonstrate
+    something false; the outcomes were a stalled packet or a fabricated
+    evidence block. Replacement it measured: mutate `parseDateOnly`'s noon
+    anchor → **9 tests red**.
+  - **MAJOR — `src/lib/format/dates.ts` already exists** and its
+    `formatFriendlyDate` is output-identical to `formatWeekdayDate` (0/800
+    divergences). My packet cited that file only for its comment style and
+    never said why this is not it. A de-duplication packet may not silently
+    create a second shared home for date formatting.
+  - **MAJOR — `buildScheduleChips` underspecified in five places** — the
+    12-hour conversion (`0 → 12 AM` vs `0 AM`), `endMinutes` range,
+    `endMinutes <= startMinutes`, midnight-spanning, `dow` outside `0..6`.
+    This is precisely the shape GAM-441 freezes into `types.ts`. It did confirm
+    the meridiem rule I wrote is correct and self-consistent (`11 AM–1 PM`).
+  - MINOR ×5 / NIT ×1 — my `parseDateOnly` count was **16 under `src/`, not
+    14** (14 is the count under `src/pages/`); missing export list; my
+    module-doc requirement was asymmetric and let `MeetingsList.tsx`'s own doc
+    keep saying "the ONLY date-formatting functions in this file"; no named
+    gate baseline (measured: **2598 tests / 102 files**, scoped **141**);
+    `buildScheduleChips` should ban `Date`/`Intl` outright, not just for the
+    weekday; `CalendarPage.test.tsx` needs no edit at all.
+
+  Every "Verified state" citation I wrote was confirmed exact **except** the
+  `parseDateOnly` count. The gate also built the entire prescribed move in its
+  worktree and measured it green: `tsc --noEmit` exit 0, 141/141 scoped,
+  0 eslint errors.
+
+- **05:34Z — revising the packet (round 2 of the 19a two-round cap).**
