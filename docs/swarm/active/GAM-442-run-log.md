@@ -245,3 +245,21 @@ on the same grounds.
 - **11:1xZ — resume recorded and pushed.** No new gate round is being opened;
   item 19a's two-round cap was spent by run 1 and its round-2 verdict closed
   with "no re-gate is required."
+
+- **11:16Z — packet read and independently re-verified before dispatch.**
+  Revision 3 read end to end. Spot-checked its load-bearing citations against
+  the live tree rather than trusting run 1: `v_event_student_hours` is at
+  `20260723000001_dashboard_views.sql:269-291` and does use `count(distinct …)`;
+  `20260806000000_met01_explicit_marks.sql:107-112` carries the
+  "INVERTS the failure mode" text §5.3 quotes; `run_t503_widen_rsvp_read.sh:50-61`
+  does hold a migration back for a before-snapshot. Packet dispatched as-is.
+
+- **11:17Z — `worker-implementer` DISPATCHED (run 2's first worker),
+  `model: "opus"` per item 18, `run_in_background: false`, orchestrator
+  blocking on the result and not ending its turn.**
+
+  **If this line is the last one in this file, run 2 died holding this subagent
+  exactly as run 1 did** — and the next reader should treat two consecutive
+  deaths at the same dispatch as evidence about the dispatch, not about the
+  packet. The packet needs no further gating; `supabase/` would still be
+  untouched.
