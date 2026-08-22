@@ -134,3 +134,41 @@ Any real undo needs a new restore write path.
   false`, `model: "opus"`.** Item 19a: a third REVISE escalates to the owner
   rather than looping. *If this line is the last one in this file, the run died
   holding this subagent.*
+
+- **03:49Z — `checker-premise` round 2 returned `VERDICT: REVISE`**
+  (0 BLOCKER, 4 MAJOR, 8 MINOR, 3 NIT; ~121K tokens, 49 tool calls, 10m07s).
+  Dispatched `run_in_background: false`; this orchestrator blocked on it.
+
+  It confirmed round 1's BLOCKER-1 and MAJOR-2/3/4 are genuinely fixed, checked
+  all 14 rows of §8's map and found no false "applied" claim, reproduced the §5
+  baseline exactly (2 files / 56 tests), and proved by `tsc --noEmit` (exit 0)
+  that P1's signature change needs no file §2 forbids. The four new MAJORs are
+  things round 1 did not reach, and **all four were found by running code, not
+  reading it**:
+
+  - **MAJOR-1** — P1 as literally worded *throws*. `runMutation` coerces
+    `data: null` to `undefined` (`src/lib/supabase/loader.ts:225`), so a
+    `deleted === null ? null : map(deleted)` guard passes `undefined` into the
+    mapper: `TypeError: Cannot read properties of undefined (reading 'id')`.
+    That is criterion 2's own "must not throw" path.
+  - **MAJOR-2** — `Banner` "manages its own dismissed state internally"
+    (installed `Banner.d.ts`). Measured on P4's exact shape: dismiss it once and
+    it never returns, so a later un-mark's undo is unreachable — and no
+    criterion catches it, because 7-10 never dismiss.
+  - **MAJOR-3** — `AttendancePanel.tsx:115-116` is a *passed-task* decision
+    against exactly this shape in exactly this file: "never a Banner the coach
+    has to visually hunt for across a multi-day, multi-student panel." That is
+    §7.5's declared doubt, already adjudicated for this component, and the
+    packet neither cites nor rebuts it.
+  - **MAJOR-4** — §7.4 trades the undo's reliability for a visible failure, and
+    the failure is not visible: `toLoaderError` discards the DB message
+    (`loader.ts:120`) and `AttendancePanel.tsx:754` gates on `instanceof Error`,
+    which a `SupabaseLoaderError` is not — so a 23505 collision with a genuine
+    new QR check-in shows the coach "Couldn't save this student's attendance."
+
+- **03:50Z — STOPPING AND ESCALATING (constitution item 19a).** Two gate rounds
+  are the cap and neither returned DISPATCH, so Definition of Ready item 1 is
+  unsatisfied and **no worker may be dispatched**. I am not running a round 3
+  and I am not dispatching against a REVISE. The findings look mechanical, which
+  is exactly the feeling item 19a exists to overrule — item 1 puts the
+  constitution above agent judgment.
