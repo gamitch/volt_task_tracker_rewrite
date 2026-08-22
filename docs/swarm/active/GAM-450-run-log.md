@@ -165,3 +165,35 @@ wall 2, and it is written this way so the next reader does not have to guess.
     `git diff --name-status origin/main...HEAD -- src/` returns only `A` rows,
     so no pre-existing test file was modified or deleted. Nothing could have
     regressed; 2699 is 2691 + this file's 8 new tests.
+- **03:26Z — gates re-run at the true final source state** `61132fba`, after the
+  doc commits, because appended Markdown can move gate 3. Identical figures. The
+  PR body now quotes `61132fba`, the commit its numbers actually describe, not
+  the earlier `10d1139f` it was first written against. (`npx prettier --check`
+  flags this run log and the PR body, but gate 3 is scoped to
+  `src/**/*.{ts,tsx}` plus root files — `package.json:13` — so Markdown under
+  `docs/` is outside it. Checked rather than assumed.)
+- **03:28Z — PR #236 marked ready for review; all 9 CI checks pass**, including
+  `Linear declaration`. Waited for them to settle rather than reporting a
+  result I had not seen.
+- **03:30Z — close-out posted to Linear and GAM-450 moved `In Progress → In
+  Review`**, with a separate read-back confirming the state. `In Review`, never
+  `Done` — the merge closes the row, not the agent (item 28e).
+- **03:31Z — label `tier/unreviewed` → `tier/standard`**, read back. The row now
+  carries the tier judgement it was claimed under, so a wrong call is visible
+  and correctable rather than silent (item 26).
+
+## Outcome
+
+Delivered. `buildOverlapIndex` landed at `f3fedd60`; six gates green; both
+mutation replays run by the orchestrator in an isolated worktree rather than
+quoted from the worker. No follow-up rows were needed under item 20 — nothing
+was knowingly deferred — and three gaps are disclosed in the PR body instead.
+
+**The premise gate is what this run turned on.** It refused my packet's named
+mutation as a MAJOR and was empirically right: replayed against the shipped
+implementation, the mutation I originally specified passes the forward-order
+assertions and is caught only by the reversed-order one the gate required me to
+add. Item 19 exists for exactly that, and it paid for itself in one round here.
+
+Every subagent on this run was dispatched with `run_in_background: false` and
+waited on; every dispatch line above has a verdict line beneath it.
