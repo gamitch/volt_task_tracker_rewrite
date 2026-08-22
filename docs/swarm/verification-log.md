@@ -1,6 +1,6 @@
 # Verification Log
 
-<!-- 
+<!--
 Keep entries concise. Move old detailed logs to:
 docs/swarm/archive/old-verification-logs/
 
@@ -15,47 +15,53 @@ Follow-up:
 -->
 
 ## T000 - System Initialized
+
 Result: PASS
 Checker: human
 Evidence:
+
 - Template files created
 - Directory structure verified
-[2026-07-16T03:21:43Z] Worker finished. Checker required before completion.
-[2026-07-16T03:23:07Z] Worker finished. Checker required before completion.
-[2026-07-16T03:30:33Z] Worker finished. Checker required before completion.
-[2026-07-16T03:32:41Z] Worker finished. Checker required before completion.
-[2026-07-16T03:34:29Z] Worker finished. Checker required before completion.
-[2026-07-16T03:43:22Z] Worker finished. Checker required before completion.
-[2026-07-16T12:11:56Z] Worker finished. Checker required before completion.
-[2026-07-16T12:18:42Z] Worker finished. Checker required before completion.
-[2026-07-16T12:23:07Z] Worker finished. Checker required before completion.
-[2026-07-16T12:28:30Z] Worker finished. Checker required before completion.
-[2026-07-16T12:33:16Z] Worker finished. Checker required before completion.
-[2026-07-16T12:34:32Z] Worker finished. Checker required before completion.
-[2026-07-16T15:30:09Z] Worker finished. Checker required before completion.
+  [2026-07-16T03:21:43Z] Worker finished. Checker required before completion.
+  [2026-07-16T03:23:07Z] Worker finished. Checker required before completion.
+  [2026-07-16T03:30:33Z] Worker finished. Checker required before completion.
+  [2026-07-16T03:32:41Z] Worker finished. Checker required before completion.
+  [2026-07-16T03:34:29Z] Worker finished. Checker required before completion.
+  [2026-07-16T03:43:22Z] Worker finished. Checker required before completion.
+  [2026-07-16T12:11:56Z] Worker finished. Checker required before completion.
+  [2026-07-16T12:18:42Z] Worker finished. Checker required before completion.
+  [2026-07-16T12:23:07Z] Worker finished. Checker required before completion.
+  [2026-07-16T12:28:30Z] Worker finished. Checker required before completion.
+  [2026-07-16T12:33:16Z] Worker finished. Checker required before completion.
+  [2026-07-16T12:34:32Z] Worker finished. Checker required before completion.
+  [2026-07-16T15:30:09Z] Worker finished. Checker required before completion.
 
 ## T001 - Vite + TS(strict) + ESLint/Prettier scaffold
+
 Date: 2026-07-16
 Result: PASS
 Checker: checker-tests (2nd run, on merits — 1st run's BLOCKER verdict vacated by boss-arbiter per D001, git-bundling evidence trap)
 Evidence:
+
 - npm install/typecheck/build/lint/format:check all exit 0; dev server boots clean
 - tsconfig strict:true confirmed
 - zero Tailwind/shadcn confirmed via grep on package.json + package-lock.json
 - index.html + package-lock.json verified as reasonable (D001-approved scope exceptions, not re-litigated)
 - file tree = Allowed Files + approved exceptions only
-Follow-up:
+  Follow-up:
 - None
-[2026-07-16T15:33:23Z] Worker finished. Checker required before completion.
-[2026-07-16T22:32:29Z] Worker finished. Checker required before completion.
-[2026-07-16T22:36:11Z] Worker finished. Checker required before completion.
-[2026-07-16T22:44:55Z] Worker finished. Checker required before completion.
+  [2026-07-16T15:33:23Z] Worker finished. Checker required before completion.
+  [2026-07-16T22:32:29Z] Worker finished. Checker required before completion.
+  [2026-07-16T22:36:11Z] Worker finished. Checker required before completion.
+  [2026-07-16T22:44:55Z] Worker finished. Checker required before completion.
 
 ## T002 - Astryx install + `volt.ts` theme (DES-03 exact spec)
+
 Date: 2026-07-16
 Result: PASS
 Checker: checker-accessibility (attempt 2; attempt 1 FAIL was an upstream `@astryxdesign/core@0.1.6` type-gap issue, not a worker error)
 Evidence:
+
 - `npx tsc --noEmit` and `npm run build` both exit 0
 - `src/theme/astryx-augment.d.ts` confirmed to contain only the `url?: string` addition to `TypographyRole`
 - `export{}` fix empirically verified via negative-control test: checker temporarily removed `export{}`, reproduced a real TS2305 break on `defineTheme` resolution project-wide, restored it, reconfirmed clean
@@ -63,75 +69,83 @@ Evidence:
 - no forbidden-file violations
 - astryx script and CLI cross-check confirmed
 - WCAG AA contrast passes both light/dark modes (carried over from attempt 1, unchanged)
-Attempts: 1 (single legitimate FAIL, attempt 1; PASS on attempt 2)
-Follow-up:
+  Attempts: 1 (single legitimate FAIL, attempt 1; PASS on attempt 2)
+  Follow-up:
 - NIT (log only, not a new task): consider filing an upstream issue against `@astryxdesign/core@0.1.6` for the `TypographyRole`/JSDoc `url`-field gap; already covered locally by `src/theme/astryx-augment.d.ts`.
-[2026-07-16T22:51:12Z] Worker finished. Checker required before completion.
-[2026-07-16T23:02:50Z] Worker finished. Checker required before completion.
-[2026-07-16T23:07:46Z] Worker finished. Checker required before completion.
-[2026-07-16T23:07:50Z] Worker finished. Checker required before completion.
-[2026-07-16T23:12:09Z] Worker finished. Checker required before completion.
-[2026-07-16T23:13:04Z] Worker finished. Checker required before completion.
+  [2026-07-16T22:51:12Z] Worker finished. Checker required before completion.
+  [2026-07-16T23:02:50Z] Worker finished. Checker required before completion.
+  [2026-07-16T23:07:46Z] Worker finished. Checker required before completion.
+  [2026-07-16T23:07:50Z] Worker finished. Checker required before completion.
+  [2026-07-16T23:12:09Z] Worker finished. Checker required before completion.
+  [2026-07-16T23:13:04Z] Worker finished. Checker required before completion.
 
 ## T009 - Migration: identity/roster tables
+
 Date: 2026-07-16
 Result: PASS (MINOR finding, non-blocking)
 Checker: checker-tests (attempt 1)
 Evidence:
+
 - Column-by-column diff of all 5 tables (profiles, teams, seasons, students, guardian_links) against PRD 8.1 ground truth: zero deltas
 - id/created_at conventions and FK `on delete restrict` conventions confirmed table by table
 - `seasons` partial unique index on `(is_active) where is_active = true` verified correct via static SQL review (no live Postgres instance available)
 - Confirmed no RLS/policy statements present (correctly out of scope — T012's job)
 - `supabase/migrations/` directory listing confirmed exactly one file exists (constitution item 10)
 - `role_enum` type placement judged reasonable for this migration; forward note logged for future migrations to reuse, not redefine, the type
-Findings:
+  Findings:
 - MINOR: `profiles.avatar_url text not null` with no default. Worker applied a consistent "no null-marker in PRD 8.1 = NOT NULL" rule, but PRD SET-01 describes avatar upload as a post-creation settings action, so this column would block INSERT into `profiles` until an avatar URL is supplied. Judged a genuine PRD 8.1 ambiguity, not a worker error. Non-blocking for T009.
-Follow-up:
+  Follow-up:
 - Routed as an amendment to T019's existing acceptance criteria (task-ledger.md T019 detail block), not a new task, since T019 already performs the invite-acceptance INSERT into `profiles` this finding affects. T019 must add a default or make the column nullable and record the choice in its worker output.
-[2026-07-16T23:17:44Z] Worker finished. Checker required before completion.
-[2026-07-16T23:18:00Z] Worker finished. Checker required before completion.
-[2026-07-16T23:20:26Z] Worker finished. Checker required before completion.
+  [2026-07-16T23:17:44Z] Worker finished. Checker required before completion.
+  [2026-07-16T23:18:00Z] Worker finished. Checker required before completion.
+  [2026-07-16T23:20:26Z] Worker finished. Checker required before completion.
 
 ## T002a - React 18→19 upgrade (D002 corrective task)
+
 Date: 2026-07-16
 Result: PASS
 Checker: checker-tests (attempt 2, on merits; attempt 1 FAIL was a legitimate but narrow pre-existing gap, not a worker fault)
 Evidence:
+
 - Attempt 1 (FAIL/MAJOR): React 19 upgrade itself fully sound — clean install with no `--legacy-peer-deps`, `npm ls react react-dom @astryxdesign/core` clean, `node -e` confirmed `react.use()` is a function, build/typecheck/lint exit 0, mandatory runtime smoke test (vitest+jsdom, real `createRoot`/`act` render of `<Theme><App/></Theme>`, asserts h1 text) passes. Sole gap: `npm run format:check` exited 1 on `src/theme/volt.ts` — checker traced this via `git show` to a pre-existing Prettier `bracketSpacing` drift predating T002a (inherited from T002's verbatim DES-03 block), not introduced by this task. Checker-approved fix: narrow the `format`/`format:check` glob in `package.json` to exclude `src/theme/volt.ts`; `volt.ts` content itself must never be edited.
 - Attempt 2 (PASS): worker applied a `package.json` glob negation (`"!src/theme/volt.ts"`) scoping the exclusion to exactly one file. Checker independently re-ran everything rather than trusting worker claims: `npm run format:check` exits 0; `react`/`react-dom` confirmed at 19.2.7 via re-run of `npm ls` (clean, no ELSPROBLEMS); `react.use()` re-confirmed a function; build/typecheck/lint/vitest all exit 0, including the mandatory runtime smoke test still passing; `volt.ts` re-diffed byte-for-byte identical to the DES-03 block (not just "git diff empty"); `astryx-augment.d.ts` unchanged from T002's approved content; glob negation independently verified not over-broad via the checker's own injected-formatting-violation test on a different file (`astryx-augment.d.ts`, subsequently fully reverted and reconfirmed clean) plus direct reading of the glob syntax; no forbidden-file violations (`docs/swarm/**`, `.claude/**` untouched; `volt.ts` content untouched).
-Attempts: 1 (single legitimate FAIL, attempt 1; PASS on attempt 2)
-Follow-up:
+  Attempts: 1 (single legitimate FAIL, attempt 1; PASS on attempt 2)
+  Follow-up:
 - None. D002's React 18→19 stack-lock reversal is now fully closed out end-to-end. T003 unblocked (Blocked→Ready) as a direct result — see task-ledger.md and state-summary.md.
-[2026-07-16T23:25:07Z] Worker finished. Checker required before completion.
-[2026-07-16T23:26:04Z] Worker finished. Checker required before completion.
-[2026-07-17T00:33:21Z] Worker finished. Checker required before completion.
-[2026-07-17T00:34:33Z] Worker finished. Checker required before completion.
-[2026-07-17T00:35:32Z] Worker finished. Checker required before completion.
-[2026-07-17T00:40:24Z] Worker finished. Checker required before completion.
+  [2026-07-16T23:25:07Z] Worker finished. Checker required before completion.
+  [2026-07-16T23:26:04Z] Worker finished. Checker required before completion.
+  [2026-07-17T00:33:21Z] Worker finished. Checker required before completion.
+  [2026-07-17T00:34:33Z] Worker finished. Checker required before completion.
+  [2026-07-17T00:35:32Z] Worker finished. Checker required before completion.
+  [2026-07-17T00:40:24Z] Worker finished. Checker required before completion.
 
 ## T010 - Migration: scheduling/attendance tables
+
 Date: 2026-07-17
 Result: PASS (1st attempt, MINOR finding, non-blocking)
 Checker: checker-tests
 Evidence:
+
 - All 5 tables (invites, events, event_sessions, rsvps, attendance) verified column-by-column against PRD 8.1 ground truth — zero deltas.
 - FK on-delete scoping confirmed: event_sessions.event_id cascade (the sole explicit PRD exception), all other 10 FKs restrict.
 - role_enum confirmed referenced from T009's migration, not redefined (grep for `create type role_enum` in this file: no match).
 - unique(session_id, student_id) confirmed on both rsvps and attendance; all check constraints (status/type/method enums) confirmed.
 - T009's migration file confirmed zero diff via git (constitution item 10).
 - No RLS/policy statements present (correctly out of scope, T012's job); no PII/seed data.
-Attempts: 0 (clean first-attempt PASS)
-Follow-up:
+  Attempts: 0 (clean first-attempt PASS)
+  Follow-up:
 - MINOR (non-blocking): `event_sessions.notes text not null` with no default follows the same "no null-marker = NOT NULL" convention as T009's `avatar_url`, but checker found stronger evidence it should be optional — PRD's MTG-02 dialog doesn't require notes to enable its create button, and OUT-02's dialog omits notes from the form spec entirely. Amended onto T031 and T039's acceptance criteria (task-ledger.md), not a new task — whichever lands first should add the small additive migration resolving nullability, not both.
-Note: T010's close-out (this entry, plus the ledger/state-summary updates) was performed directly by the orchestrating session rather than foreman-planner, because the dispatched foreman-planner close-out agent failed mid-run on a session usage limit before writing anything. No partial/inconsistent state resulted from that failure; this entry reflects the same close-out that agent was given complete instructions to perform.
-[2026-07-17T03:36:04Z] Worker finished. Checker required before completion.
-[2026-07-17T11:47:29Z] Worker finished. Checker required before completion.
+  Note: T010's close-out (this entry, plus the ledger/state-summary updates) was performed directly by the orchestrating session rather than foreman-planner, because the dispatched foreman-planner close-out agent failed mid-run on a session usage limit before writing anything. No partial/inconsistent state resulted from that failure; this entry reflects the same close-out that agent was given complete instructions to perform.
+  [2026-07-17T03:36:04Z] Worker finished. Checker required before completion.
+  [2026-07-17T11:47:29Z] Worker finished. Checker required before completion.
 
 ## T003 - CSS cascade layers + `theme.css` build pattern
+
 Date: 2026-07-17
 Result: PASS (1st attempt, clean, no findings)
 Checker: checker-tests
 Evidence:
+
 - build/typecheck/lint/format:check all exit 0
 - `src/theme/theme.css` declares `@layer reset, astryx-base, app;` as its first statement, matching NFR-08 exactly; every rule in the file confirmed to sit inside one of the three layer blocks (no unlayered global CSS)
 - Astryx's own `reset.css`/`astryx.css` confirmed pre-wrapped in their own `@layer` blocks by the package itself (not something the worker needed to wrap)
@@ -139,21 +153,23 @@ Evidence:
 - `src/main.tsx` diff confirmed exactly two lines (vite/client triple-slash reference + `theme.css` import), no other restructuring
 - `npm run build` output inspected: `dist/assets/theme.css` exists as a real static file and is linked via a `<link rel="stylesheet">` tag in `dist/index.html` (DES-07 — no runtime style injection)
 - no forbidden-file violations (file tree compared directly against Allowed Files list per D001 standing rule, not git history)
-Attempts: 0 (clean first-attempt PASS)
-Follow-up:
+  Attempts: 0 (clean first-attempt PASS)
+  Follow-up:
 - None.
-[2026-07-17T12:05:00Z] Worker finished. Checker required before completion.
-[2026-07-17T11:51:03Z] Worker finished. Checker required before completion.
-[2026-07-17T11:54:04Z] Worker finished. Checker required before completion.
-[2026-07-17T11:54:21Z] Worker finished. Checker required before completion.
-[2026-07-17T11:55:27Z] Worker finished. Checker required before completion.
-[2026-07-17T11:56:59Z] Worker finished. Checker required before completion.
+  [2026-07-17T12:05:00Z] Worker finished. Checker required before completion.
+  [2026-07-17T11:51:03Z] Worker finished. Checker required before completion.
+  [2026-07-17T11:54:04Z] Worker finished. Checker required before completion.
+  [2026-07-17T11:54:21Z] Worker finished. Checker required before completion.
+  [2026-07-17T11:55:27Z] Worker finished. Checker required before completion.
+  [2026-07-17T11:56:59Z] Worker finished. Checker required before completion.
 
 ## T005 - Router skeleton + route guards + deep-link redirect
+
 Date: 2026-07-17
 Result: FAIL (1st attempt, MAJOR finding, BLOCKER-class per constitution SEC-04/kiosk rule)
 Checker: checker-reviewer
 Evidence:
+
 - No worker self-report existed (worker session died on a session usage limit before reporting); checker derived all findings independently from artifacts + its own 6-test suite.
 - All 13 PRD Section 7 routes confirmed present as stub `<Route>` elements.
 - RequireAuth/RequireRole guard logic independently verified: unauth → `/login`; wrong-role → `/` + exact toast "You don't have access to that page."
@@ -161,39 +177,43 @@ Evidence:
 - `src/main.tsx`/`src/App.tsx` confirmed not wired to router/guards (correctly deferred to T006).
 - `npm run build`/`typecheck`/`lint` all exit 0 (only expected non-blocking react-refresh/only-export-components warnings).
 - `react-router-dom@7.18.1` confirmed the only new dependency; peer range satisfied by React 19, no `--legacy-peer-deps`.
-Findings:
+  Findings:
 - MAJOR/BLOCKER-class (K1): `/kiosk/:sessionId` stubbed as a fully public, unguarded route; module doc comment incorrectly claims the PRD doesn't spell out kiosk auth requirements. PRD Section 7's route table explicitly assigns `/kiosk/:sessionId` to coach/admin; SEC-04 states "no public pages." Constitution flags SEC-04/kiosk surfaces as BLOCKER-class.
 - Minor (K2, bundled with K1's fix): `guards.tsx`'s `Role` union (`'admin' | 'staff' | 'volunteer'`) is missing `'coach'`, needed for K1's fix to compile. Full role vocabulary reconciliation against AUTH-05 (admin|coach|student|parent) left open, not required this attempt.
 - NIT (K3, log only): `RequireRole` calls `pushToast` during render rather than in an effect. Deferred to T006 when real toast UI lands — not a blocker for this task.
-Attempts: 1 (FAIL, attempt 1)
-Follow-up:
+  Attempts: 1 (FAIL, attempt 1)
+  Follow-up:
 - Rework dispatched as a targeted fix (not a full redo): guard `/kiosk/:sessionId` with RequireAuth+RequireRole(['coach','admin']), add `'coach'` to the Role union, correct the doc comment. Detail: `docs/swarm/active/T005-latest-failure.md`. Worker packet updated: `docs/swarm/active/T005-worker-packet.md`.
-[2026-07-17T11:58:58Z] Worker finished. Checker required before completion.
-[2026-07-17T11:59:47Z] Worker finished. Checker required before completion.
-[2026-07-17T12:00:27Z] Worker finished. Checker required before completion.
-[2026-07-17T12:01:33Z] Worker finished. Checker required before completion.
+  [2026-07-17T11:58:58Z] Worker finished. Checker required before completion.
+  [2026-07-17T11:59:47Z] Worker finished. Checker required before completion.
+  [2026-07-17T12:00:27Z] Worker finished. Checker required before completion.
+  [2026-07-17T12:01:33Z] Worker finished. Checker required before completion.
 
 ## T005 - Router skeleton + route guards + deep-link redirect (PASS close-out)
+
 Date: 2026-07-17
 Result: PASS (attempt 2, targeted re-check of a targeted fix, on merits)
 Checker: checker-reviewer
 Evidence:
+
 - Attempt 1 (FAIL, MAJOR/BLOCKER-class) — see full entry above and `docs/swarm/archive/T005-latest-failure.md`: all 13 PRD Section 7 routes present, RequireAuth/RequireRole guard logic and NAV-08 round-trip independently verified correct via checker's own 6-test suite, build/typecheck/lint clean, dependency hygiene clean. Sole failure (K1): `/kiosk/:sessionId` stubbed as a fully public, unguarded route with a doc comment incorrectly claiming the PRD is silent on kiosk auth, against PRD Section 7's explicit coach/admin assignment and SEC-04's "no public pages" rule (constitution BLOCKER-class).
 - Attempt 2 (PASS): checker read `src/app/router.tsx` and `src/app/guards.tsx` directly and confirmed `/kiosk/:sessionId` genuinely wrapped in `RequireAuth` + `RequireRole(['coach','admin'])` in the real JSX tree, not merely claimed in a comment; `Role` union confirmed to now include `'coach'`, and this is the only substantive change to `guards.tsx` — `RequireRole`'s `pushToast`-during-render logic (K3) confirmed byte-identical to before, deliberately untouched.
 - Checker's own independent throwaway 5-test suite (`createRoot`/jsdom/`MemoryRouter`/`AuthProvider`) against the real `AppRoutes` tree confirmed all 3 kiosk-access cases: unauthenticated → stores full intended URL and redirects to `/login`; wrong-role (staff/volunteer) → redirects to `/` with exact toast "You don't have access to that page."; correct-role (coach/admin) → renders through to kiosk content. Scratch test file deleted before finishing, confirmed no leftover scratch files in tree.
 - Regression sweep: all 13 PRD Section 7 routes still present; `src/main.tsx`/`src/App.tsx` still not wired to router/guards (correctly deferred to T006); `npm run build`/`typecheck`/`lint` all exit 0, same 8 pre-existing non-blocking `react-refresh/only-export-components` warnings, no new warnings/errors.
 - Forbidden-file check (D001 standing rule, file-tree comparison not git history): `src/app/` contains only `router.tsx`/`guards.tsx`, no scratch/leftover files; no changes under `src/theme/**`, `docs/swarm/**`, `.claude/**`; `package.json`/`package-lock.json` unchanged (no new dependency this attempt).
-Attempts: 1 (single legitimate FAIL, attempt 1, BLOCKER-class; PASS on attempt 2)
-Follow-up:
+  Attempts: 1 (single legitimate FAIL, attempt 1, BLOCKER-class; PASS on attempt 2)
+  Follow-up:
 - K2 (Role union completeness) and K3 (`pushToast`-during-render in `RequireRole`) logged as context for whichever future task next touches `guards.tsx`/routing (expected T006) — not spun into new ledger rows. See task-ledger.md T005 row and state-summary.md Completed section.
-[2026-07-17T12:05:00Z] Worker finished. Checker required before completion.
-[2026-07-17T12:04:43Z] Worker finished. Checker required before completion.
+  [2026-07-17T12:05:00Z] Worker finished. Checker required before completion.
+  [2026-07-17T12:04:43Z] Worker finished. Checker required before completion.
 
 ## T011 - Migration: support tables + audit triggers (DATA-02)
+
 Date: 2026-07-17
 Result: PASS (1st attempt, MINOR finding, non-blocking)
 Checker: checker-tests
 Evidence:
+
 - All 4 support tables (notification_prefs, calendar_feeds, email_log, audit_log) verified column-by-column against PRD 8.1 ground truth — zero deltas.
 - `role_enum` confirmed reused from T009's migration, not redefined (grep for `create type role_enum`: no match); confirmed consistent with ground truth that none of T011's four tables carry a role column.
 - All 5 DATA-02 triggers independently tested against a real scratch Postgres instance (T009→T010→T011 applied in order), with full positive AND negative controls, not merely re-running the worker's claimed tests:
@@ -207,25 +227,27 @@ Evidence:
 - T009's and T010's migration files confirmed byte-identical to their pre-T011 on-disk state (constitution item 10) — file content comparison, not git history (per D001 standing rule).
 - All 5 `meta jsonb` payloads independently read from the actual `jsonb_build_object(...)` calls in the trigger function bodies — confirmed to contain only IDs, enum/status values, and booleans; no names/emails/free text (constitution item 6).
 - File-count/scope check: exactly one new file under `supabase/migrations/` beyond the T009/T010 baseline; nothing else in the repo touched.
-Findings:
+  Findings:
 - MINOR (accept-as-is, no follow-up task per checker's own recommendation): `notification_prefs` extends `not null default true` to all 6 EML-02 category bools, not just `digest_enabled` (the only column PRD 8.1 ground truth explicitly specifies a default for). Judged a reasonable, well-documented UX interpretation (opt-in-by-default), not a defect. Note for future EML-02 spec work: make per-column defaults explicit.
 - Design decision (adjudicated, not-blocking, logged as a standing operational risk rather than a task amendment — see state-summary.md Known Decisions): `audit_log.actor uuid not null` with no default, following the established fk-not-marked-null convention. Any future write to `attendance`/`profiles`/`students`/`event_sessions`/`invites` made outside a user's own authenticated browser session (e.g. via a service-role Edge Function or background job) will hard-fail the entire triggering UPDATE unless `app.actor_id` is set via `SET LOCAL` first, since `auth.uid()` won't resolve in that context. Ruled acceptable as designed; not routed as an amendment to any specific downstream task because which future tasks actually write to these five tables via a service-role/non-interactive context depends on implementation choices not yet made (see state-summary.md for full reasoning).
 - Design decision (adjudicated, not-blocking): no FK on `email_log.session_id`/`email_log.profile_id` — confirmed correct reading of PRD 8.1's "null, not fk" marking; log rows intentionally survive deletion of the referenced session/profile.
-Attempts: 0 (clean first-attempt PASS)
-Follow-up:
+  Attempts: 0 (clean first-attempt PASS)
+  Follow-up:
 - None requiring a new task or acceptance-criteria amendment. Operational note on `audit_log.actor` NOT NULL logged centrally in `docs/swarm/state-summary.md` (Known Decisions) as a standing risk for any future task/packet involving service-role or background writes to the five trigger-guarded tables, rather than amended onto specific rows — see that file for the rationale.
-[2026-07-17T12:07:55Z] Worker finished. Checker required before completion.
-[2026-07-17T12:12:34Z] Worker finished. Checker required before completion.
-[2026-07-17T12:22:00Z] Worker finished. Checker required before completion.
-[2026-07-17T12:22:57Z] Worker finished. Checker required before completion.
-[2026-07-17T12:29:14Z] Worker finished. Checker required before completion.
-[2026-07-17T12:30:06Z] Worker finished. Checker required before completion.
+  [2026-07-17T12:07:55Z] Worker finished. Checker required before completion.
+  [2026-07-17T12:12:34Z] Worker finished. Checker required before completion.
+  [2026-07-17T12:22:00Z] Worker finished. Checker required before completion.
+  [2026-07-17T12:22:57Z] Worker finished. Checker required before completion.
+  [2026-07-17T12:29:14Z] Worker finished. Checker required before completion.
+  [2026-07-17T12:30:06Z] Worker finished. Checker required before completion.
 
 ## T004 - CI pipeline (typecheck/lint/unit/build + bundle budget)
+
 Date: 2026-07-17
 Result: PASS (1st attempt, clean, no defect findings)
 Checker: checker-tests
 Evidence:
+
 - `.github/workflows/ci.yml` read directly and confirmed structurally correct: `push`/`pull_request` triggers, Node `20.18.1` pinned via `actions/setup-node@v4` with `cache: npm`, `npm ci` (not `npm install`), five separate steps (typecheck, lint, test, build, bundle-size gate) — no `continue-on-error:`, no `\|\| true`, no other exit-code-swallowing anywhere in the file.
 - `package.json` confirmed zero diff via direct file-tree comparison against the pre-T004 baseline (D001 method — file state, not git commit authorship).
 - Checker independently re-ran every workflow `run:` command, extracted verbatim from the YAML itself (not retyped from worker report): `npm ci`, `npm run typecheck`, `npm run lint`, `npm run test`, `npm run build` — all exit 0 against the current clean tree.
@@ -234,30 +256,32 @@ Evidence:
 - YAML validity independently confirmed via PyYAML (`yaml.safe_load`).
 - Deliverable location (`.github/workflows/ci.yml`) confirmed correct against the Allowed Files list; the worker packet's bullet-list phrasing (grouping the workflow file alongside `package.json`) was packet imprecision, not an actual scope violation.
 - No forbidden-file violations found via full-list check (`docs/swarm/**`, `.claude/**`, anything outside `.github/workflows/` and `package.json`'s `scripts` block, `src/**`) — file tree compared directly, not git history.
-Findings:
+  Findings:
 - MINOR, calibration-only, not a task defect: checker separately flagged new `docs/swarm/active/*.md` files (the worker/checker packets for this very task) and a hook-appended `verification-log.md` line as a "technical violation" of the zero-net-diff-outside-allowed-files criterion, explicitly noting this "does not affect deliverable quality" and that the workflow is "ready for use." These are expected background swarm-process artifacts present on every task (every checker packet is itself a new `docs/swarm/active/*.md` file; the SubagentStop hook appends a verification-log.md line on every worker completion, regardless of task) — not something the worker produced or could avoid, and not real evidence to weigh per task. Routed as a checker-packet-writing calibration note in `docs/swarm/state-summary.md` (Known Decisions), not a follow-up task and not a mark against this PASS.
-Attempts: 0 (clean first-attempt PASS)
-Follow-up:
+  Attempts: 0 (clean first-attempt PASS)
+  Follow-up:
 - None requiring a new task. Standing process note logged in `docs/swarm/state-summary.md`: future checker packets' "Forbidden Modification Check" instructions should state upfront that new `docs/swarm/active/*.md` files and verification-log.md's hook-appended lines are always-expected background artifacts, not per-task findings to file.
-[2026-07-17T12:38:49Z] Worker finished. Checker required before completion.
-[2026-07-17T12:42:31Z] Worker finished. Checker required before completion.
-[2026-07-17T19:29:24Z] Worker finished. Checker required before completion.
-[2026-07-17T19:41:19Z] Worker finished. Checker required before completion.
-[2026-07-17T19:43:31Z] Worker finished. Checker required before completion.
-[2026-07-17T21:36:53Z] Worker finished. Checker required before completion.
-[2026-07-17T21:38:35Z] Worker finished. Checker required before completion.
-[2026-07-17T21:45:46Z] Worker finished. Checker required before completion.
-[2026-07-17T21:46:46Z] Worker finished. Checker required before completion.
-[2026-07-17T21:49:32Z] Worker finished. Checker required before completion.
+  [2026-07-17T12:38:49Z] Worker finished. Checker required before completion.
+  [2026-07-17T12:42:31Z] Worker finished. Checker required before completion.
+  [2026-07-17T19:29:24Z] Worker finished. Checker required before completion.
+  [2026-07-17T19:41:19Z] Worker finished. Checker required before completion.
+  [2026-07-17T19:43:31Z] Worker finished. Checker required before completion.
+  [2026-07-17T21:36:53Z] Worker finished. Checker required before completion.
+  [2026-07-17T21:38:35Z] Worker finished. Checker required before completion.
+  [2026-07-17T21:45:46Z] Worker finished. Checker required before completion.
+  [2026-07-17T21:46:46Z] Worker finished. Checker required before completion.
+  [2026-07-17T21:49:32Z] Worker finished. Checker required before completion.
 
 ## T012 - RLS helper functions + policies (verbatim PRD 8.4)
+
 Date: 2026-07-17
 Result: PASS (1st attempt, clean, no findings)
 Checker: checker-tests
 Evidence:
+
 - Highest-stakes task run so far: constitution items 3 ("RLS policies ... come only from PRD Section 8.4, copied verbatim ... → BLOCKER") and 4 ("RLS is default-deny; any table without policies → BLOCKER; a policy subquerying its own table → BLOCKER") both explicitly apply. Checker treated every worker claim as a hypothesis to independently verify, not evidence.
 - Byte-verbatim helper diff: all three PRD 8.4 helper functions (`auth_role()`, `is_staff()`, `my_student_ids()`) extracted from the migration and diffed against ground truth via SHA-256 checksum match, not a visual/eyeball read — zero difference, including whitespace and the `union` clause ordering.
-- Self-referential subquery sweep: every `create policy` statement in the file grepped and individually classified; confirmed each `USING`/`WITH CHECK` clause references only the three helpers, `auth.uid()`, direct column comparisons, or a subquery against a *different* table than the one the policy is attached to. Zero same-table subqueries found anywhere, including on `profiles` (the canonical recursion-bug table), `students` (Trap 1), and `events`/`event_sessions` (Trap 2). Confirmed `is_staff()`/`auth_role()` calls inside policies are SECURITY DEFINER function calls (safe), not direct subqueries under the caller's own RLS context.
+- Self-referential subquery sweep: every `create policy` statement in the file grepped and individually classified; confirmed each `USING`/`WITH CHECK` clause references only the three helpers, `auth.uid()`, direct column comparisons, or a subquery against a _different_ table than the one the policy is attached to. Zero same-table subqueries found anywhere, including on `profiles` (the canonical recursion-bug table), `students` (Trap 1), and `events`/`event_sessions` (Trap 2). Confirmed `is_staff()`/`auth_role()` calls inside policies are SECURITY DEFINER function calls (safe), not direct subqueries under the caller's own RLS context.
 - 14-table RLS + policy coverage: all 14 tables from T009/T010/T011 (profiles, teams, seasons, students, guardian_links, invites, events, event_sessions, rsvps, attendance, notification_prefs, calendar_feeds, email_log, audit_log) confirmed to have `enable row level security` plus at least one real policy — zero gaps, and no table left inaccessible-by-accident vs. intentionally narrow (e.g. `audit_log`'s staff-read-only correctly distinguished from an accidental omission).
 - `role_enum` cast claim independently tested on a live scratch Postgres instance: the literal uncast canonical form (`role = auth_role()`) reproducibly throws `operator does not exist: role_enum = text`; the shipped cast form (`role::text = auth_role()`) works correctly and still blocks a self role-escalation attempt (`UPDATE profiles SET role='admin'` as a non-admin session → 0 rows/blocked); `auth_role()`'s own function body re-confirmed untouched — the cast lives only in the policy, not the helper.
 - Independent scratch-Postgres validation (own seed data, fabricated names only per constitution item 6; migrations applied in strict T009→T010→T011→T012 order) covering: anon/no-JWT (zero rows everywhere); orphan authenticated session with a real `auth.users` row but no `profiles` row (zero rows from `students`/`attendance`/`events`/`event_sessions` — the specific case the Trap 2 fix targets); student1 (reads own `students`/`attendance`, cannot read another team's student, cannot insert into `attendance` — no insert policy exists for non-staff); parent1 (reads only their linked student's `attendance`/`rsvps`/`students`, not an unlinked student's); events/event_sessions team-scoping (student1/parent1 see both their own team's event and the "all teams" event — 2/2, independently re-verified rather than trusting the worker's reported count); admin/coach (full read/write on `students`/`invites`, `is_staff()`-gated policies confirmed working); `profiles` queried as every role type with zero infinite-recursion/stack-depth errors in any case; `notification_prefs`/`calendar_feeds` confirmed self-only (own | own | own per the matrix, not staff_all even for admin/coach).
@@ -267,28 +291,30 @@ Evidence:
 - T009/T010/T011 migration files confirmed byte-identical/zero-diff via direct file-content comparison (D001 standing rule — never git history) — constitution item 10.
 - No secrets/service-role keys anywhere in the migration file (constitution item 5).
 - Forbidden-file/scope check: exactly one new file under `supabase/migrations/` beyond the T009/T010/T011 baseline; nothing else in the repository changed.
-Attempts: 0 (clean first-attempt PASS)
-Follow-up:
+  Attempts: 0 (clean first-attempt PASS)
+  Follow-up:
 - None requiring a new task. T013's worker packet must explicitly account for closing the Trap 1 teammate-visibility gap deferred here. Full worker/checker packets archived at `docs/swarm/archive/T012-worker-packet.md` and `docs/swarm/archive/T012-checker-packet.md`.
-[2026-07-17T21:52:00Z] Worker finished. Checker required before completion.
-[2026-07-17T21:57:27Z] Worker finished. Checker required before completion.
-[2026-07-17T22:01:59Z] Worker finished. Checker required before completion.
-[2026-07-17T22:05:54Z] Worker finished. Checker required before completion.
-[2026-07-17T22:20:57Z] Worker finished. Checker required before completion.
-[2026-07-17T22:25:56Z] Worker finished. Checker required before completion.
-[2026-07-17T22:26:51Z] Worker finished. Checker required before completion.
-[2026-07-17T22:27:01Z] Worker finished. Checker required before completion.
-[2026-07-17T22:27:52Z] Worker finished. Checker required before completion.
-[2026-07-17T22:28:44Z] Worker finished. Checker required before completion.
-[2026-07-17T22:31:51Z] Worker finished. Checker required before completion.
-[2026-07-17T22:41:41Z] Worker finished. Checker required before completion.
-[2026-07-17T22:48:41Z] Worker finished. Checker required before completion.
-[2026-07-17T22:49:43Z] Worker finished. Checker required before completion.
+  [2026-07-17T21:52:00Z] Worker finished. Checker required before completion.
+  [2026-07-17T21:57:27Z] Worker finished. Checker required before completion.
+  [2026-07-17T22:01:59Z] Worker finished. Checker required before completion.
+  [2026-07-17T22:05:54Z] Worker finished. Checker required before completion.
+  [2026-07-17T22:20:57Z] Worker finished. Checker required before completion.
+  [2026-07-17T22:25:56Z] Worker finished. Checker required before completion.
+  [2026-07-17T22:26:51Z] Worker finished. Checker required before completion.
+  [2026-07-17T22:27:01Z] Worker finished. Checker required before completion.
+  [2026-07-17T22:27:52Z] Worker finished. Checker required before completion.
+  [2026-07-17T22:28:44Z] Worker finished. Checker required before completion.
+  [2026-07-17T22:31:51Z] Worker finished. Checker required before completion.
+  [2026-07-17T22:41:41Z] Worker finished. Checker required before completion.
+  [2026-07-17T22:48:41Z] Worker finished. Checker required before completion.
+  [2026-07-17T22:49:43Z] Worker finished. Checker required before completion.
 
 ## T015 — Supabase Auth provider config
+
 Verdict: PASS (1st attempt). Severity: NIT (non-blocking, no rework).
 Checker: checker-tests. Files inspected: `supabase/config.toml`, `.env.example`, `.gitignore`, `docs/swarm/active/T015-worker-packet.md`, `docs/swarm/active/T015-checker-packet.md`.
 Findings:
+
 - Line-by-line confirmation: `[auth]` `enable_signup = false` (line 133, AUTH-01 master switch); `[auth.email]` `enable_signup = false` (line 173, provider-scoped level); `[auth.external.google]` `enabled = true` (line 205).
 - `client_id = env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)` (line 209), `secret = env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)` (line 214) — env(...) references only, no literal secret values.
 - Env-var naming discrepancy (worker's `..._EXTERNAL_GOOGLE_...` vs. packet's illustrative `..._GOOGLE_...`): Supabase CLI not available in checker's sandbox (`which supabase` exit 1, no binary found anywhere in project) — checker performed a manual structural review instead of CLI reproduction, explicitly stated as the method used. Judged the worker's section-path-derived naming (`SUPABASE_<SECTION_PATH>`, matching `auth.external.google`) logically sound and within the packet's explicit allowance for "the exact equivalent current Supabase CLI env-reference syntax." Passed with the caveat noted, not treated as unverifiable/failing.
@@ -299,15 +325,17 @@ Findings:
 - External blocker (George's real Google OAuth client doesn't exist yet) correctly handled: no fake/placeholder client ID or secret anywhere; `redirect_uri` left blank to use the Supabase-managed default; config is structurally ready to receive real credentials via env vars at runtime — not failed for being unable to live-test.
 - Other config review: `enable_anonymous_sign_ins = false`, `enable_manual_linking = false`, reasonable rate limits, 1-hour JWT expiry, refresh token rotation enabled — no other suspicious settings found.
 - D001-method forbidden-file check (file-tree comparison, not git history): only `supabase/config.toml` (new) and `.env.example` (edited) touched; zero writes under `docs/swarm/**` or `.claude/**`; real `.env` file confirmed not created. Clean.
-Attempts: 0 (clean first-attempt PASS)
-Follow-up:
+  Attempts: 0 (clean first-attempt PASS)
+  Follow-up:
 - Optional NIT-level follow-up (not spun into a new task): document the `SUPABASE_AUTH_EXTERNAL_GOOGLE_*` env-var naming decision somewhere durable in case Supabase CLI conventions change in a future version — logged here instead.
 - Full worker/checker packets archived at `docs/swarm/archive/T015-worker-packet.md` and `docs/swarm/archive/T015-checker-packet.md`.
 
 ## T013 — Metric views (verbatim PRD 8.4)
+
 Verdict: PASS (1st attempt). Severity: none — no BLOCKER/MAJOR/MINOR findings.
 Checker: checker-tests. Files inspected: `supabase/migrations/20260717000003_metric_views.sql`, `src/` (grep sweep), `docs/swarm/active/T013-worker-packet.md`, `docs/swarm/active/T013-checker-packet.md`.
 Findings:
+
 - Byte-verbatim confirmation: SQL body of the three views (`v_student_hours`, `v_student_participation`, `v_team_participation`) matches ground-truth PRD 8.4 text via SHA-256 checksum match on both sides, not an eyeballed diff. Prescribed implementation-note comment present, substantively unchanged.
 - TS formula-duplication grep (`participation_pct|confirmed_hours|hours_override` across `src/`): zero hits.
 - NFR-03 fixture validation on a fresh scratch Postgres, using the checker's own independently-designed fixtures (migrations T009→T013 applied in order):
@@ -319,86 +347,92 @@ Findings:
 - T009–T012 migration files re-read directly and confirmed unchanged; exactly one new file under `supabase/migrations/`.
 - Trap 1 gap re-confirmed via `information_schema.columns`: all three views contain only id/metric numeric columns, zero PII/identity columns (no name/email/avatar_url/display_name); no self-referential `students` subquery anywhere. Correctly leaves the teammate-leaderboard-visibility gap deferred to a future task (most likely T044), not a T013 defect.
 - Forbidden-file/scope check: file tree confirmed to contain exactly the one new allowed migration file; `src/` unchanged (7 files, same as before).
-Attempts: 0 (clean first-attempt PASS)
-Follow-up:
+  Attempts: 0 (clean first-attempt PASS)
+  Follow-up:
 - None requiring a new task. T014 (NFR-03 metric-view fixture tests) unblocked (Blocked→Ready) as a direct result.
 - Full worker/checker packets archived at `docs/swarm/archive/T013-worker-packet.md` and `docs/swarm/archive/T013-checker-packet.md`.
-[2026-07-17T22:53:08Z] Worker finished. Checker required before completion.
-[2026-07-17T22:55:41Z] Worker finished. Checker required before completion.
-[2026-07-17T22:58:04Z] Worker finished. Checker required before completion.
-[2026-07-17T23:04:17Z] Worker finished. Checker required before completion.
-[2026-07-17T23:35:19Z] Worker finished. Checker required before completion.
-[2026-07-17T23:48:24Z] Worker finished. Checker required before completion.
-[2026-07-17T23:58:05Z] Worker finished. Checker required before completion.
-[2026-07-18T00:33:54Z] Worker finished. Checker required before completion.
-[2026-07-18T00:38:42Z] Worker finished. Checker required before completion.
-[2026-07-18T00:49:32Z] Worker finished. Checker required before completion.
-[2026-07-18T00:51:12Z] Worker finished. Checker required before completion.
-[2026-07-18T00:52:13Z] Worker finished. Checker required before completion.
-[2026-07-18T00:52:49Z] Worker finished. Checker required before completion.
-[2026-07-18T00:53:25Z] Worker finished. Checker required before completion.
-[2026-07-18T00:54:05Z] Worker finished. Checker required before completion.
-[2026-07-18T00:55:01Z] Worker finished. Checker required before completion.
-[2026-07-18T00:55:39Z] Worker finished. Checker required before completion.
-[2026-07-18T00:56:23Z] Worker finished. Checker required before completion.
-[2026-07-18T00:56:54Z] Worker finished. Checker required before completion.
-[2026-07-18T00:57:30Z] Worker finished. Checker required before completion.
-[2026-07-18T00:57:59Z] Worker finished. Checker required before completion.
-[2026-07-18T00:58:49Z] Worker finished. Checker required before completion.
-[2026-07-18T01:00:00Z] Worker finished. Checker required before completion.
-[2026-07-18T01:01:43Z] Worker finished. Checker required before completion.
-[2026-07-18T01:02:21Z] Worker finished. Checker required before completion.
+  [2026-07-17T22:53:08Z] Worker finished. Checker required before completion.
+  [2026-07-17T22:55:41Z] Worker finished. Checker required before completion.
+  [2026-07-17T22:58:04Z] Worker finished. Checker required before completion.
+  [2026-07-17T23:04:17Z] Worker finished. Checker required before completion.
+  [2026-07-17T23:35:19Z] Worker finished. Checker required before completion.
+  [2026-07-17T23:48:24Z] Worker finished. Checker required before completion.
+  [2026-07-17T23:58:05Z] Worker finished. Checker required before completion.
+  [2026-07-18T00:33:54Z] Worker finished. Checker required before completion.
+  [2026-07-18T00:38:42Z] Worker finished. Checker required before completion.
+  [2026-07-18T00:49:32Z] Worker finished. Checker required before completion.
+  [2026-07-18T00:51:12Z] Worker finished. Checker required before completion.
+  [2026-07-18T00:52:13Z] Worker finished. Checker required before completion.
+  [2026-07-18T00:52:49Z] Worker finished. Checker required before completion.
+  [2026-07-18T00:53:25Z] Worker finished. Checker required before completion.
+  [2026-07-18T00:54:05Z] Worker finished. Checker required before completion.
+  [2026-07-18T00:55:01Z] Worker finished. Checker required before completion.
+  [2026-07-18T00:55:39Z] Worker finished. Checker required before completion.
+  [2026-07-18T00:56:23Z] Worker finished. Checker required before completion.
+  [2026-07-18T00:56:54Z] Worker finished. Checker required before completion.
+  [2026-07-18T00:57:30Z] Worker finished. Checker required before completion.
+  [2026-07-18T00:57:59Z] Worker finished. Checker required before completion.
+  [2026-07-18T00:58:49Z] Worker finished. Checker required before completion.
+  [2026-07-18T01:00:00Z] Worker finished. Checker required before completion.
+  [2026-07-18T01:01:43Z] Worker finished. Checker required before completion.
+  [2026-07-18T01:02:21Z] Worker finished. Checker required before completion.
 
 ## T006 — AppShell + TopNav (attempt 1)
+
 Verdict: FAIL. Severity: BLOCKER (structural, not a worker-code defect).
 Checker: checker-accessibility. Files inspected: `src/app/AppShell.tsx`, `src/components/nav/TopNav.tsx`, `src/App.tsx`, `src/theme/theme.smoke.test.tsx`, `src/app/router.tsx`, `src/app/guards.tsx`, `docs/swarm/astryx-api.md` (every cited line range), `vite.config.ts`, `package.json`, `dist/assets/theme.css`.
 Findings:
+
 - NAV-01/NAV-02, Astryx prop cross-check (every prop re-verified against astryx-api.md's actual line numbers, no hallucinations), DES-17 keyboard/focus (verified via a real scratch-test harness dispatching actual KeyboardEvents, not just screenshots — worker's claimed screenshots were never found on disk), role-gating (admin/coach show the season Selector, staff/volunteer don't — confirmed via the same harness), null-user no-crash (confirmed both as a direct component mount and full end-to-end redirect), forbidden-file boundary (router.tsx/guards.tsx confirmed untouched via mtime + content re-read), and build/typecheck/lint/format:check: all independently verified clean, zero findings.
 - The BLOCKER: wiring `App.tsx` into a real `BrowserRouter > AuthProvider > LayerProvider > Theme > AppShell > AppRoutes` tree (mandated by T005's own module doc, confirmed by reading it directly — not worker scope creep) broke the pre-existing, already-Passed `theme.smoke.test.tsx` (T002a, outside T006's Allowed Files) two independent ways: (a) `TypeError: window.matchMedia is not a function` — no matchMedia polyfill exists anywhere in the project, and `App` now needs it once real Astryx components actually mount for the first time; (b) confirmed independently by temporarily patching in a polyfill then reverting cleanly — even fixed, the test's `'VOLT Team Portal'` assertion is now permanently stale, since an unauthenticated session now correctly redirects to `/login`'s placeholder rather than rendering the old root content.
 - Constitution Non-Negotiable directly implicated: "Existing tests must pass unless the boss explicitly approves a test update" — no such approval exists yet.
 - Checker's explicit judgment: this is not fixable within T006's own Allowed Files (the fix requires editing the forbidden test file), so sending T006's worker into a rework loop would waste an attempt on an unfixable-in-scope problem. Recommended immediate escalation to boss-arbiter, same pattern as D001/D002, rather than a passively-logged follow-up — citing direct precedent from CI break #1/#2 (both treated as same-day urgent fixes).
 - Confirmed live on real GitHub Actions CI: required `npm run test` gate red on every push to this branch since commit e20b8d1.
-Attempts: 1 (FAIL, not attributable to worker error — escalated rather than reworked)
-Follow-up:
+  Attempts: 1 (FAIL, not attributable to worker error — escalated rather than reworked)
+  Follow-up:
 - Dispute filed with boss-arbiter requesting explicit authorization for: (a) a new shared test-setup file with a matchMedia polyfill wired into vite.config.ts's test.setupFiles, and (b) an edit to the currently-forbidden theme.smoke.test.tsx to replace its stale assertion. T006 stays In Progress pending the ruling and a green re-check on real CI.
-[2026-07-18T01:04:07Z] Worker finished. Checker required before completion.
-[2026-07-18T01:04:40Z] Worker finished. Checker required before completion.
-[2026-07-18T01:05:22Z] Worker finished. Checker required before completion.
-[2026-07-18T01:06:34Z] Worker finished. Checker required before completion.
-[2026-07-18T01:07:12Z] Worker finished. Checker required before completion.
-[2026-07-18T01:07:50Z] Worker finished. Checker required before completion.
-[2026-07-18T01:08:24Z] Worker finished. Checker required before completion.
-[2026-07-18T01:10:30Z] Worker finished. Checker required before completion.
-[2026-07-18T01:11:14Z] Worker finished. Checker required before completion.
-[2026-07-18T01:12:10Z] Worker finished. Checker required before completion.
-[2026-07-18T01:12:46Z] Worker finished. Checker required before completion.
+  [2026-07-18T01:04:07Z] Worker finished. Checker required before completion.
+  [2026-07-18T01:04:40Z] Worker finished. Checker required before completion.
+  [2026-07-18T01:05:22Z] Worker finished. Checker required before completion.
+  [2026-07-18T01:06:34Z] Worker finished. Checker required before completion.
+  [2026-07-18T01:07:12Z] Worker finished. Checker required before completion.
+  [2026-07-18T01:07:50Z] Worker finished. Checker required before completion.
+  [2026-07-18T01:08:24Z] Worker finished. Checker required before completion.
+  [2026-07-18T01:10:30Z] Worker finished. Checker required before completion.
+  [2026-07-18T01:11:14Z] Worker finished. Checker required before completion.
+  [2026-07-18T01:12:10Z] Worker finished. Checker required before completion.
+  [2026-07-18T01:12:46Z] Worker finished. Checker required before completion.
 
 ## T006a — Fix CI test regression from T006 wiring (D003 corrective task)
+
 Verdict: PASS (1st attempt). Severity: none — no findings.
 Checker: checker-tests. Files inspected: `src/theme/theme.smoke.test.tsx`, `src/test-setup.ts`, `vite.config.ts`, D003 ruling text, T006a worker packet.
 Findings:
+
 - `theme.smoke.test.tsx`: confirmed renders `<App/>` directly (no `<Theme>` double-wrap, App owns Theme per NAV-01), unused Theme/voltTheme imports removed, `.not.toThrow()` kept as core assertion, stale `'VOLT Team Portal'` h1 check replaced with `expect(container.textContent?.trim()).toBeTruthy()` — independently confirmed no `'Login (placeholder)'` copy asserted either (avoids recreating the same staleness trap once T016 changes that copy).
 - `test-setup.ts`: guard logic independently tested (not just read) — confirmed the polyfill only installs when `window.matchMedia` is undefined and does not clobber a real one when present.
 - `vite.config.ts`: `test.setupFiles` wiring confirmed; T003's `build.rollupOptions` block confirmed byte-unchanged via git-history checksum comparison across the pre/post commits (both `e22252de279f3624ad4e17cae517fe46`).
 - Independently re-ran `npm run test`/`typecheck`/`lint`/`build`/`format:check` — all exit 0. Independently re-executed the exact bundle-size-gate shell logic from `.github/workflows/ci.yml` against a fresh build: 128,239 bytes gzip vs. 307,200 byte budget, PASS.
 - D001-method forbidden-file check clean: only the three D003-authorized files changed; T006's own AppShell.tsx/TopNav.tsx/App.tsx untouched.
 - Checker's explicit conclusion, matching D003 Ruling F: this PASS re-verifies T006's own CI gate too — no separate checker-accessibility re-run needed. T006 and T006a Passed together.
-Attempts: 1 (clean first-attempt PASS; T006's own attempt-1 FAIL was reassigned to this task per D003, not a T006a rework)
-Follow-up:
+  Attempts: 1 (clean first-attempt PASS; T006's own attempt-1 FAIL was reassigned to this task per D003, not a T006a rework)
+  Follow-up:
 - None. T007 and T016 unblocked (Blocked→Ready) as a direct result — see task-ledger.md full-ledger sweep note.
 - Worker packet archived at `docs/swarm/archive/T006a-worker-packet.md` (no separate checker packet file — checker-tests was dispatched directly with inline instructions for this small corrective task).
-[2026-07-18T01:20:06Z] Worker finished. Checker required before completion.
-[2026-07-18T01:25:50Z] Worker finished. Checker required before completion.
-[2026-07-18T01:27:15Z] Worker finished. Checker required before completion.
-[2026-07-18T01:32:11Z] Worker finished. Checker required before completion.
-[2026-07-18T01:45:41Z] Worker finished. Checker required before completion.
-[2026-07-18T01:46:41Z] Worker finished. Checker required before completion.
-[2026-07-18T01:49:51Z] Worker finished. Checker required before completion.
+  [2026-07-18T01:20:06Z] Worker finished. Checker required before completion.
+  [2026-07-18T01:25:50Z] Worker finished. Checker required before completion.
+  [2026-07-18T01:27:15Z] Worker finished. Checker required before completion.
+  [2026-07-18T01:32:11Z] Worker finished. Checker required before completion.
+  [2026-07-18T01:45:41Z] Worker finished. Checker required before completion.
+  [2026-07-18T01:46:41Z] Worker finished. Checker required before completion.
+  [2026-07-18T01:49:51Z] Worker finished. Checker required before completion.
 
 ## T016 — `/login` screen
+
 Verdict: PASS (1st attempt). Severity: MINOR (highest finding; several NITs also logged).
 Checker: checker-accessibility. Files inspected: `src/pages/login/LoginPage.tsx`, `src/pages/login/index.ts`, `src/app/guards.tsx`, `src/app/router.tsx`, `src/app/AppShell.tsx`, `src/theme/theme.css`, `src/theme/volt.ts`, `docs/swarm/astryx-api.md` at every cited line range.
 Findings:
+
 - Astryx prop cross-check: every cited prop (TextInput, Button, Link, Card, Center, VStack, Heading, Text, Banner) independently re-verified against astryx-api.md's actual line numbers — zero hallucinated props.
 - AUTH-02: zero self-serve signup affordances anywhere, confirmed via full DOM text scan across every reachable UI state in both modes (empty, error, loading, reset-panel open/error/success, dark mode).
 - DES-12 four-state handling traced to real conditional renders (`isSubmitting`, `formError`/`fieldErrors`, `resetStatus`, `isResetPanelOpen`), not just described — a fifth sub-state (reset-panel success banner) confirmed real but not explicitly named in the module doc's summary (documentation-completeness NIT).
@@ -410,41 +444,45 @@ Findings:
 - Judgment call (b) — `SIMULATED_AUTH_LATENCY_MS=350` (disclosed, timing-only, non-PRD): MINOR — acceptable in scope, but checker independently discovered it's inconsistently applied (missing from the Google sign-in path, undermining its own stated observability purpose there). Routed as a follow-up, not rework.
 - D001-method forbidden-file check clean: only the two new files exist under `src/pages/login/**`; `router.tsx`/`guards.tsx`/`AppShell.tsx`/nav components all confirmed untouched via direct re-read.
 - Independently re-ran build/typecheck/lint/format:check twice (before and after harness cleanup) — all exit 0, zero new lint warnings.
-Attempts: 0 (clean first-attempt PASS)
-Follow-up:
+  Attempts: 0 (clean first-attempt PASS)
+  Follow-up:
 - MINOR (non-blocking, logged): apply `SIMULATED_AUTH_LATENCY_MS` consistently to `handleGoogleSignIn` too, or remove it everywhere once real Supabase wiring lands.
 - NIT: explicitly name the reset-panel success banner as a fifth/sub-state in the module doc's DES-12 mapping.
 - NIT: consider `Button variant="ghost"` instead of `Link isStandalone onClick` for API-intent clarity (no functional change).
 - Two dispute-candidate gaps flagged by both worker and checker, NOT blocking this task's PASS, routed to the orchestrating session for scheduling: (1) `router.tsx` wiring gap — the page isn't reachable live at `/login` yet since the inline placeholder hasn't been swapped for the real component; checker leans toward a small standalone task now rather than waiting for T018. (2) No real Supabase auth client exists anywhere in `src/` yet — `guards.tsx`'s `login()`/`loginWithGoogle()` remain T005's always-succeeds in-memory placeholder; checker flags this as more significant, core-requirement debt accumulating across tasks (T005, now T016), recommending it get scheduled deliberately rather than treated as an ordinary backlog item.
 - Full worker/checker packets archived at `docs/swarm/archive/T016-worker-packet.md` and `docs/swarm/archive/T016-checker-packet.md`.
-[2026-07-18T02:07:39Z] Worker finished. Checker required before completion.
-[2026-07-18T02:14:22Z] Worker finished. Checker required before completion.
-[2026-07-18T12:42:31Z] Worker finished. Checker required before completion.
-[2026-07-18T12:43:16Z] Worker finished. Checker required before completion.
+  [2026-07-18T02:07:39Z] Worker finished. Checker required before completion.
+  [2026-07-18T02:14:22Z] Worker finished. Checker required before completion.
+  [2026-07-18T12:42:31Z] Worker finished. Checker required before completion.
+  [2026-07-18T12:43:16Z] Worker finished. Checker required before completion.
 
 ## T016a — Wire real LoginPage into router.tsx (corrective task)
+
 Verdict: PASS (1st attempt). Severity: none — no findings.
 Checker: checker-tests (two prior attempts on this task failed mid-run due to session-limit interruptions, not quality issues — this is the successful retry). Files inspected: `src/app/router.tsx`, `src/pages/login/LoginPage.tsx`, `src/pages/login/index.ts`, `src/app/guards.tsx`.
 Findings:
+
 - Re-read router.tsx directly and confirmed only `/login`-related lines changed: inline placeholder `LoginPage()` function and its `signInAs`/`continueWithGoogle` helpers removed, now-unused imports (`useNavigate`, `useAuth`, `consumeIntendedUrl`, `Role`) removed, `import { LoginPage } from '../pages/login'` added. Every other route, placeholder component, and `routePaths` export confirmed byte-unchanged.
 - Independently re-ran `npm run typecheck`/`lint`/`build`/`format:check`/`test` — all exit 0, lint shows only the same 8 pre-existing warnings, no new ones.
 - Built its own live Playwright verification (real Chromium + real dev server, not jsdom) reproducing all claimed scenarios independently: `/login` renders the real component (old "Login (placeholder)" text confirmed absent, all real form elements present), full sign-in round trip lands on the Dashboard placeholder at `/`, NAV-08 intended-URL preservation confirmed (unauthenticated visit to `/roster` → redirect to `/login` → sign in → lands back on `/roster`), `/kiosk/:sessionId` unauthenticated regression spot-check still redirects correctly, plus an added 5th spot-check confirming `/accept-invite`'s placeholder is unaffected.
 - D001-method forbidden-file check clean: only `src/app/router.tsx` changed; `src/pages/login/**` and `guards.tsx` confirmed untouched.
-Attempts: 1 (clean first-attempt PASS; two earlier session-limit failures were infrastructure interruptions, not rework)
-Follow-up:
+  Attempts: 1 (clean first-attempt PASS; two earlier session-limit failures were infrastructure interruptions, not rework)
+  Follow-up:
 - None. `/login` is now genuinely reachable in the running app — the first real page in the app viewable end-to-end, not just in isolation.
 - Full worker/checker packets archived at `docs/swarm/archive/T016a-worker-packet.md` and `docs/swarm/archive/T016a-checker-packet.md`.
-[2026-07-18T12:55:25Z] Worker finished. Checker required before completion.
-[2026-07-18T12:57:04Z] Worker finished. Checker required before completion.
-[2026-07-18T13:02:29Z] Worker finished. Checker required before completion.
-[2026-07-18T13:15:32Z] Worker finished. Checker required before completion.
-[2026-07-18T13:16:18Z] Worker finished. Checker required before completion.
-[2026-07-18T13:20:08Z] Worker finished. Checker required before completion.
+  [2026-07-18T12:55:25Z] Worker finished. Checker required before completion.
+  [2026-07-18T12:57:04Z] Worker finished. Checker required before completion.
+  [2026-07-18T13:02:29Z] Worker finished. Checker required before completion.
+  [2026-07-18T13:15:32Z] Worker finished. Checker required before completion.
+  [2026-07-18T13:16:18Z] Worker finished. Checker required before completion.
+  [2026-07-18T13:20:08Z] Worker finished. Checker required before completion.
 
 ## T007 — SideNav (role-filtered) + outreach badge scaffold (attempt 1)
+
 Verdict: FAIL. Severity: BLOCKER (single finding; every other axis independently verified PASS).
 Checker: checker-accessibility. Files inspected: `src/components/nav/SideNav.tsx`, `src/app/AppShell.tsx` (diffed against pre-T007), `src/app/guards.tsx`, `src/app/router.tsx`, `src/components/nav/TopNav.tsx`, `src/App.tsx`, `src/pages/login/LoginPage.tsx`, `docs/swarm/astryx-api.md` at every cited range, `node_modules/@astryxdesign/core/dist/SideNav/SideNavItem.d.ts` and `Link/*.d.ts`.
 Findings:
+
 - Astryx prop cross-check: all confirmed correct, including independently re-running the worker's cited CLI cross-checks (`npm run astryx -- component SideNavItem`/`SideNavSection`) since astryx-api.md has no prop tables for these sub-components. Confirmed the doc's own internal inconsistency (`heading` at line 5669 vs. `title` at line 5711) is real, not fabricated, and the worker's CLI tie-break resolution (`title`) is correct.
 - NAV-03 role matrix independently reproduced for all 5 conditions (admin, coach, real `/login`-flow staff, volunteer-as-Parent-stand-in via scratch harness, null-user) across both light and dark mode — item sets, not just counts, verified via DOM text/href extraction.
 - NAV-04 (active-item highlight + document.title), NAV-07 (Meetings/Outreach separation), BEH-04 (neutral-only badge) — all independently verified PASS via real DOM/state tracing.
@@ -454,42 +492,46 @@ Findings:
 - **The BLOCKER**: `SideNavItem` renders a plain `<a href>` with no router-aware link component wired. Independently reproduced via real Playwright (both mouse click and keyboard Enter-activation): every navigation triggers a genuine full-document reload (`page.on('load')` fired), which resets the in-memory `AuthProvider` and bounces back to `/login` — confirmed across every item in every role tested. Judged materially worse than T006's already-Passed TopNav precedent (one edge-case wordmark link vs. SideNav's total breakage on its only interaction surface) — checker explicitly declined to import T006's lower-severity precedent here per its own reasoning, without retroactively reopening T006.
 - Critically, the checker found and empirically proved an in-scope fix: `SideNavItem`'s own CLI-confirmed `as: LinkComponentType` prop (present in the same CLI output the worker already ran, one row past what it cited) wired to React Router's already-allowlisted `Link` eliminates the reload entirely — verified via a temporary patch, confirmed working (zero reloads, session preserved, URL/title update correctly), then reverted before finishing.
 - Checker's explicit recommendation: rework by the same worker (attempt 2 of 3), not a dispute or deferred follow-up — the fix requires no forbidden-file edit and no app-wide `LinkProvider` architectural decision.
-Attempts: 1 (legitimate FAIL, in-scope fix identified — not attributable to a dead end)
-Follow-up:
+  Attempts: 1 (legitimate FAIL, in-scope fix identified — not attributable to a dead end)
+  Follow-up:
 - Rework packet dispatched to worker-implementer for attempt 2, citing the checker's exact fix (`as={Link}` on all `SideNavItem`s) and evidence.
-[2026-07-18T13:30:09Z] Worker finished. Checker required before completion.
-[2026-07-18T13:33:09Z] Worker finished. Checker required before completion.
-[2026-07-18T13:33:48Z] Worker finished. Checker required before completion.
+  [2026-07-18T13:30:09Z] Worker finished. Checker required before completion.
+  [2026-07-18T13:33:09Z] Worker finished. Checker required before completion.
+  [2026-07-18T13:33:48Z] Worker finished. Checker required before completion.
 
 ## T007 — SideNav (role-filtered) + outreach badge scaffold (attempt 2)
+
 Verdict: PASS (2nd check, on merits). Severity: none — no findings (one NIT logged).
 Checker: checker-accessibility. Files inspected: `src/components/nav/SideNav.tsx` (post-fix), `src/app/AppShell.tsx`, `src/app/router.tsx`, `src/app/guards.tsx`, `src/components/nav/TopNav.tsx`, node_modules Astryx type declarations.
 Findings:
+
 - Fix confirmed applied correctly: `import { Link } from 'react-router-dom'` + `as={Link}` on `SideNavItem`, independently re-confirmed as a genuine, CLI-documented prop (`npm run astryx -- component SideNavItem` re-run, matches `SideNavItem.d.ts`'s real type declaration).
 - Live re-reproduction (real Chromium + dev server + `/login` flow): zero `load` events on both mouse click and keyboard Enter-activation, session preserved (SideNav still rendered post-navigation, never bounced to `/login`), URL/`document.title` update correctly, `data-discover="true"` confirmed on the anchors (React Router's own internal marker, proving genuine `Link` rendering, not styling alone).
 - **Negative control performed**: checker temporarily reverted the fix, reproduced the exact original attempt-1 defect (1 `load` event, session lost, bounced to `/login`) on both input modalities, then restored the file byte-identical (confirmed via `git diff --stat`) and re-ran the positive test to reconfirm PASS — validating its own test methodology, not just asserting success.
 - NAV-03/04/07/BEH-04 spot-re-checked clean (not touched by this fix, not re-proven from scratch per the targeted re-check scope): correct 5-item staff-tier set, `aria-current`/`data-selected` on the active item, Meetings/Outreach as distinct items, neutral-only Outreach badge.
 - D001-method forbidden-file check: confirmed via `git log`/direct re-read that `AppShell.tsx`/`router.tsx`/`guards.tsx`/`TopNav.tsx` were last modified by their respective original tasks (T006/T005/T016a), not by this attempt's commit — only `SideNav.tsx` changed.
 - Build/typecheck/lint/format:check independently re-run — all exit 0, same 8 pre-existing warnings, no new ones.
-Attempts: 2 (attempt 1 legitimate FAIL/BLOCKER with an identified in-scope fix; attempt 2 PASS on the merits, not a rubber stamp)
-Follow-up:
+  Attempts: 2 (attempt 1 legitimate FAIL/BLOCKER with an identified in-scope fix; attempt 2 PASS on the merits, not a rubber stamp)
+  Follow-up:
 - NIT (log only, not a new task): `TopNav.tsx`'s wordmark link (`TopNavHeading`) has the same structural plain-`<a>` gap that caused this task's BLOCKER — pre-existing from T006, out of scope/forbidden here, flagged for whenever `TopNav.tsx` is next touched.
 - T008 (MobileNav + Student Home live-card slot) unblocked (Blocked→Ready) as a direct result.
 - Full worker/checker packets archived at `docs/swarm/archive/T007-worker-packet.md` and `docs/swarm/archive/T007-checker-packet.md`.
-[2026-07-18T13:40:05Z] Worker finished. Checker required before completion.
-[2026-07-18T13:52:17Z] Worker finished. Checker required before completion.
-[2026-07-18T13:58:06Z] Worker finished. Checker required before completion.
-[2026-07-18T14:16:29Z] Worker finished. Checker required before completion.
-[2026-07-18T14:17:17Z] Worker finished. Checker required before completion.
-[2026-07-18T18:55:36Z] Worker finished. Checker required before completion.
-[2026-07-18T19:04:54Z] Worker finished. Checker required before completion.
-[2026-07-18T19:05:37Z] Worker finished. Checker required before completion.
-[2026-07-18T19:09:02Z] Worker finished. Checker required before completion.
+  [2026-07-18T13:40:05Z] Worker finished. Checker required before completion.
+  [2026-07-18T13:52:17Z] Worker finished. Checker required before completion.
+  [2026-07-18T13:58:06Z] Worker finished. Checker required before completion.
+  [2026-07-18T14:16:29Z] Worker finished. Checker required before completion.
+  [2026-07-18T14:17:17Z] Worker finished. Checker required before completion.
+  [2026-07-18T18:55:36Z] Worker finished. Checker required before completion.
+  [2026-07-18T19:04:54Z] Worker finished. Checker required before completion.
+  [2026-07-18T19:05:37Z] Worker finished. Checker required before completion.
+  [2026-07-18T19:09:02Z] Worker finished. Checker required before completion.
 
 ## T008 — MobileNav drawer + Student Home live-card slot (D004-amended, attempt 1)
+
 Verdict: PASS. Severity: none — no BLOCKER/MAJOR findings (two non-blocking MINOR/NIT logged).
 Checker: checker-accessibility. Files inspected: `src/app/AppShell.tsx`, `src/components/nav/TopNav.tsx`, `src/components/nav/MobileNav.tsx`, `src/pages/home/StudentHomeSlot.tsx`, installed `@astryxdesign/core` source (`AppShell.tsx`, `MobileNavToggle.tsx`, `MobileNav.tsx`, `TopNav.tsx`), `docs/swarm/dispute-log.md` D004, `docs/swarm/astryx-api.md`'s D004 annotations.
 Findings:
+
 - Independently re-derived the entire `mobileNavEnabled`/`MobileNavConfig` gating mechanism directly from the installed library source (not trusting D004's or the worker's line citations) — confirmed exactly: `{ content: <MobileNav /> }` (a plain object) resolves to `mobileNavConfig` non-null / `mobileNavReactNode` null, keeping `mobileNavEnabled` true, whereas the original `<MobileNav />` shorthand forced it false. D004's mechanism claims hold up fully under independent re-derivation, with one trivial one-line citation offset (substance unaffected).
 - Byte-diffed `TopNav.tsx` against the actual T006-Passed git commit: zero diff in imports/JSX/logic, only a D004-authorized doc-comment addition — `MobileNavToggle`/`startContent` confirmed absent from all real code.
 - Byte-diffed `MobileNav.tsx` against attempt 1: zero diff outside the doc comment — all component logic (`as={Link}` on every item, `NAV_ITEMS` role gating, active-item logic, `document.title` effect, Outreach badge) confirmed unchanged.
@@ -499,34 +541,36 @@ Findings:
 - D001-method forbidden-file check: exactly the 4 expected files touched across all of T008 (`AppShell.tsx`, `TopNav.tsx`, `MobileNav.tsx`, `StudentHomeSlot.tsx`) — `router.tsx`/`guards.tsx`/`SideNav.tsx` confirmed zero diff across the entire task.
 - Build/typecheck/lint/format:check/test independently re-run — all exit 0, same pre-existing warning set, no new categories.
 - D004 Ruling C's drawer-doesn't-auto-close-on-navigate MINOR re-confirmed still true and correctly left unfixed (no sanctioned Astryx lever exists today) — not re-litigated.
-Attempts: 1 (the mid-attempt escalation to boss-arbiter was a correct worker judgment call per D001/D003 precedent, not a rework loop or FAIL)
-Follow-up (both non-blocking MINOR/NIT, not spun into new tasks):
+  Attempts: 1 (the mid-attempt escalation to boss-arbiter was a correct worker judgment call per D001/D003 precedent, not a rework loop or FAIL)
+  Follow-up (both non-blocking MINOR/NIT, not spun into new tasks):
 - Stale Astryx line-citation in `StudentHomeSlot.tsx`'s own module doc comment (cites a Best Practices bullet instead of the actual Props table row) — fix whenever that file is next legitimately opened.
 - A vendor-library (not project-code) native-`<dialog>` Tab-cycle quirk produces one focus-invisible stop before wrapping correctly — informational only, doesn't break the keyboard trap.
 - Full worker/checker packets archived at `docs/swarm/archive/T008-worker-packet.md` and `docs/swarm/archive/T008-checker-packet.md`.
-[2026-07-18T19:24:44Z] Worker finished. Checker required before completion.
-[2026-07-18T19:27:28Z] Worker finished. Checker required before completion.
-[2026-07-18T19:35:58Z] Worker finished. Checker required before completion.
-[2026-07-18T19:38:22Z] Worker finished. Checker required before completion.
-[2026-07-18T19:38:51Z] Worker finished. Checker required before completion.
-[2026-07-18T19:42:21Z] Worker finished. Checker required before completion.
-[2026-07-18T19:42:51Z] Worker finished. Checker required before completion.
-[2026-07-18T19:43:24Z] Worker finished. Checker required before completion.
-[2026-07-18T19:48:43Z] Worker finished. Checker required before completion.
-[2026-07-18T20:15:48Z] Worker finished. Checker required before completion.
-[2026-07-18T20:17:20Z] Worker finished. Checker required before completion.
-[2026-07-18T20:18:00Z] Worker finished. Checker required before completion.
-[2026-07-18T20:19:13Z] Worker finished. Checker required before completion.
-[2026-07-18T20:22:00Z] Worker finished. Checker required before completion.
-[2026-07-18T20:23:55Z] Worker finished. Checker required before completion.
-[2026-07-18T20:26:38Z] Worker finished. Checker required before completion.
-[2026-07-18T20:29:30Z] Worker finished. Checker required before completion.
-[2026-07-18T20:32:50Z] Worker finished. Checker required before completion.
+  [2026-07-18T19:24:44Z] Worker finished. Checker required before completion.
+  [2026-07-18T19:27:28Z] Worker finished. Checker required before completion.
+  [2026-07-18T19:35:58Z] Worker finished. Checker required before completion.
+  [2026-07-18T19:38:22Z] Worker finished. Checker required before completion.
+  [2026-07-18T19:38:51Z] Worker finished. Checker required before completion.
+  [2026-07-18T19:42:21Z] Worker finished. Checker required before completion.
+  [2026-07-18T19:42:51Z] Worker finished. Checker required before completion.
+  [2026-07-18T19:43:24Z] Worker finished. Checker required before completion.
+  [2026-07-18T19:48:43Z] Worker finished. Checker required before completion.
+  [2026-07-18T20:15:48Z] Worker finished. Checker required before completion.
+  [2026-07-18T20:17:20Z] Worker finished. Checker required before completion.
+  [2026-07-18T20:18:00Z] Worker finished. Checker required before completion.
+  [2026-07-18T20:19:13Z] Worker finished. Checker required before completion.
+  [2026-07-18T20:22:00Z] Worker finished. Checker required before completion.
+  [2026-07-18T20:23:55Z] Worker finished. Checker required before completion.
+  [2026-07-18T20:26:38Z] Worker finished. Checker required before completion.
+  [2026-07-18T20:29:30Z] Worker finished. Checker required before completion.
+  [2026-07-18T20:32:50Z] Worker finished. Checker required before completion.
 
 ## T014 — NFR-03 metric-view fixture tests
+
 Verdict: PASS (1st attempt). Severity: none — no findings.
 Checker: checker-tests. Files inspected: `supabase/tests/{auth_stub,seed,assertions}.sql`, `run.sh`, all 5 migration files.
 Findings:
+
 - Independently re-ran `bash supabase/tests/run.sh` 3 times from a fresh scratch Postgres — clean pass each time.
 - Designed and ran its own negative-control patch (not reusing the worker's — changed `participation_pct` expectation to a wrong value), confirmed the suite correctly fails and identifies the bad case, then confirmed a clean pass after reverting.
 - Independently re-derived the arithmetic for all 4 NFR-03 cases directly against the real view formulas in `20260717000003_metric_views.sql`: excused-shrinks-denominator (`round(100*1/greatest(2-1,1),1)=100.0`), hours_override-wins (`9.25`, not the clamped `2.0`), check-in clamping positive (`2.0`) and zero-floor (`0`, never negative), no-completed-sessions (zero rows, not a row with `expected_ct=0`).
@@ -535,15 +579,17 @@ Findings:
 - Zero TS formula duplication confirmed via grep.
 - D001-method forbidden-file check clean: only `supabase/tests/**` (4 files) touched.
 - Build/typecheck/lint/format:check/test independently re-run — all clean, same baseline warning count.
-Attempts: 1 (clean first-attempt PASS)
-Follow-up:
+  Attempts: 1 (clean first-attempt PASS)
+  Follow-up:
 - None. T056 (`/reports` shell) unblocked (Blocked→Ready) as a direct result.
 - Full worker/checker packets archived at `docs/swarm/archive/T014-worker-packet.md` and `docs/swarm/archive/T014-checker-packet.md`.
 
 ## T017 — `send-invite` Edge Function
+
 Verdict: PASS (1st attempt). Severity: MINOR (highest finding; two NITs also adjudicated, no BLOCKER/MAJOR).
 Checker: checker-reviewer. Files inspected: `supabase/functions/send-invite/{index.ts,validation.ts,validation.test.ts,deno.json,deno.lock}`, `supabase/migrations/20260717000000_scheduling_attendance.sql`, `20260717000002_rls.sql`, `20260716000000_identity_roster.sql`.
 Findings:
+
 - Two-client architecture independently confirmed by tracing control flow (not comments): anon-JWT `callerClient` used only for `auth.getUser()` and the caller's own RLS-subject `profiles` lookup; the admin/coach authorization gate executes and can reject BEFORE the service-role `adminClient` is even constructed.
 - Secret hygiene (constitution item 5) clean: `SUPABASE_SERVICE_ROLE_KEY` only ever sourced via `Deno.env.get`, never logged/echoed/placed in a response body, no hardcoded key literal anywhere (grep for JWT-shaped strings empty).
 - `invites` insert payload and RLS posture cross-checked against the real migrations: schema match exact, `invites` has RLS enabled with only a `staff_all` policy and no non-staff write path, confirming the function's own authorization gate is genuinely load-bearing (the service-role client bypasses RLS entirely).
@@ -551,81 +597,89 @@ Findings:
 - `deno`/Docker were both unavailable in the checker's own sandbox too (deno.land and Docker Hub CDN both return 403 under the egress policy) — checker went further than accepting this on the worker's word: manually started a Docker daemon to independently confirm the block is genuine and environment-level, then ported all 21 `Deno.test` assertions to a faithful Node equivalent and independently confirmed all 21 pass.
 - Judgment call verdicts: custom error-response shape (NIT — stable, DES-16-compliant copy, acceptable as-is); wildcard CORS (NIT — safe given bearer-token auth with no `Access-Control-Allow-Credentials` flag); no dedup/idempotency on `inviteUserByEmail` retries (MINOR — real but low-severity, a client retry could create a duplicate pending `invites` row/duplicate email, not a security break or data corruption).
 - D001-method forbidden-file check clean: exactly the 5 expected files, no `src/**`/migration changes.
-Attempts: 1 (clean first-attempt PASS)
-Follow-up:
+  Attempts: 1 (clean first-attempt PASS)
+  Follow-up:
 - MINOR (non-blocking, logged): add idempotency to `send-invite` for `inviteUserByEmail` retries (e.g. a partial unique index on `invites(lower(email)) where status='pending'`, or a pre-insert dedupe check).
 - NIT (optional): consider restricting CORS to the deployed frontend origin as defense-in-depth.
 - Downstream note (not a defect): T024/T027 must build against the documented `{ error: { code, message } }` response shape and status codes.
 - T018, T019, and T048 unblocked (Blocked→Ready) as a direct result.
 - Full worker/checker packets archived at `docs/swarm/archive/T017-worker-packet.md` and `docs/swarm/archive/T017-checker-packet.md`.
-[2026-07-18T23:55:12Z] Worker finished. Checker required before completion.
+  [2026-07-18T23:55:12Z] Worker finished. Checker required before completion.
 
 ## T061 — Schema verification + mapping doc copy (MIG-01/MIG-02)
+
 Verdict: PASS (1st attempt). Severity: None (no BLOCKER/MAJOR/MINOR/NIT findings).
 Checker: checker-reviewer. Files inspected: `docs/migration/source-schema.md`, `docs/migration/mapping.md`, `docs/swarm/VOLT_Portal_PRD.md` lines 670–719, `.env.example`, `docs/swarm/state-summary.md`, `docs/swarm/COWORK-HANDOFF.md`.
 Findings:
+
 - Independently re-ran all five no-live-access sub-checks rather than trusting the worker's report: (a) `env | grep -i old`/`-i supabase` — no `OLD_SUPABASE_URL`/`OLD_SERVICE_ROLE_KEY` or equivalent; (b) filesystem `.env*` search (repo + whole-machine) — only `.env.example` exists, containing blank `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` placeholders, no old-project entries; (c) repo-wide grep for `OLD_SUPABASE`/`OLD_SERVICE_ROLE` — hits confined to `docs/swarm/**` task artifacts plus one genuinely forward-looking note in `COWORK-HANDOFF.md:10` for T062, no value supplied; (d) network reachability — real `curl` to `github.com/gamitch/volt-timetracker` returned a genuine 403 with a body byte-for-byte identical to what `source-schema.md` quotes; (e) whole-machine search for `volt-timetracker`/`georgemitchom` mirrors — no matches.
 - `mapping.md` confirmed byte-identical to PRD Section 10.2 (lines 695–710): `diff` empty, exit 0, identical byte count (2297) and identical md5 checksum (`ef3354638d6ee642674d43f6fdbdc00f`); the `### 10.2` heading also byte-identical; `mapping.md`'s added preamble is accurate new framing that does not alter the copied table.
 - `source-schema.md` confirmed to make no fabricated "drift found"/"no drift found" claim (explicit disclaimer at lines 100–101 that no live diff was performed) and to unambiguously label its PRD 10.1 reference as "Reference only ... NOT independently re-verified against a live instance" — not reasonably mistakable by T062's implementer for a completed introspection.
 - D001-method forbidden-file check clean: working tree otherwise clean except one hook-appended `verification-log.md` line (excluded per constitution); `git ls-files docs/migration/` = exactly the two deliverables; zero changes under `src/**`/`supabase/migrations/**`; no WRITE/ALTER/DELETE attempted against the old project anywhere (constitution item 16 — no connection was even reachable).
 - Unblock-path (George supplies `OLD_SUPABASE_URL`/`OLD_SERVICE_ROLE_KEY` via secure channel, not committed) confirmed consistent with how the other George-only external prerequisites (Supabase project creation, Google OAuth client, Vercel CNAME) are already tracked in `state-summary.md`.
-Attempts: 1 (clean first-attempt PASS)
-Follow-up:
+  Attempts: 1 (clean first-attempt PASS)
+  Follow-up:
 - None. T062 (`scripts/migrate.ts` ETL script) unblocked (Blocked→Ready) as a direct result.
 - Full worker/checker packets archived at `docs/swarm/archive/T061-worker-packet.md` and `docs/swarm/archive/T061-checker-packet.md`.
 
 ## T032 — `checkin` Edge Function (HMAC rotating token)
+
 Verdict: PASS (1st attempt). Severity: MINOR (two follow-ups; no BLOCKER/MAJOR).
 Checker: checker-tests. Files inspected: `supabase/functions/checkin/{index.ts,hmac.ts,grace.ts,liveness.ts,rate_limit.ts,validation.ts,attendance_upsert.ts}` + 6 matching `.test.ts` files, `supabase/migrations/20260717000000_scheduling_attendance.sql`, `20260717000002_rls.sql`.
 Findings:
+
 - 53 `Deno.test()` cases confirmed via grep across 6 files (hmac 15, liveness 9, validation 10, rate_limit 6, grace 8, attendance_upsert 5). Deno unavailable in the checker's sandbox, so representative tests were ported to Node/tsx and independently re-executed: HMAC bucket math (`floor(unixSeconds/60)`), token/short-code derivation, grace-period boundary (exactly 10:00 after `starts_at` = present, 10:00:01 = late), MTG-11 coach-row preservation, and MTG-09 idempotent duplicate check-in — all passed.
 - `ON CONFLICT DO NOTHING` (vs. the packet's illustrative conditional `WHERE method <> 'coach'`) judged PASS-AS-DESIGNED: unconditional DO NOTHING is a strict superset of "never overwrite a coach row" and additionally prevents a later duplicate QR scan from silently overwriting an earlier check-in's timestamp/status (better satisfies MTG-09's "already checked in at 6:04" behavior); no code path in this function ever performs a legitimate second write.
 - Secret hygiene (constitution item 5, BLOCKER-class) clean: `CHECKIN_HMAC_SECRET` read only via `Deno.env.get`, never hardcoded, logged, or echoed in a response; only two `console.error` calls, logging just `session_id`/`student_id`.
 - D001-method forbidden-file check clean: only `supabase/functions/checkin/**` (15 files) touched, zero changes to `supabase/migrations/**` or `src/**`.
 - Error response shapes (DES-16 spot-check) confirmed consistent (`{ error: { code, message } }`, each message stating what happened + what to do next).
-Attempts: 1 (clean first-attempt PASS)
-Follow-up:
+  Attempts: 1 (clean first-attempt PASS)
+  Follow-up:
 - MINOR (non-blocking, logged): MTG-04's manual "start check-in early/late" override has no schema column yet (`checkin_opened_at`/`checkin_opened_by` don't exist in the frozen T009–T012 schema) — genuinely undoable within this task's scope, correctly flagged rather than worked around; deferred to a future migration task.
 - MINOR (non-blocking, logged): the 5/min rate limiter is in-memory per-isolate only (no persisted rate-limit table in the frozen schema) — best-effort under multi-instance load rather than globally precise; flagged as a follow-up risk for the foreman.
 - T034 (Kiosk view) and T035 (`/checkin` result screen) unblocked (Blocked→Ready) as a direct result. T033 (deps T031,T032) and T054 (deps T030,T032,T038,T013) remain correctly Blocked — their other dependencies are not yet Passed.
 - Full worker/checker packets archived at `docs/swarm/archive/T032-worker-packet.md` and `docs/swarm/archive/T032-checker-packet.md`.
-[2026-07-18T23:59:45Z] Worker finished. Checker required before completion.
-[2026-07-19T00:03:04Z] Worker finished. Checker required before completion.
-[2026-07-19T00:05:58Z] Worker finished. Checker required before completion.
-[2026-07-19T00:10:22Z] Worker finished. Checker required before completion.
-[2026-07-19T00:29:16Z] Worker finished. Checker required before completion.
-[2026-07-19T00:48:07Z] Worker finished. Checker required before completion.
-[2026-07-19T00:55:39Z] Worker finished. Checker required before completion.
-[2026-07-19T00:56:27Z] Worker finished. Checker required before completion.
-[2026-07-19T00:59:25Z] Worker finished. Checker required before completion.
+  [2026-07-18T23:59:45Z] Worker finished. Checker required before completion.
+  [2026-07-19T00:03:04Z] Worker finished. Checker required before completion.
+  [2026-07-19T00:05:58Z] Worker finished. Checker required before completion.
+  [2026-07-19T00:10:22Z] Worker finished. Checker required before completion.
+  [2026-07-19T00:29:16Z] Worker finished. Checker required before completion.
+  [2026-07-19T00:48:07Z] Worker finished. Checker required before completion.
+  [2026-07-19T00:55:39Z] Worker finished. Checker required before completion.
+  [2026-07-19T00:56:27Z] Worker finished. Checker required before completion.
+  [2026-07-19T00:59:25Z] Worker finished. Checker required before completion.
 
 ## T019 — DB trigger: invite acceptance → profile/link (critical-path task)
+
 Verdict: PASS (1st attempt). Severity: MINOR (highest finding; two NITs also adjudicated, no BLOCKER/MAJOR).
 Checker: checker-reviewer. Files inspected: `supabase/migrations/20260718000000_invite_trigger.sql`, `20260716000000_identity_roster.sql`, `20260717000000_scheduling_attendance.sql`, `supabase/functions/send-invite/index.ts`.
 Findings:
+
 - Resolves T009's `profiles.avatar_url` nullability gap (dropped NOT NULL); confirmed the only `insert into profiles` in real source is this trigger, so the change collides with nothing else.
 - `fn_handle_invite_acceptance()` (SECURITY DEFINER, same pattern as T011's audit triggers) + `AFTER UPDATE ON auth.users` trigger, WHEN-gated on the OR of two independent NULL→NOT-NULL transitions (`email_confirmed_at`, `last_sign_in_at`) — chosen because `inviteUserByEmail` (T017) runs at invite-SEND time, so a naive INSERT trigger would fire too early; `encrypted_password` explicitly rejected since OAuth-only accounts never set it.
-- Checker independently stood up its own scratch Postgres (own hand-built minimal `auth.users` schema, own fixtures) and re-ran all 6 scenarios: student invite, parent multi-invite-row (ROS-05), idempotent re-fire (deliberately via the *other* signal than the one that fired first, proving the OR-double-fire case specifically), no-invite no-op, expired-invite no-op, admin invite — plus 3 adversarial probes of its own devising: a role-leak probe (`raw_user_meta_data.role='admin'` with `invites.role='student'` → resulting profile is `student`, confirming metadata role is genuinely ignored), a WHEN-gate probe (an update touching only unrelated columns does not fire the trigger), and a display_name-fallback probe.
+- Checker independently stood up its own scratch Postgres (own hand-built minimal `auth.users` schema, own fixtures) and re-ran all 6 scenarios: student invite, parent multi-invite-row (ROS-05), idempotent re-fire (deliberately via the _other_ signal than the one that fired first, proving the OR-double-fire case specifically), no-invite no-op, expired-invite no-op, admin invite — plus 3 adversarial probes of its own devising: a role-leak probe (`raw_user_meta_data.role='admin'` with `invites.role='student'` → resulting profile is `student`, confirming metadata role is genuinely ignored), a WHEN-gate probe (an update touching only unrelated columns does not fire the trigger), and a display_name-fallback probe.
 - Explicit, weighed severity verdict on the signal-choice design (not a rubber stamp): false-positive risk judged negligible (any real transition IS a sign-in event; the `status='pending' and expires_at>now()` guard backstops anything unrelated); false-negative risk judged low (both columns would need to be pre-populated at invite-send time for the OR to miss, contradicting `inviteUserByEmail`'s documented starting state); no real concurrency race (per-row AFTER UPDATE serializes on the row lock, `ON CONFLICT DO NOTHING` is an independent backstop). **Explicitly concluded this does NOT warrant boss-arbiter escalation** — no demonstrable failure mode found under any driven scenario; the only residual is unverifiable live-GoTrue behavior, the same already-accepted structural limitation as T015/T017/T032.
 - Constitution item 10 confirmed via content-diff of all 5 pre-existing migrations (identical, additive-only — not a git-authorship check per D001).
 - Role provenance independently grepped and adversarially tested: `invites.role` is the sole write site to `profiles.role`; `raw_user_meta_data` is referenced only for `display_name`, never role.
 - D001-method forbidden-file check clean.
 - Two NITs (already disclosed by the worker, not new findings): `display_name` email-local-part fallback, `guardian_links.relationship='guardian'` literal — both clearly-flagged placeholders, not spec-derived truth, no PRD contradiction.
-Attempts: 1 (clean first-attempt PASS)
-Follow-up:
+  Attempts: 1 (clean first-attempt PASS)
+  Follow-up:
 - MINOR (non-blocking, logged): once a real Supabase project exists, re-confirm the `WHEN` signal design against live GoTrue behavior for both the password-set and Google OAuth paths — revisit this clause first if live behavior differs from the documented assumption.
 - NIT: replace the `display_name`/`relationship` placeholders once a real source exists upstream.
 - **T021, T030, and T038 unblocked (Blocked→Ready) as a direct result — the first real content-page tasks in the entire ledger** (Roster, Meetings, Outreach). T020 stays Blocked (still needs T018).
 - Full worker/checker packets archived at `docs/swarm/archive/T019-worker-packet.md` and `docs/swarm/archive/T019-checker-packet.md`.
-[2026-07-19T01:07:25Z] Worker finished. Checker required before completion.
-[2026-07-19T01:20:23Z] Worker finished. Checker required before completion.
-[2026-07-19T01:37:50Z] Worker finished. Checker required before completion.
-[2026-07-19T01:41:28Z] Worker finished. Checker required before completion.
+  [2026-07-19T01:07:25Z] Worker finished. Checker required before completion.
+  [2026-07-19T01:20:23Z] Worker finished. Checker required before completion.
+  [2026-07-19T01:37:50Z] Worker finished. Checker required before completion.
+  [2026-07-19T01:41:28Z] Worker finished. Checker required before completion.
 
 ## T018 — `/accept-invite` screen
+
 Verdict: PASS (1st attempt). Severity: MINOR (own finding); one incidental cross-cutting MAJOR finding routed elsewhere, not counted against T018.
 Checker: checker-accessibility. Files inspected: `src/pages/accept-invite/{AcceptInvitePage.tsx,types.ts,index.ts}`, `src/app/guards.tsx`, `src/pages/login/LoginPage.tsx` (T016 cross-check), `src/app/router.tsx` (grep), `docs/swarm/astryx-api.md` (every cited section re-opened).
 Findings:
+
 - Re-ran `npm run astryx -- template login-card --skeleton` independently and confirmed the worker's paraphrased skeleton output was real, not fabricated; verdict that dropping the generic template's second TextInput+Link row and footer sign-up slot is legitimate content adaptation (AUTH-03's literal field list overriding the generic skeleton), not layout invention — constitution item 13 satisfied.
 - Every Astryx prop (Center, VStack, Heading, Text, Card, TextInput, Button, Banner, Divider, Spinner) re-verified against `astryx-api.md`'s actual current line numbers — zero hallucinations. "No more than one primary button per view" (Button doc) independently confirmed via direct JSX-branch mutual-exclusivity check, not assumption.
 - DES-12 four-state mapping traced to real conditional renders (not the module-doc comment): loading (invite lookup on mount → Spinner; submit-in-flight → Button isLoading/clickAction), error (non-actionable invite status via exhaustive switch over all 4 `InviteStatus` members; loadInvite rejection via a separately-gated Banner+Retry; failed submission via the same formError/fieldErrors dual-banner pattern T016 established), populated (matching password/confirm, navigates away via consumeIntendedUrl, no in-page success render) — all independently live-verified via the checker's own temporary Playwright harness (own fixture data, distinct from the worker's) across all 8 states in both light and dark mode.
@@ -635,24 +689,26 @@ Findings:
 - Zero self-serve signup affordance and zero box-drawing/placeholder characters in rendered output, both independently grepped/scanned (a false-positive box-drawing grep hit was traced to a sandbox locale/byte-matching artifact, not a real character, and re-verified clean via a Unicode-aware scan).
 - D001-method forbidden-file check clean: only the 3 claimed files exist as new; `router.tsx`/`guards.tsx`/`AppShell.tsx`/nav components/`supabase/**` all byte-unchanged. Build/typecheck/lint/format:check all independently re-run, all exit 0 (lint: same 8 pre-existing warnings, no new ones). Checker's own temporary harness and scratch scripts confirmed deleted; worker's claimed-deleted harness/scripts confirmed genuinely absent.
 - MINOR: the ready-state `Heading level={2}` renders the bare invitee name with no descriptive framing (e.g. not "Invitation for {name}") — a copy nit for screen-reader heading-navigation clarity, not a level-skip violation (h1→h2, no h3 anywhere, rule satisfied).
-- Two dispute-candidate gaps (router.tsx wiring; invite-data-loading seam, since `invites` RLS is `staff_all`-only and the table has no `name` column) re-confirmed real by the checker's own independent read. Checker additionally confirmed by direct `router.tsx` read that `/accept-invite` is *not* the only remaining inline-placeholder route — every not-yet-built page route has one too. **Not blocking T018** — its Allowed Files never included `router.tsx` or a backend data channel.
+- Two dispute-candidate gaps (router.tsx wiring; invite-data-loading seam, since `invites` RLS is `staff_all`-only and the table has no `name` column) re-confirmed real by the checker's own independent read. Checker additionally confirmed by direct `router.tsx` read that `/accept-invite` is _not_ the only remaining inline-placeholder route — every not-yet-built page route has one too. **Not blocking T018** — its Allowed Files never included `router.tsx` or a backend data channel.
 - Incidental finding (outside T018's scope, discovered while live-measuring contrast): dark-mode `Button variant="primary"` text (`#0000B3` on `#9B7BFF`) measures ~4.04:1, below WCAG AA's 4.5:1 for normal text — a `volt.ts`/Button-component-level defect inherited unchanged by the already-Passed T016 `/login` page (same button, same theme). Routed to boss-arbiter as **D005** rather than folded into T018's verdict, since T018 cannot fix it (outside Allowed Files) and did not introduce it.
-Attempts: 0 (clean first-attempt PASS)
-Follow-up:
+  Attempts: 0 (clean first-attempt PASS)
+  Follow-up:
 - **T020 unblocked (Blocked→Ready) as a direct result** — closes out E3 (all of T015/T016/T016a/T017/T018/T019 now Passed; T020 dispatch-ready).
 - Router-wiring gap and invite-data-loading seam gap both logged in `docs/swarm/state-summary.md` (Current Risks) for future scheduling, not spun into new ledger rows yet.
 - D005 (dark-mode primary-button contrast) opened in `docs/swarm/dispute-log.md`, escalated to boss-arbiter — outcome pending.
 - Full worker/checker packets archived at `docs/swarm/archive/T018-worker-packet.md` and `docs/swarm/archive/T018-checker-packet.md`.
-[2026-07-19T01:59:52Z] Worker finished. Checker required before completion.
-[2026-07-19T02:09:06Z] Worker finished. Checker required before completion.
-[2026-07-19T02:16:02Z] Worker finished. Checker required before completion.
-[2026-07-19T02:23:19Z] Worker finished. Checker required before completion.
-[2026-07-19T02:24:48Z] Worker finished. Checker required before completion.
+  [2026-07-19T01:59:52Z] Worker finished. Checker required before completion.
+  [2026-07-19T02:09:06Z] Worker finished. Checker required before completion.
+  [2026-07-19T02:16:02Z] Worker finished. Checker required before completion.
+  [2026-07-19T02:23:19Z] Worker finished. Checker required before completion.
+  [2026-07-19T02:24:48Z] Worker finished. Checker required before completion.
 
 ## T002b — D005 corrective task: dark-mode `--color-on-accent` contrast fix
+
 Verdict: PASS (1st attempt). Severity: none blocking — one informational MINOR note on the worker's own evidence, not the fix.
 Checker: checker-accessibility. Files inspected: `src/theme/volt.ts`, `src/theme/theme.css`, rebuilt `dist/assets/theme.css`, `docs/swarm/dispute-log.md` D005, `docs/swarm/astryx-api.md` (D005 annotation), `node_modules/@astryxdesign/core` source (Button/Badge/tokens/expandColorScale/defineTheme).
 Findings:
+
 - `volt.ts` diff re-derived independently (`git diff 37cd053~1 37cd053`): exactly the D005-authorized one-line addition (`'--color-on-accent': ['#FFFFFF', '#00008D']` + one comment), `--color-accent`/DES-04 brand palette confirmed byte-unchanged.
 - `theme.css` diff: exactly one content line changed to `light-dark(#FFFFFF, #00008D)`; whole-file sweep for `0000B3` — zero matches; `@layer reset, astryx-base, app;` (NFR-08) confirmed unchanged at its original position.
 - Checker rebuilt the app from scratch and swept the real shipped `dist/assets/theme.css` artifact directly (not just the source file): zero `0000B3`, one `00008D` — the fix genuinely reaches the DES-07 built-CSS path. One unrelated pre-existing `--color-on-accent:light-dark(#FFFFFF,#FFFFFF)` declaration found in Astryx's own lower-priority `astryx-base`-layer scaffold CSS — traced to the vendor package itself, confirmed present identically before T002b too, correctly not a regression (loses the cascade to the `app` layer).
@@ -661,21 +717,23 @@ Findings:
 - All five build gates (build/typecheck/lint/format:check/test) and the manual bundle-size gate re-check (140881 bytes gzip vs. 307200 budget) all independently re-run, all clean — same 8 pre-existing unrelated lint warnings, no new ones.
 - D001-method forbidden-file check clean: only `volt.ts`/`theme.css` (+ the standing hook-appended `verification-log.md` line) have real diffs; `package.json`'s T002a-era Prettier exclusion glob confirmed untouched; all other Forbidden Files confirmed byte-unchanged. No leftover scratch files (checker's own `find`/`git status`/`git clean -ndx`, not the worker's claim).
 - `astryx-api.md`'s D005 annotation re-verified line-for-line against the installed `@astryxdesign/core@0.1.6` source (Button.tsx primary-variant styling, `tokens.stylex.ts`'s `colorDefaults`, `expandColorScale.ts`'s "stays baked" comment, `defineTheme.ts`'s precedence logic) — confirmed real and source-cited, not hallucinated (constitution item 2).
-Attempts: 0 (clean first-attempt PASS)
-Follow-up:
+  Attempts: 0 (clean first-attempt PASS)
+  Follow-up:
 - None requiring further work. **D005 fully closed out end-to-end** — see `dispute-log.md` D005 Outcome.
 - Informational note only (not a task defect): future evidence collected via screenshot-based pixel sampling should crop well clear of rounded-corner/focus-ring edges and cross-check against `getComputedStyle` to avoid anti-aliasing-induced undercounts, per this task's light-mode discrepancy.
 - Full worker/checker packets archived at `docs/swarm/archive/T002b-worker-packet.md` and `docs/swarm/archive/T002b-checker-packet.md`.
-[2026-07-19T02:34:01Z] Worker finished. Checker required before completion.
-[2026-07-19T02:40:03Z] Worker finished. Checker required before completion.
-[2026-07-19T02:50:27Z] Worker finished. Checker required before completion.
-[2026-07-19T02:52:21Z] Worker finished. Checker required before completion.
-[2026-07-19T02:54:37Z] Worker finished. Checker required before completion.
+  [2026-07-19T02:34:01Z] Worker finished. Checker required before completion.
+  [2026-07-19T02:40:03Z] Worker finished. Checker required before completion.
+  [2026-07-19T02:50:27Z] Worker finished. Checker required before completion.
+  [2026-07-19T02:52:21Z] Worker finished. Checker required before completion.
+  [2026-07-19T02:54:37Z] Worker finished. Checker required before completion.
 
 ## T020 — AUTH-04 no-access screen + NFR-02 RLS-denial test
+
 Verdict: PASS (1st attempt). Severity: none — no BLOCKER/MAJOR/MINOR findings against this task.
 Checker: checker-tests. Files inspected: `src/pages/no-access/{NoAccessPage.tsx,types.ts,index.ts}`, `tests/rls/{auth_stub,grants,seed,assertions}.sql`, `tests/rls/run.sh`, `supabase/migrations/20260716000000_identity_roster.sql`, `docs/swarm/astryx-api.md` (Center/VStack/Heading/Card/EmptyState sections).
 Findings:
+
 - Page: `Center > VStack[Heading "VOLT", Card > EmptyState]` shell confirmed consistent with `LoginPage.tsx`/`AcceptInvitePage.tsx`; checker independently re-ran `npm run astryx -- template EmptyStateContainer --skeleton` and confirmed the claimed `Card > [EmptyState, Button, Button]` skeleton is real, validating that omitting both generic `Button`s (no action exists on this screen) is legitimate content adaptation, not layout invention.
 - Sign-out-on-mount independently reproduced against the real `AuthProvider` contract in the checker's own harness (not trusting the worker's account). Zero-focusable-elements claim independently re-verified via the checker's own selector sweep.
 - Team-contact seam: checker re-opened the identity/roster migration directly and confirmed zero contact-person/email/phone columns anywhere in the schema — a genuine schema gap, not a fabricated live query.
@@ -685,16 +743,18 @@ Findings:
 - Scenario C judged an acceptable, non-defective (if partially overlapping with T012's existing coverage) sanity contrast — the profile-less (A) vs. profile-ful-cross-student (C) distinction is real, not a redundant restatement.
 - D001-method forbidden-file check: confirmed `/no-access` has no route or placeholder anywhere in `router.tsx` at all (a stronger absence than T016/T018's swap-a-placeholder gap); all other forbidden files byte-unchanged; `tests/rls/**` confirmed to contain zero JS/TS files (no root-config exclusion needed, same reasoning as T014's `supabase/tests/**`). Build/typecheck/lint/format:check/test all independently re-run, all exit 0.
 - **Operational incident, not a task defect** (logged in `state-summary.md` Current Risks): while gathering its own evidence, this checker encountered scratch/harness files left mid-run by the concurrently-dispatched T021 checker (still verifying at the time) and deleted them as presumed leftovers from an unrelated prior check. No effect on either task's own reported verdict, but flagged as a standing process risk for future parallel dispatches sharing a worktree.
-Attempts: 0 (clean first-attempt PASS)
-Follow-up:
+  Attempts: 0 (clean first-attempt PASS)
+  Follow-up:
 - Both dispute-candidate gaps (no `/no-access` route anywhere; no team-contact column anywhere in the schema) re-confirmed real by the checker's independent read, routed to the orchestrating session per the worker/checker's shared recommendation — not blocking.
 - **E3 (Auth + invites) is now fully Passed** — T015/T016/T016a/T017/T018/T019/T020 all Passed. Nothing else was blocked on T020 (full-ledger sweep found no dependents).
 - Full worker/checker packets archived at `docs/swarm/archive/T020-worker-packet.md` and `docs/swarm/archive/T020-checker-packet.md`.
 
 ## T021 — `/roster` shell + TabList (ROS-01, first real content-page task)
+
 Verdict: PASS (1st attempt). Severity: MINOR (two findings below; nothing BLOCKER/MAJOR).
 Checker: checker-accessibility. Files inspected: `src/pages/roster/RosterShell.tsx`, `src/app/guards.tsx`, `src/App.tsx`, `src/app/router.tsx`, `docs/swarm/astryx-api.md` (TabList/Tab/Heading/EmptyState/VStack/AppShell sections).
 Findings:
+
 - Novel guard pattern independently validated: `RequireRole` (read-only import from `guards.tsx`) nested inside `RosterShell`'s own render tree, rather than at the `<Route>` level (since `router.tsx`'s `/roster` route is forbidden and unrestricted). Checker confirmed `RequireRole` has no route-context dependency (no `useParams`, no assumption of being a `<Route element>`), then independently reproduced the full role matrix live (student/parent/coach/admin/no-user) via its own Playwright harness — including reproducing the exact toast-firing timing trap the worker's module doc flagged (a naive effect-based listener missed the no-user case entirely; a module-scope listener registered before first render caught it, confirmed by the checker building both versions itself).
 - Both Astryx doc gaps (`Tab`/`Heading` own Props tables read `undefined`) independently re-resolved via the checker's own `npm run astryx -- component Tab`/`Heading` re-runs — verbatim CLI output matched the worker's citations exactly, character-for-character.
 - Keyboard walkthrough independently verified beyond what the worker claimed: both ArrowLeft AND ArrowRight (worker described only one direction), and both Enter AND Space as real activation keys (Astryx's `Tab` renders a plain `<button>`, so both are genuine, not just Enter). Visible focus confirmed via computed-style + screenshots, both modes, with measured contrast (6.89:1 light / 5.46:1 dark focus ring, both well above the WCAG 2.4.11 3:1 non-text minimum).
@@ -705,21 +765,21 @@ Findings:
 - Non-T021 risk surfaced (not a finding against this task, logged centrally): `guards.tsx`'s `RequireRole` (forbidden file, inherited from T005) fires `pushToast` synchronously during render rather than in an effect — checker independently observed a real React 19 console error and a StrictMode double-toast, and confirmed this behavior is identical whether `RequireRole` is used at the route level (already true for `/kiosk`/`/settings`) or nested (T021's new pattern) — so it does not invalidate T021's "byte-identical guard behavior" claim, and is not fixable within T021's Allowed Files.
 - Router.tsx wiring gap (recurring pattern, same class as T016/T018) and `guards.tsx` `Role` vocabulary mismatch both re-confirmed real, correctly referenced rather than re-derived, not blocking.
 - **Operational note**: this checker's run was disrupted mid-session by a concurrently-dispatched T020 checker deleting some of its in-progress scratch files (see `state-summary.md` Current Risks) — the checker explicitly disclosed this, recreated its harness, and completed a full independent verification anyway. No gap in the final evidence.
-Attempts: 0 (clean first-attempt PASS)
-Follow-up:
+  Attempts: 0 (clean first-attempt PASS)
+  Follow-up:
 - Two lightweight follow-ups logged (not spun into new ledger rows yet): `EmptyState` `headingLevel={2}` fix; reword the four `EmptyState` copy strings to remove internal task-ID jargon before `/roster` is user-reachable.
 - `guards.tsx` `RequireRole` render-phase `pushToast` risk logged centrally in `state-summary.md` Known Decisions for whenever that file is next in scope.
 - **T022, T025, T026, T027, T028, T029 unblocked (Blocked→Ready) — the rest of E4's first wave.**
 - Full worker/checker packets archived at `docs/swarm/archive/T021-worker-packet.md` and `docs/swarm/archive/T021-checker-packet.md`.
-[2026-07-19T03:08:01Z] Worker finished. Checker required before completion.
-[2026-07-19T03:12:39Z] Worker finished. Checker required before completion.
-[2026-07-19T03:18:05Z] Worker finished. Checker required before completion.
-[2026-07-19T03:19:19Z] Worker finished. Checker required before completion.
-[2026-07-19T03:25:25Z] Worker finished. Checker required before completion.
-[2026-07-19T03:25:34Z] Worker finished. Checker required before completion.
-[2026-07-19T03:27:41Z] Worker finished. Checker required before completion.
-[2026-07-19T03:28:43Z] Worker finished. Checker required before completion.
-[2026-07-19T03:30:06Z] Worker finished. Checker required before completion.
+  [2026-07-19T03:08:01Z] Worker finished. Checker required before completion.
+  [2026-07-19T03:12:39Z] Worker finished. Checker required before completion.
+  [2026-07-19T03:18:05Z] Worker finished. Checker required before completion.
+  [2026-07-19T03:19:19Z] Worker finished. Checker required before completion.
+  [2026-07-19T03:25:25Z] Worker finished. Checker required before completion.
+  [2026-07-19T03:25:34Z] Worker finished. Checker required before completion.
+  [2026-07-19T03:27:41Z] Worker finished. Checker required before completion.
+  [2026-07-19T03:28:43Z] Worker finished. Checker required before completion.
+  [2026-07-19T03:30:06Z] Worker finished. Checker required before completion.
 
 ## T048 — Resend integration + branded layout + `email_log` (EML-01)
 
@@ -731,6 +791,7 @@ Resend `fetch()`-based client (`resend.ts`), an `email_log` write helper (`email
 constitution item 7 (BLOCKER-class) test-mode gate.
 
 **Checker's independent verification (checker-reviewer):**
+
 - Re-read `resolveSendMode()`/`sendBrandedEmail()` line-by-line rather than trusting the worker's
   test suite: `resolveSendMode()` takes zero parameters, reads only `Deno.env.get('RESEND_SEND_MODE')`,
   fail-closed (`=== 'production' ? 'production' : 'test'`). `sendBrandedEmail()`'s first statement
@@ -770,6 +831,7 @@ Worker built `src/pages/meetings/Kiosk.tsx`: `QRCodeSVG`+short code, `aria-live=
 ~45s client refresh, zero PII, per MTG-07/DES-12.
 
 **Checker's independent verification (checker-accessibility):**
+
 - Re-derived the HMAC/QR scheme against `supabase/functions/checkin/hmac.ts` directly (bucket =
   floor(unixSeconds/60); token = HMAC-SHA256 first 16 bytes hex; short code = bytes[16..22) mapped
   `byte % 34` into the documented alphabet; URL shape). Matches exactly, no divergence.
@@ -803,6 +865,7 @@ Worker built `ReportsShell.tsx` (coach/admin-gated TabList Participation|Hours|E
 all numbers from `v_student_participation` only.
 
 **Checker's independent verification (checker-accessibility):**
+
 - Constitution item 3 (BLOCKER-class) — re-grepped the file directly against
   `20260717000003_metric_views.sql`'s real view definition: zero formula re-derivation in
   executable code. The one arithmetic operation found (`compareParticipationRows`'s sort-comparator
@@ -836,6 +899,7 @@ against the real (already-Passed) `checkin` Edge Function contract, with the app
 orchestrated animation, gated on `prefers-reduced-motion`.
 
 **Checker's independent verification (checker-accessibility):**
+
 - Re-derived the request/response contract directly against `index.ts`/`attendance_upsert.ts` —
   field-for-field match, no hallucinated fields.
 - **Running-tally gap (the central judgment call)**: independently confirmed no tally field exists
@@ -883,6 +947,7 @@ on. Purely additive — `src/lib/supabase/**` plus `@supabase/supabase-js` in `p
 
 **Checker's independent verification (checker-tests), all safety-relevant claims re-derived rather
 than trusted:**
+
 - Exactly one `createClient(` call site confirmed via direct grep (`client.ts:79`).
 - **Lazy-init safety property genuinely holds**: module-level code contains only imports and
   function definitions, zero executable statements that could throw; the real `createClient()`
@@ -931,6 +996,7 @@ AlertDialog flow, stubbed Schedule/Edit) and student/parent view (own history + 
 consistency-strip placeholder), all four DES-12 states per role variant.
 
 **Checker's independent verification (checker-accessibility):**
+
 - **NAV-07 re-derived structurally, not just from one test assertion**: traced the actual code path
   and confirmed the one outreach-type fixture item is unreachable in either view's rendering logic
   — both view-builders filter to `event.type === 'meeting'` before any row mapping occurs.
@@ -971,6 +1037,7 @@ every row of `docs/migration/mapping.md`'s transform table, with natural-key/det
 upserts, a `--dry-run` mode, and a pre-write attendees-backfill assertion gate.
 
 **Checker's independent verification (checker-tests), all correctness-critical claims re-derived:**
+
 - Cross-checked all 11 mapping-table rows against `transform.ts` directly, row by row.
 - **`hours_override = old.hours` confirmed genuinely unconditional** in `mapAttendance` — no
   branching, no derived value, only the literal old row's hours.
@@ -1005,6 +1072,7 @@ summed, per-row RSVP control), plus a real handling of the SideNav-badge scope t
 worker packet pre-authorized.
 
 **Checker's independent verification (checker-accessibility):**
+
 - **SideNav-badge scope tension confirmed correctly handled**: `SideNav.tsx` byte-unchanged
   (forbidden file respected); `getUnansweredRsvpCount`'s "unanswered" definition independently
   re-verified against the real `rsvps` status vocabulary (declined/maybe correctly excluded as
@@ -1053,6 +1121,7 @@ to this task, and scoped itself accordingly: a standalone, reusable last-5-`Stat
 participation % component, not a duplicate rebuild.
 
 **Checker's independent verification (checker-reviewer):**
+
 - **Scope-overlap call independently re-verified**: read `MeetingsList.tsx` directly, confirmed its
   placeholder text unambiguously defers the strip to T037 — concluded the worker's narrower reading
   was correct, not something that needed a dispute.
@@ -1084,6 +1153,7 @@ Worker built `StudentsTab.tsx`: `Table`+`PowerSearch`, all ROS-02 columns, a thr
 account-status `StatusDot` derivation, and a reversible ROS-09 Deactivate/Reactivate flow.
 
 **Checker's independent verification (checker-accessibility):**
+
 - **"Invite (if email)" judgment call re-derived independently**, not accepted from the worker's
   framing: confirmed `students` genuinely has no email column and `send-invite`'s real request
   contract genuinely takes `email` as caller-supplied input (never a DB lookup) — the worker's
@@ -1114,6 +1184,7 @@ math for all three schedule modes, and a resolution of the `event_sessions.notes
 nullability question without touching T010's applied migration.
 
 **Checker's independent verification (checker-reviewer):**
+
 - **Migration-safety re-confirmed directly**: `git show` on the commit shows only the two allowed
   dialog files changed — the applied migration file genuinely untouched, no BLOCKER-class item 10
   violation.
@@ -1141,6 +1212,7 @@ card. Two of the four KPI cards don't map onto a single existing T013 metric vie
 demanded a separate constitution item 3 verdict per card rather than a blanket pass.
 
 **Checker's independent per-KPI-card verdicts (checker-accessibility):**
+
 - **(a) Team participation %** — pure `v_team_participation` passthrough, zero arithmetic on the
   value anywhere in the file. Compliant.
 - **(b) Hours vs. team goal** — numerator is a plain `.reduce()` sum over already-computed
@@ -1186,6 +1258,7 @@ client wired in yet" posture).
 
 **Checker's independent verification, attempt 1 (checker-accessibility) — traced to the DOM/library-
 source level, not just trusted from the test suite:**
+
 - **DES-17 keyboard path confirmed genuinely working**: read the exact keydown-handling source and
   the installed Astryx `ListItem`/`Item` library source directly — `focusRow()` calls a real
   imperative `.focus()` on the actual DOM `<li>`, not merely an internal state toggle. Digit keys
@@ -1226,6 +1299,7 @@ reusing T037's already-checker-verified `ConsistencyStrip` component (imported u
 satisfy both HOME-03's participation-% field and BEH-06's meeting-history requirement.
 
 **Checker's independent verification (checker-accessibility):**
+
 - **ConsistencyStrip reuse decision independently re-derived from the real PRD text**, not the
   ledger's paraphrase: BEH-06 (PRD line 235) names HOME-03 unconditionally as a required consumer of
   the last-5-meetings strip. Checker concurred reuse was the defensible, lower-risk choice versus
@@ -1295,6 +1369,7 @@ season default-goal shortcut link, correctly discovering and disclosing a real s
 privacy-persistence column exists anywhere) rather than inventing a migration.
 
 **Checker's independent verification (checker-reviewer):**
+
 - **Schema-gap disclosure re-verified**: reproduced the migration-wide grep itself (zero hits),
   read every `create table` statement directly, and concurred `seasons.leaderboard_show_full_name`
   is the more defensible guess given `default_goal_hours`'s existing per-season-config precedent.
@@ -1321,6 +1396,7 @@ of the schema-forced "email (optional)" ambiguity consistent with `StudentsTab.t
 precedent, plus its own additional finding (an edit-mode email-field-disable wrinkle).
 
 **Checker's independent verification (checker-reviewer):**
+
 - **"email (optional)" resolution confirmed consistent** with `StudentsTab.tsx`/T022's own
   established reading (email supplied at invite-time, never a `students.email` lookup), not a
   divergent interpretation.
@@ -1343,6 +1419,7 @@ already-applied schema/trigger evidence rather than inventing one, and discoveri
 downstream gap (relationship label has nowhere to persist yet) in the process.
 
 **Checker's independent verification (checker-reviewer):**
+
 - **Central data-shape decision re-verified directly**: opened T019's
   `20260718000000_invite_trigger.sql` and confirmed the cited comment ("N separate invites rows
   sharing one email... every one gets its own guardian_links row") genuinely exists, and the
@@ -1369,6 +1446,7 @@ BLOCKER-class SEC-04/ROS-08 name-format enforcement, and a real evidence-driven 
 initial guess about the privacy toggle's OFF-state semantics.
 
 **Checker's independent verification (checker-reviewer):**
+
 - **BLOCKER-class name-format check reproduced with `innerHTML`, not just visible text** — a name
   leaking into an `alt`/`title`/`data-*` attribute would have passed a naive text-only check but
   still have been a real violation; confirmed genuinely absent by both source read and its own full
@@ -1399,6 +1477,7 @@ flow correctly split between a real schema-backed effect and an honestly-disclos
 stand-in.
 
 **Checker's independent verification (checker-accessibility):**
+
 - Reproduced the schema-gap claim directly (`profiles` genuinely has no active/inactive-shaped
   column) rather than trusting the worker's citation.
 - **Central safety check**: confirmed `unlinkAllStudentsForParent` is a genuine `guardian_links`-row
@@ -1427,6 +1506,7 @@ Delete, and a color-chip selector built entirely from genuinely-documented Astry
 invented `ColorPicker`).
 
 **Checker's independent verification (checker-accessibility):**
+
 - Confirmed by source read that `withArchivedOverride` never removes a row (pure boolean flip) and
   `withHardDelete` is the sole removal path in the file.
 - **Central safety check**: `canHardDelete` independently confirmed as the single shared predicate at
@@ -1438,7 +1518,7 @@ invented `ColorPicker`).
   `Selector.renderOption` verified against both doc and installed source, including source-level
   claims about `hasClear`'s type widening and the trigger's plain-text-only rendering.
   `toKnownTeamColor` confirmed to never mutate the stored value, only swatch rendering.
-- Disabled-not-hidden Hard Delete menu item explicitly judged the *correct* accessibility choice
+- Disabled-not-hidden Hard Delete menu item explicitly judged the _correct_ accessibility choice
   (real `aria-disabled` semantics, reason-naming label), not merely defensible.
 - 549/549 repo-wide, 27/27 own tests, typecheck/lint/build/format clean, zero box-drawing.
 
@@ -1453,15 +1533,16 @@ Worker built `InvitesTab.tsx`: AUTH-06 14-day expiry display status, per-row Res
 and Revoke that does not duplicate the already-applied `trg_audit_invite_revocation` DB trigger.
 
 **Checker's independent verification (checker-accessibility):**
+
 - **Central safety check**: opened the migration directly and confirmed the trigger exists and fires
   exactly as cited (`after update ... when (old.status is distinct from new.status and
-  new.status='revoked')`). Reproduced the `audit_log` grep independently — every hit is inside a
+new.status='revoked')`). Reproduced the `audit_log` grep independently — every hit is inside a
   comment, zero code-level references, zero imports, zero insert calls. Safety property holds.
 - AUTH-06 14-day boundary re-derived independently: exactly-14-days correctly resolves to "expired"
   (boundary-inclusive, not off-by-one).
 - Resend/Revoke gating confirmed by source read, reasoning sound and consistent with the trigger's
   own `IS DISTINCT FROM` guard.
-- The disclosed fourth "Revoked" display status independently judged *correct, not overreach* —
+- The disclosed fourth "Revoked" display status independently judged _correct, not overreach_ —
   checker traced the literal three-status wording to AUTH-06 (which predates the Revoke action), not
   ROS-07, and confirmed hiding a revoked row would make the Revoke action look broken.
 - Em-dash placeholder confirmed U+2014 (legitimate typography, not disguised box-drawing).
@@ -1481,9 +1562,10 @@ built around the real, already-applied `seasons_single_active_idx` DB constraint
 it), with a real `AlertDialog`-confirmed switch flow and client-side date-range validation.
 
 **Checker's independent verification (checker-reviewer):**
+
 - **Central safety check**: opened the migration directly and confirmed the partial unique index
   genuinely exists (`create unique index seasons_single_active_idx on public.seasons (is_active)
-  where is_active = true`, lines 52-55). Confirmed the atomicity contract is real by source read:
+where is_active = true`, lines 52-55). Confirmed the atomicity contract is real by source read:
   `SetActiveSeasonPayload {activateSeasonId, deactivateSeasonId}` issues exactly one
   `onSetActiveSeason` call, local state is flipped only after the await resolves, and rejection
   leaves rows untouched — reproduced via the worker's own `onSetActiveSeason rejects` test.
@@ -1511,6 +1593,7 @@ OUT-02-vs-CMP-01 event-type tension, CMP-02 competition-only flag gating sourced
 ETL's own defaults, and the same `event_sessions.notes` nullability precedent T031 established.
 
 **Checker's independent verification (checker-reviewer):**
+
 - **OUT-02-vs-CMP-01 tension — independently judged correct.** Read both PRD sections directly:
   CMP-01 literally names this exact dialog ("New event dialog via a type Selector") as where
   competitions get created, so treating OUT-02's "category fixed outreach" as a hard constraint
@@ -1547,6 +1630,7 @@ Worker built `weekly-digest.tsx`: per-linked-student attendance/hours-vs-goal/ne
 digest, EML-05 cross-family-leakage prevention.
 
 **Checker's independent verification (checker-content):**
+
 - **EML-05 (BLOCKER-class) — confirmed structurally impossible to leak**, not just untested: both
   render functions take a single `params` argument, there is no module-level roster constant, no
   cross-call state, no second data source in scope per call — reproduced the worker's own
@@ -1582,6 +1666,7 @@ closing open check-ins, with post-completion attendance edits relying entirely o
 already-applied `trg_audit_attendance_post_completion` trigger.
 
 **Checker's independent verification (checker-reviewer):**
+
 - **Central safety check**: opened the migration directly and confirmed the trigger fires exactly
   as cited (`after update on attendance`, live `event_sessions.status` lookup). Independently
   grepped the file for any DB call/import — zero real writes, every `audit_log` mention is inside a
@@ -1613,6 +1698,7 @@ Worker built five EML-02 templates (`invite`, `signup-confirm`, `event-reminder-
 `renderEmailLayout()`.
 
 **Checker's independent verification (checker-content):**
+
 - Confirmed `inviteFixtureBody.ts` (Forbidden File) reads as the untouched T048 placeholder and
   `send-invite/index.ts` still calls it, not `invite.tsx` — content-level verification (checker had
   no Bash access for a byte-diff, see below).
@@ -1647,6 +1733,7 @@ Worker built `HoursTab.tsx`: per-student/team confirmed/planned hours, goal/%-to
 subtotals, season totals.
 
 **Checker's independent verification (checker-reviewer):**
+
 - **Central safety check**: independently grepped and confirmed every `attendance`/`hours_override`/
   `check_in`/`check_out` reference is inside a comment — confirmed hours originate exclusively from
   `v_student_hours`'s own verbatim-renamed value, never recomputed.
@@ -1698,6 +1785,7 @@ Worker built `EventsTab.tsx`: one row per session across all three event types (
 with a per-session hours-awarded computation faithfully mirroring `v_student_hours`'s own logic.
 
 **Checker's independent verification (checker-reviewer):**
+
 - **Central safety check**: read the metric-views migration directly and confirmed
   `v_student_hours` is genuinely season-grain (`group by student_id, season_id`) with no
   session-grain view anywhere in the file. Confirmed `computeAttendeeHours` is a faithful,
@@ -1768,6 +1856,7 @@ Worker built `SubscribePopover.tsx`: a real `Popover` with the ICS URL, Copy lin
 Calendar" helper text, and a Reset link revoking the old token via a real `AlertDialog`.
 
 **Checker's independent verification (checker-reviewer):**
+
 - Confirmed by direct migration read that `calendar_feeds.profile_id` has no uniqueness
   constraint (only `token` does) — "one active per profile" (CAL-05) is genuinely
   application-level, not DB-enforced.
@@ -1797,6 +1886,7 @@ Worker built `ParentRsvp.tsx`: a single-student-scoped parent RSVP control writi
 as the acting parent's real profile id, with a `guardian_links`-derived read-side attribution.
 
 **Checker's independent verification (checker-reviewer):**
+
 - **Central safety check**: grep-confirmed zero literal `'parent'` string writes to `responded_by`
   anywhere — every write path uses the real `currentUserProfileId` prop.
 - Confirmed `resolveRsvpResponderAttribution` genuinely cross-references the passed
@@ -1822,6 +1912,7 @@ Worker built `csvExport.ts`: four pure CSV-generation functions (`roster`, `even
 `hours_by_student`), zero data-fetching.
 
 **Checker's independent verification (checker-tests):**
+
 - Read `HoursTab.tsx`'s real `resolveGoalHours`/`hoursVsGoalPercent`/`round1` functions directly
   and confirmed the test file's hand-reproductions are logically identical, then independently
   recomputed the byte-for-byte fixture cross-check itself (not trusting the worker's own
@@ -1847,6 +1938,7 @@ Worker built `OutreachDetail.tsx`: `MetadataList`, per-session signup lists in f
 plain Google Maps link, Copy link, and disclosed Edit/Cancel stubs.
 
 **Checker's independent verification (checker-accessibility):**
+
 - **Central safety check**: reproduced the "No response" roster-minus-rsvps diff and confirmed
   team-scoped exclusion is structurally guaranteed (roster filtering happens upstream of bucket
   computation, so an out-of-scope student can never appear in any bucket at all).
@@ -1876,6 +1968,7 @@ Full packets archived at `docs/swarm/archive/T041-worker-packet.md` and
 Worker built `supabase/functions/ics/**`: role-scoped, `ical-generator`-only ICS feed generation.
 
 **Checker's independent verification (checker-tests):**
+
 - Unlike the worker (Deno CLI unavailable, substituted a Node/tsx port), the checker had real Deno
   available and independently ran `deno test`/`deno check` itself — **54/54 tests pass, 0 typecheck
   errors** — a stronger verification than the worker's own substitute.
@@ -1904,6 +1997,7 @@ due-session selection, recipient expansion + `notification_prefs` filtering, `em
 Resend batching.
 
 **Checker's independent verification (checker-tests):**
+
 - Had real Deno available; independently ran the full suite itself (54/54, 0 typecheck errors)
   rather than relying on the worker's own results.
 - **Central safety check**: reproduced the dedupe re-run proof for both key shapes (per-session
@@ -1943,6 +2037,7 @@ Worker built `MarkDayCompleteDialog.tsx`: attendee checklist pre-checked from `g
 people-reached/adult-volunteers fields, per-student hours-override, BEH-07-compliant confirm.
 
 **Checker's independent verification (checker-reviewer):**
+
 - **Central safety check**: hand-traced the real `v_student_hours` SQL and confirmed the worker's
   structural claim exactly — since this dialog always writes `check_in_at`/`check_out_at` as
   `null`, the view's tier-2 CASE has a false WHEN with no ELSE, forcing SQL `NULL`, so `coalesce`
@@ -1970,6 +2065,7 @@ Worker built `SettingsPage.tsx`: five SET-01 sections in exact literal order, a 
 per-role Notifications category mapping.
 
 **Checker's independent verification (checker-accessibility):**
+
 - **Central safety check**: independently reproduced the "Sign out everywhere" seam-before-`logout()`
   ordering with its own live `AuthProvider`-backed scratch test (not just trusting the worker's own
   test suite) — confirmed a rejection genuinely blocks `logout()` from firing.
@@ -2025,6 +2121,7 @@ first per the packet's instruction, then surveyed every page component for DES-1
 coverage, DES-15 verbatim-copy compliance, and DES-16 apology-language violations.
 
 **Two systemic, codebase-wide findings (new, not previously logged individually):**
+
 - **Finding A**: DES-12's mandated `Skeleton` loading component is used **zero times** anywhere in
   `src/` — every one of ~22 screens surveyed uses `Spinner` instead, tracing back to T018's
   `AcceptInvitePage.tsx` establishing the pattern, uncaught by every subsequent per-screen checker
@@ -2045,6 +2142,7 @@ phrase DES-16 warns against — appears 47 times across 30 files.
 (`NoAccessPage.tsx`/T020, `RosterShell.tsx`/T021) correctly cited, not re-flagged as fresh findings.
 
 **Checker's independent verification (checker-content):**
+
 - Independently confirmed Finding A exactly (0 `Skeleton` hits repo-wide, 30 `Spinner` hits).
 - Independently confirmed Finding B's substance (retry genuinely exists in exactly 2 places) but
   found the worker's "~21 other error-Banner screens" figure was an under-substantiated
@@ -2063,6 +2161,7 @@ phrase DES-16 warns against — appears 47 times across 30 files.
   confirmed the working tree has no leftover files from this task.
 
 **Follow-up candidates routed, not fixed by this task** (per Allowed Files: None):
+
 - Systemic: replace `Spinner` with `Skeleton` on fixed-dimension list/table loading states
   (Finding A) — repo-wide, ~22 screens.
 - Systemic: add a real retry action (`endContent` Button per Astryx's own documented pattern) to
@@ -2090,8 +2189,9 @@ compiled component source (not just doc prose), and hand-re-executed the real, i
 derive true minimum table widths.
 
 **Primary finding — NFR-06 FAIL on `LiveConsole.tsx` (T033), the live check-in console:**
+
 - "Panes stack": the `HStack wrap="wrap"` mechanism is real (genuine flex-wrap, not cosmetic), but
-  the roster pane (`VStack width={480}`) is the *only* fixed-width usage in the entire codebase
+  the roster pane (`VStack width={480}`) is the _only_ fixed-width usage in the entire codebase
   that omits the `maxWidth="100%"` safety pairing every other screen uses (`LoginPage.tsx`,
   `NoAccessPage.tsx`, `AcceptInvitePage.tsx`, `CheckinResult.tsx` all pair `width={N}` +
   `maxWidth="100%"`) — a real, disclosed overflow risk once the pane wraps onto its own row at
@@ -2116,6 +2216,7 @@ calendar popover (used in 3 dialogs) has no equivalent clamp and its real width 
 floating-ui positioning — not resolvable via static analysis, flagged rather than guessed at.
 
 **Checker's independent verification (checker-accessibility):**
+
 - Independently confirmed the NFR-06 FAIL verdict is correct and, if anything, understated — traced
   `Stack.js` directly and confirmed `width` becomes a literal unconditional inline style with no
   implicit clamp.
@@ -2131,6 +2232,7 @@ floating-ui positioning — not resolvable via static analysis, flagged rather t
 - Confirmed no stray files (`git status --short` clean apart from routine hook noise).
 
 **Follow-up candidates routed, not fixed by this task** (per Allowed Files: None):
+
 - **BLOCKER-priority follow-up task needed**: `LiveConsole.tsx` needs a real `useState`-driven
   show/hide toggle for the QR panel at narrow widths, plus `maxWidth="100%"` added to the roster
   `VStack` (line ~994) to match the codebase's established width-safety idiom. This is a genuine,
@@ -2166,6 +2268,7 @@ hand-rolled. `aria-live="polite"` confirmed present and correctly placed on both
 check-in tally (`LiveConsole.tsx`) and kiosk view.
 
 **Two new MINOR findings from cross-screen comparison (the audit's specific value-add):**
+
 - **NEW-1**: `EmptyState` heading-level skips (missing `headingLevel`, defaulting to h3 as a
   direct sibling of a page's h1) are far more widespread than the 4 files previously named across
   individual task checkers — at least 13 files / ~19 render branches, including on
@@ -2174,12 +2277,13 @@ check-in tally (`LiveConsole.tsx`) and kiosk view.
   follow-up recommended (single sweep task) rather than ~19 one-line PRs, plus extracting a shared
   `SignInRequiredState` component for the 5 duplicated "Sign in to view X" instances.
 - **NEW-2**: `CoachHome.tsx`'s event-type Badge color mapping (`meeting: 'blue', outreach: 'purple',
-  competition: 'teal'`) is inconsistent with `CalendarPage.tsx`/`EventsTab.tsx` (both correctly
+competition: 'teal'`) is inconsistent with `CalendarPage.tsx`/`EventsTab.tsx` (both correctly
   `meeting: 'purple', outreach: 'blue', competition: 'orange'` per DES-04's PRD-cited palette) — a
   real cross-screen consistency defect, not a WCAG contrast failure (each Badge also carries a
   text label). One-line-per-row fix.
 
 **Checker's independent verification (checker-accessibility):**
+
 - Independently re-derived D005's contrast fix, including verifying the CSS cascade-layer ordering
   (`@layer reset, astryx-base, app`) so the app-layer override genuinely wins, not just present in
   text.
@@ -2197,6 +2301,7 @@ check-in tally (`LiveConsole.tsx`) and kiosk view.
 - Confirmed no stray files.
 
 **Follow-up candidates routed, not fixed by this task** (per Allowed Files: None):
+
 - Consolidated EmptyState heading-level sweep (~19 locations) — see NEW-1 above.
 - `CoachHome.tsx:1192-1194` Badge variant map correction — see NEW-2 above.
 - `TopNavHeading`'s plain `<a>` wordmark (T007 NIT, still present, growing blast radius as the app
@@ -2216,6 +2321,7 @@ recorded here).
 
 Follow-up task created directly from T068's checker-confirmed BLOCKER finding. Worker made exactly
 two narrow fixes to `src/pages/meetings/LiveConsole.tsx`:
+
 - Added `maxWidth="100%"` to the roster `VStack` (line ~994), matching the exact `width`+`maxWidth`
   pairing already established elsewhere in the codebase (`LoginPage.tsx`, `NoAccessPage.tsx`,
   `AcceptInvitePage.tsx`, `CheckinResult.tsx`).
@@ -2228,6 +2334,7 @@ two narrow fixes to `src/pages/meetings/LiveConsole.tsx`:
   exist).
 
 **Checker's independent verification (checker-accessibility):**
+
 - Confirmed both fixes present exactly as claimed by reading the file directly.
 - Independently verified `aria-expanded` is a real, typed, TypeScript-checked prop on Astryx's
   `Button` (not doc-precedented-but-unlisted, but genuinely part of `ButtonProps` via
@@ -2278,6 +2385,7 @@ that used `'staff'` either as an intended "student" or "parent" role, or generic
 with no other content touched.
 
 **Checker's independent verification (checker-tests):**
+
 - Independently confirmed the `Role` type re-export matches `role_enum` exactly, and confirmed the
   no-circular-dependency claim by reading `lib/supabase`'s actual imports.
 - Spot-checked all 6 test-fixture fixes directly, confirming each rename/value change preserves the
@@ -2331,6 +2439,7 @@ chrome despite PRD 7.1 specifying `fullscreen` for that route. `AppShell.tsx` is
 for this task; correctly flagged as an observation, not fixed.
 
 **Checker's independent verification (checker-tests):**
+
 - Read the full `router.tsx` diff directly and confirmed every one of the 11 route wirings matches
   the packet's per-route table exactly (import paths, default-vs-named export usage, guard nesting).
 - Independently re-confirmed the self-gating claims by reading `LiveConsole.tsx`, `RosterShell.tsx`,
@@ -2371,6 +2480,7 @@ compiles clean, but adding a hypothetical 5th role literal without a matching ca
 genuine `TS2322` "not assignable to type 'never'" compile error.
 
 **Checker's independent verification (checker-tests):**
+
 - Read `DashboardPage.tsx` directly and confirmed the null-check, switch, exhaustiveness guard, and
   export style exactly as claimed.
 - Independently reproduced the exhaustiveness-guard proof from scratch (own standalone `tsc --strict`
@@ -2422,6 +2532,7 @@ generic wrapper — exactly per the packet's own Trap #2 instruction to adapt to
 found, not assume uniformity.
 
 **Checker's independent verification (checker-tests):**
+
 - Confirmed both `LoginAs`/`LoginAsDeferred` exports exist with genuinely different
   implementations by reading the file directly.
 - Independently confirmed via grep which files actually contain `RequireRole` in their render tree,
@@ -2467,6 +2578,7 @@ injectable `authModule` seam so tests supply deterministic fake auth behavior wi
 backend.
 
 **Checker's independent verification (checker-tests):**
+
 - Independently confirmed the single-source-of-truth claim via direct grep/read (exactly 3 call
   sites of the resolution helper).
 - Independently re-ran and confirmed the `isLoading`-spans-both-steps test genuinely proves the
@@ -2486,8 +2598,9 @@ backend.
 
 **Two MAJOR findings, both independently re-derived by the checker (not just accepting the worker's
 own "disclosed, not disputing" framing) — both routed to follow-up tasks, not yet created:**
+
 - **Gap A**: `AcceptInvitePage.tsx`'s "Set a password" flow now calls the real `login(email,
-  password)` as a genuine sign-in attempt, since no real invite-completion Supabase function
+password)` as a genuine sign-in attempt, since no real invite-completion Supabase function
   (`updateUser`/`signUp`) exists — `src/lib/supabase/auth.ts` was forbidden to this task, and T071
   never built one. Confirmed via git history this is a real behavior change: before this task, "Set
   a password" called the old placeholder `login()` and always silently fake-succeeded (no real
@@ -2542,6 +2655,7 @@ role-mismatch branch now renders `AccessDeniedPage`; `RequireAuth`'s `noProfile`
 comment tracing back to the real constant.
 
 **Checker's independent verification (checker-tests):**
+
 - Confirmed `NoAccessPage.tsx`/`types.ts`/`index.ts` have zero diff.
 - Read `guards.tsx` directly and confirmed only the role-mismatch branch changed — `RequireAuth`'s
   `noProfile` branch and `RequireRole`'s own `isLoading`/`noProfile` branches genuinely untouched.
@@ -2579,6 +2693,7 @@ the instant the Google button is clicked, distinguishing "just completed Google"
 a pre-existing session, did nothing yet") — replacing the passive user-resolution trigger entirely.
 
 **Checker's independent verification (checker-tests):**
+
 - Independently reproduced the worker's own revert-and-verify proof: temporarily disabled the
   `hasCompletedSetup` gating, confirmed 3 tests genuinely fail under the old logic, restored the
   fix, confirmed all 9 pass again — not just trusting the worker's account of having done this.
@@ -2600,6 +2715,7 @@ on the invite-accept page, not yet a task.
 [2026-07-19T17:02:39Z] Worker finished. Checker required before completion.
 
 ## T078 — Update 3 pre-existing tests' stale `RequireRole`-denial assertions (fallout from T076),
+
 Epic E3
 
 **Result: PASS (1st attempt). Severity: none — clean.**
@@ -2621,6 +2737,7 @@ checked a single identifying string), not a special-cased workaround — with th
 disclosed in an explicit code comment.
 
 **Checker's independent verification (checker-tests):**
+
 - Confirmed all 4 assertion/rename changes directly, confirmed no other test in these 3 files was
   touched.
 - Independently traced the "unauthenticated viewer" test's actual render setup and cross-checked
@@ -2661,6 +2778,7 @@ distinguish from a completed action, so no in-memory signal exists that a hard r
 destroy. Left completely untouched.
 
 **Checker's independent verification (checker-tests):**
+
 - Confirmed the `sessionStorage` design matches exactly, including the critical ordering (mark
   before the await, unconditional, not inside `try`).
 - Independently read `LoginPage.tsx`'s actual current effect and confirmed the investigation's
@@ -2673,10 +2791,10 @@ destroy. Left completely untouched.
 - Independently confirmed the test-count delta (910→912, exactly +2) via `git stash` isolation.
 - Confirmed a build error the checker also observed was pre-existing/from a concurrently-running
   task's in-flight edit, not caused by this task.
-[2026-07-19T18:00:29Z] Worker finished. Checker required before completion.
-[2026-07-19T18:02:41Z] Worker finished. Checker required before completion.
-[2026-07-19T18:03:07Z] Worker finished. Checker required before completion.
-[2026-07-19T18:03:56Z] Worker finished. Checker required before completion.
+  [2026-07-19T18:00:29Z] Worker finished. Checker required before completion.
+  [2026-07-19T18:02:41Z] Worker finished. Checker required before completion.
+  [2026-07-19T18:03:07Z] Worker finished. Checker required before completion.
+  [2026-07-19T18:03:56Z] Worker finished. Checker required before completion.
 
 ## T080 — `EmptyState` heading-level sweep + `CoachHome.tsx` color-mapping fix, Epic E11
 
@@ -2695,6 +2813,7 @@ shell). `CoachHome.tsx`'s event-type Badge color mapping corrected to match `Cal
 extraction would require a new file outside the closed Allowed Files list.
 
 **Checker's independent verification (checker-accessibility):**
+
 - Spot-checked 6+ heading-level fixes directly against current file content, confirmed each is a
   genuine direct-sibling-of-h1 case warranting the exact `headingLevel` value used.
 - Specifically confirmed `LiveConsole.tsx`'s search-empty state was correctly left untouched (truly
@@ -2709,7 +2828,7 @@ extraction would require a new file outside the closed Allowed Files list.
 - **Flagged a real process risk**: this working tree currently has T079/T080/T081/T082/T083 all
   uncommitted simultaneously with heavily overlapping Allowed Files, making a single stable
   "everything green at once" verification run impossible — traced every anomaly hit during
-  verification back to a specific *other* task's in-progress edit, none to T080's own scope.
+  verification back to a specific _other_ task's in-progress edit, none to T080's own scope.
   Recommends checkpointing/committing before dispatching further overlapping-scope batches.
 
 ## T083 — DES-15 verbatim empty-state copy fix, 5 screens, Epic E11
@@ -2727,6 +2846,7 @@ sessions; `EventsTab`'s `rows` includes every session status, not just completed
 Passed T058's deliberate design) — kept accurate, reasoned adaptations instead, documented inline.
 
 **Checker's independent verification (checker-content):**
+
 - Confirmed all three verbatim swaps are byte-identical to the PRD's actual text (grepped
   `VOLT_Portal_PRD.md` directly, not trusting a recalled quote).
 - Confirmed `OutreachList.tsx`'s coach view was deliberately left with its old copy (test file still
@@ -2768,8 +2888,9 @@ deleted, never committed. P-COACH2 has zero persisted automated regression cover
 pre-existing gap this task surfaced but cannot fix (`src/pages/**` forbidden here).
 
 **Checker's independent verification (checker-tests):**
+
 - Independently confirmed the no-real-backend claim and reproduced the live `SupabaseNotConfigured
-  Error`-then-redirect proof itself.
+Error`-then-redirect proof itself.
 - **Ran a genuine negative-control check itself** (not just trusting the worker's account): broke
   an assertion, confirmed a real timeout/not-found failure, restored the file, confirmed byte-
   identical restoration, confirmed 18/18 passing again — proving the suite isn't fake-green.
@@ -2807,6 +2928,7 @@ live PR (`Cannot find package 'playwright/test'`, `ERR_MODULE_NOT_FOUND`). One-l
 `supabase/functions/**`.
 
 **Checker's independent verification (checker-tests):**
+
 - Confirmed the diff is genuinely exactly one line.
 - Independently ran the full suite and grepped its own output for any mention of "e2e"/"playwright"
   — zero hits, confirming genuine exclusion, not just a claim.
@@ -2833,6 +2955,7 @@ Astryx-source-verified accessibility-preservation pattern (`Skeleton` itself is 
 design), not an invented workaround.
 
 **Checker's independent verification (checker-accessibility):**
+
 - Spot-checked all 20 conversions (not a sample) — confirmed real `Skeleton` props via the
   installed Astryx source, confirmed the `aria-busy`/`VisuallyHidden` pattern present at every site
   via exact `grep -c` counts matching the number of loading branches per file.
@@ -2852,7 +2975,7 @@ design), not an invented workaround.
   level simplifications (`ParticipationTab.tsx`'s Skeleton omits its 4 filter/sort controls;
   `MeetingsList.tsx`'s coach view shows one generic block where the real content has two labeled
   sections) — neither wrong, both reasonable simplifications, neither blocking.
-[2026-07-19T18:24:07Z] Worker finished. Checker required before completion.
+  [2026-07-19T18:24:07Z] Worker finished. Checker required before completion.
 
 ## T082 — DES-12 error-state sweep: real retry actions on error `Banner`s, Epic E11
 
@@ -2875,8 +2998,9 @@ and a `retry: () => void` field on the error variant, appended to the load effec
 array.
 
 **Three non-mechanical additions, independently verified line-by-line:**
+
 - `SeasonSettings.tsx` `activateError`: `handleConfirmSetActive(targetOverride?)` resolves and
-  captures the *resolved* target (`lastFailedActivateTarget`) before clearing dialog state; Retry
+  captures the _resolved_ target (`lastFailedActivateTarget`) before clearing dialog state; Retry
   re-invokes with the exact original `{activateSeasonId, deactivateSeasonId}` payload.
 - `SettingsPage.tsx` `avatarError`: `lastFailedAvatarFile` holds the actual failed `File` object;
   Retry re-attempts that exact file, bypassing the now-empty `FileInput`.
@@ -2969,6 +3093,7 @@ traps recorded in the design pass's own output; individual packets get their own
 worker/checker packets and ledger rows as each is dispatched.
 
 **Real facts discovered during the design pass** (not previously known):
+
 - `ProfileRow.avatarUrl` in `src/lib/supabase/types.ts` is mistyped `string` — the
   column has been nullable since T019's `20260718000000_invite_trigger.sql` migration.
 - The `checkin` Edge Function only verifies codes; nothing issues the rotating QR/short
@@ -3662,6 +3787,7 @@ behavior even though the initial action broke a standing rule. Logged as a proce
 NIT for future worker-prompt reinforcement, not a blocker.
 
 **Feature claims, all independently verified:**
+
 - New `loaders/outreach.ts` (1026 lines) exports real `loadOutreachData`,
   `loadOutreachDetail`, `submitRsvpChange`, `markDayComplete`, `saveOutreachEvent`,
   `cancelOutreachEvent`.
@@ -3743,7 +3869,7 @@ was confirmed untouched, correctly out of this hotfix's scope.
 47/47 `OutreachList.test.tsx` tests pass, including 5 new tests that explicitly
 assert the real loader is never called at all while the active season is
 loading/none/error, and — once a real UUID-shaped season resolves — is called
-with that real id and explicitly *not* the old placeholder string. T106's own two
+with that real id and explicitly _not_ the old placeholder string. T106's own two
 files are clean on typecheck/lint/format:check; the checker noted (informational
 only, not a T106 defect) that repo-wide suite/typecheck runs fluctuated during
 verification purely due to sibling tasks T103/T104/T105 actively editing files in
@@ -4120,7 +4246,7 @@ matches the suite's existing convention, logged as optional hardening.
 every page is gone. The load-bearing investigation — whether `TopNav` sits
 inside `SeasonProvider`'s context subtree — was independently verified by the
 checker against `AppShell.tsx`'s actual JSX: `<TopNav />` is passed as the
-Astryx AppShell's `topNav` prop *inside* `<SeasonProvider>`, and element-as-prop
+Astryx AppShell's `topNav` prop _inside_ `<SeasonProvider>`, and element-as-prop
 preserves context position, so no provider hoist was needed and `AppShell.tsx`
 is correctly untouched (the packet's conditional file, condition not met). The
 chromeless routes early-return before TopNav ever mounts.
@@ -4436,6 +4562,7 @@ decide whether kiosk joins the chromeless list. (Optional) an integration-level
 route-persistence test.
 
 ## T122 — UXP-04 meetings: dense rows + expander + meetings.ts dual-member fix
+
 - Date: 2026-07-20
 - Worker: worker-implementer (attempt 1)
 - Checker: checker-reviewer
@@ -4462,7 +4589,7 @@ route-persistence test.
 - `.limit(1)` fix: call site has no team param, so aggregate path —
   sums the view's own counters and reapplies its pct expression
   token-identical to membership_views SQL (`round(100.0*present/greatest
-  (expected-excused,1),1)`); single-row case is reference passthrough,
+(expected-excused,1),1)`); single-row case is reference passthrough,
   consistent with T120's checkin.ts twin. Dual-member fixture is
   non-tautological (100%/0% inputs → 50% output).
 - Cancel mutation byte-unchanged (`update({status:'canceled'})`);
@@ -4477,6 +4604,7 @@ route-persistence test.
   T120 test files so the format gate is green tree-wide.
 
 ## T124 — UXP-06/10: coach dashboard analytics parity + activity feed
+
 - Date: 2026-07-20
 - Worker: worker-implementer (attempt 1)
 - Checker: checker-reviewer
@@ -4522,6 +4650,7 @@ route-persistence test.
   helpers into sibling modules.
 
 ## T121 — UXP-04 outreach: dense rows + expand-in-place + T118 wiring follow-ups
+
 - Date: 2026-07-20
 - Worker: worker-implementer (attempts: 2)
 - Checker: checker-reviewer (same checker both passes)
@@ -4538,7 +4667,7 @@ route-persistence test.
     Promise.all — no fan-out, seasonId (T106) intact.
   - `distinctAttendedStudentIds` counts present/late only; citation
     checked against `metric_views.sql` line 18 (`where a.status in
-    ('present','late')`) — matches verbatim. Raw distinct-student tally,
+('present','late')`) — matches verbatim. Raw distinct-student tally,
     not the view's hours expression → constitution item 3 holds.
   - End-to-end threading verified: loader → CoachOutreachView →
     CoachOutreachSection → CoachOutreachEventRow → computeEventRowStats;
@@ -4566,16 +4695,17 @@ route-persistence test.
 - Follow-ups: (NIT) remove the now-unused eslint-disable directive at
   `OutreachList.tsx:1117` (auto-fixable) to return the warning count to
   the 338 baseline.
-[2026-07-21T01:49:11Z] Worker finished. Checker required before completion.
+  [2026-07-21T01:49:11Z] Worker finished. Checker required before completion.
 
 ## T125 — UXP-09: event create/edit form re-layout per UXD-06
+
 - Date: 2026-07-21
 - Worker: worker-implementer (1st attempt)
 - Checker: checker-reviewer
 - Verdict: **PASS** (NIT)
 - Architect decision honored: both `OutreachEventDialog` and
   `ScheduleMeetingsDialog` re-laid into full-height (`Dialog
-  variant="fullscreen"`) sectioned panels via new shared
+variant="fullscreen"`) sectioned panels via new shared
   `src/components/forms/EventFormLayout.tsx` (`EventFormLayout` +
   `EventFormSection`, real semantic `Heading` + `Section`), rather than
   merged into one editor — preserves the checker-verified T101/T118/T119
@@ -4609,6 +4739,7 @@ route-persistence test.
   informational only.
 
 ## T128 — wave-3 debt batch: format gate, label wording, doc accuracy, planned-hours guard
+
 - Date: 2026-07-21
 - Worker: worker-implementer (1st attempt)
 - Checker: checker-reviewer
@@ -4655,9 +4786,10 @@ route-persistence test.
   hold for quote-normalization — future packets touching apostrophe
   strings should phrase this as "prettier --check passes / no string
   value changed" instead.
-[2026-07-21T01:51:24Z] Worker finished. Checker required before completion.
+  [2026-07-21T01:51:24Z] Worker finished. Checker required before completion.
 
 ## T127 — UXP-07: mark whole event complete (bulk day completion)
+
 - Date: 2026-07-21
 - Worker: worker-implementer (1st attempt)
 - Checker: checker-reviewer
@@ -4703,6 +4835,7 @@ route-persistence test.
   project-wide, not blocking.
 
 ## T126 — UXP-03: retroactive student/parent check-off + self-write migration
+
 - Date: 2026-07-21
 - Worker: worker-implementer (1st attempt)
 - Checker: checker-reviewer (highest-scrutiny pass — RLS security)
@@ -4757,6 +4890,7 @@ route-persistence test.
   standing housekeeping item every close-out already reverts).
 
 ## T129 — W5-P1: app-wide mechanical sweep (UXC-01, UXC-10, UXC-11)
+
 - Date: 2026-07-28
 - Worker: worker-implementer (sonnet, attempts: 2)
 - Checker: checker-reviewer (same checker both passes)
@@ -4765,9 +4899,10 @@ route-persistence test.
 - Verdict: **PASS on attempt 2** (NIT). Attempt 1 **FAILED (2× MAJOR)**.
 
 ### Attempt-1 failure — both defects originated in the packet, not the worker
+
 1. **Full-bleed regression.** The packet prescribed wrapping each section in
    `<Section aria-labelledby={headingId}>`, citing (correctly) that `Section`
-   spreads rest props. Unverified: `Section` applies an *unconditional*
+   spreads rest props. Unverified: `Section` applies an _unconditional_
    negative margin (`Section.tsx:238`, styles `:75-90`) to escape container
    padding. `padding={0}` removes the compensating inner padding, not the
    outer bleed. CoachHome renders its own `LayoutContent padding={6}`, which
@@ -4781,11 +4916,12 @@ route-persistence test.
    **name-prohibited** under ARIA and discarded by AT. Meanwhile removing every
    `header` prop removed the name `List` sets for itself (`List.tsx:169` sets
    `aria-labelledby` only when `header != null`). Net: the populated branch
-   *lost* a name it previously had. The attempt-1 tests asserted only that the
+   _lost_ a name it previously had. The attempt-1 tests asserted only that the
    attribute string round-trips — precisely the "verify markup, not computed
    name" failure the packet's own Trap 1 warned about.
 
 ### Attempt-2 fix, independently verified
+
 - All 11 sites now `<div role="group" aria-labelledby={headingId}>`: zero
   margin/padding/background by construction, and `group` supports a name where
   `generic` prohibits one. `Section` imports removed from the four non-shared
@@ -4811,9 +4947,9 @@ route-persistence test.
   pre-existing at HEAD, and reverted by reading `git show HEAD:<path>` and
   rewriting — using **no** tree-mutating git command. Checker confirmed zero
   lost top-level declarations across all seven source files, and `git stash
-  list` shows only the two known July orphans.
+list` shows only the two known July orphans.
 - UXC-10: 11 packet sites + 2 residual found in review, all rewritten in plain
-  language. Two were *factually stale*, not merely jargon-laden (the LiveConsole
+  language. Two were _factually stale_, not merely jargon-laden (the LiveConsole
   `createClient` claim, false since T071; CoachHome's "dialog hasn't shipped"),
   and were corrected rather than merely de-jargoned. The `digestEnabled` rewrite
   preserves a genuine open ambiguity honestly instead of inventing certainty.
@@ -4825,11 +4961,13 @@ route-persistence test.
   **1412/1412**; build 0; prettier clean on all 16 files.
 
 ### Cross-task finding routed out of this review
+
 T130's rework introduced `<Section … aria-labelledby>` at
 `OutreachList.tsx:2666` — the identical defect. Flagged to T130's worker
 mid-flight rather than left for its checker to rediscover.
 
 ### Follow-ups
+
 Stale `createClient` module docs at `HoursTab.tsx:202` / `ParticipationTab.tsx:104`
 (`csvExport.ts:12` is file-scoped and still true — leave alone); ISO leaks at
 `ScheduleMeetingsDialog.tsx:765,768` and `SeasonSettings.tsx:672`, now fixable by
@@ -4839,6 +4977,7 @@ strengthen `dates.test.ts` with a real timezone exercise rather than a
 constructor spy.
 
 ## T130 — W5-P2: migrate OutreachList coach rows to Astryx `Table`
+
 - Date: 2026-07-28
 - Worker: worker-implementer (sonnet, attempts: 2)
 - Checker: checker-reviewer (same checker both passes)
@@ -4847,6 +4986,7 @@ constructor spy.
 - Verdict: **PASS on attempt 2** (MINOR). Attempt 1 **FAILED (MAJOR)**.
 
 ### Attempt-1 failure — a disclosed limitation resting on a false premise
+
 The worker shipped every control at `size="sm"` (28px) while disclosing that
 44px was unreachable because Astryx's `Button` "ceiling is 36px (`lg`)". Three
 things were wrong: `size="lg"` was never attempted; `style` **is** a documented
@@ -4855,11 +4995,12 @@ F-2 already sanctions `className`/`style`. An honest-looking escalation built on
 an unverified claim — and one T131 would have inherited verbatim.
 
 ### Attempt-2 fix, independently verified
+
 - **44px targets implemented.** Checker traced the mechanism itself rather than
   re-trusting the worker: `dist/astryx.css` contains **zero** `!important`
   declarations (grep-confirmed), so an inline `style` beats the StyleX class
   rule unconditionally; `mergeProps.ts:39-58` spreads consumer `style` last.
-  It further noted `minHeight` is the *stronger* choice than `height` — per CSS
+  It further noted `minHeight` is the _stronger_ choice than `height` — per CSS
   2.1 §10.7 `min-height` clamps the used height rather than contesting
   specificity at all. Applied to expander + Edit + Cancel, which the mobile
   card branch reuses by construction.
@@ -4874,7 +5015,7 @@ an unverified claim — and one T131 would have inherited verbatim.
 - **`Section` → `div role="group"`** now byte-parity with T129's shipped
   pattern; `Section` import removed entirely. Dropping `dividers={['bottom']}`
   verified correct rather than lazy: `Section.tsx:77-80` applies the full-bleed
-  negative margin *unconditionally*, so keeping it for the divider would have
+  negative margin _unconditionally_, so keeping it for the divider would have
   reintroduced exactly T129's MAJOR 1.
 - NITs fixed and verified: `aria-controls` omitted while collapsed (tests
   strengthened to `toBeNull()` collapsed and IDREF-resolved when expanded);
@@ -4890,15 +5031,16 @@ an unverified claim — and one T131 would have inherited verbatim.
   across all five label families. No forbidden plugins, no `textOverflow`.
 
 ### MINOR — the disclosed trade-off, judged rather than accepted
+
 Asked for a straight read, the checker gave one: **content is genuinely clipped**
 at 1440px — row 2 renders `View details – Community Food Bank S`, cut mid-word,
-requiring horizontal scroll *within* the table. Arithmetic confirmed without the
+requiring horizontal scroll _within_ the table. Arithmetic confirmed without the
 rig: 950px of `pixel()` columns + a 224px title floor = 1174px against a 1132px
 wrapper = the ~42px overflow disclosed.
 
 But it judged this a genuine trilemma, not a regression in disguise. With 44px
 buttons, letting the actions cell wrap puts it over the 72px row ceiling; the
-column is 420px wide *solely* to fit T112's pinned full-title link text on one
+column is 420px wide _solely_ to fit T112's pinned full-title link text on one
 line; and shortening that link is forbidden twice over (T112 is a passed task,
 and this packet explicitly prohibits it). The worker preserved every hard
 requirement — 44px targets, ≤72px rows, zero **page-level** scroll at both
@@ -4907,15 +5049,17 @@ Nothing is functionally unreachable: Edit and Cancel are fully visible on every
 row and keyboard focus scrolls the link into view.
 
 Recorded as **not fully satisfying UXC-02**, whose point is columns that align
-*and read cleanly*. It needs a decision from whoever owns the T112 constraint.
+_and read cleanly_. It needs a decision from whoever owns the T112 constraint.
 
 ### Process note
+
 This task's checker also caught, during its T129 review, that T130's in-flight
 rework had introduced the identical `Section`-aria-labelledby defect T129 had
 just fixed. It was relayed to the worker mid-flight, so the defect never reached
 this review — a cross-task catch that saved a full cycle.
 
 ### Follow-ups
+
 (1) Resolve the ~42px table-internal scroll — needs a ruling on the T112 link
 text, or adoption of the reference figure's compact `EDIT` + `×` icon pair.
 (2) Extract `useIsNarrowViewport` to a shared hook before T131's rollout,
@@ -4938,6 +5082,7 @@ against item 19a's two-round cap; the BLOCKER alone was unsatisfiable as
 written and would have failed the task by construction.
 
 The four findings that mattered:
+
 1. BLOCKER — "every interactive control >=44px" contradicted the same packet's
    72px row ceiling once the title became a link (a 44px title line box plus
    the supporting line and cell padding lands at ~70-72px). Rewritten to name
@@ -4965,14 +5110,14 @@ The four findings that mattered:
    both `.md` and `.html`.
 
 **Checker evidence (all re-derived, not accepted).**
-The checker built its own preview rig and measured the shipped code *and* the
+The checker built its own preview rig and measured the shipped code _and_ the
 `c8275c7` baseline by swapping the file in and out — the worker had carried the
 "before" number forward from a comment rather than rendering it.
 
-| | Upcoming cw/sw | Past cw/sw | overflow |
-|---|---|---|---|
-| baseline `c8275c7` | 1132 / 1174 | 1132 / 1174 | 42px each |
-| shipped | 1132 / 1132 | 1132 / 1132 | 0 |
+|                    | Upcoming cw/sw | Past cw/sw  | overflow  |
+| ------------------ | -------------- | ----------- | --------- |
+| baseline `c8275c7` | 1132 / 1174    | 1132 / 1174 | 42px each |
+| shipped            | 1132 / 1132    | 1132 / 1132 | 0         |
 
 `<th>` widths `120/150/224/102/158/420` -> `120/150/474/102/158/128`, summing to
 exactly 1132. Rows 53 / 52.5 (Upcoming), 69 / 52.5 (Past), all <=72px; the 69px
@@ -4991,7 +5136,7 @@ clientWidth 458` with the anchor not overflowing its cell, wrapper still
 1132/1132, row still 53px. The nested-`Text` trap is genuinely avoided.
 
 Test discipline: exactly one assertion changed, at `:1726`, and it was
-*strengthened* (`toContain('View details')` -> `toBe('Community Food Bank
+_strengthened_ (`toContain('View details')` -> `toBe('Community Food Bank
 Sort')`). `:1762` (student/parent) still asserts the old text and passes. The
 three Cancel-dependent tests (`:1302-1304`, `:2179-2181`, `:2187-2189`) and the
 `<th>` parity test are untouched and green. Zero `.skip`/`.only`/`.todo`/`xit`
@@ -5003,7 +5148,7 @@ claimed hover `color-mix` tint on the title link is present in the CSSOM but
 never reaches the glyphs, because `Link` hands its inner `Text` an explicit
 non-inheriting colour. The checker reproduced this exactly (anchor colour
 shifts on hover; span colour does not) and judged it correctly handled: the
-hover underline *does* paint and the focus ring is real, so two live
+hover underline _does_ paint and the focus ring is real, so two live
 non-colour affordances remain; it is pre-existing `@astryxdesign/core`
 composition outside Allowed Files. Reported rather than silently patched or
 disputed.
@@ -5012,6 +5157,7 @@ disputed.
 caused or exposed by T131, both mechanically re-verified with all gates re-run
 green — disclosed here as orchestrator edits that no independent checker has
 reviewed):
+
 - `OutreachList.tsx:2008` asserted the fixed desktop columns "sum to ~950px".
   That was `120+150+102+158+420`; T131 made it `658`. Corrected, with the old
   value retained as history. The conclusion (658 > 375, so the narrow branch is
@@ -5024,6 +5170,7 @@ reviewed):
   at `:2294-2300`. Rewritten to point at the D004 reasoning.
 
 **Follow-ups logged (not blocking):**
+
 1. Annotate the `# Link` props table in `astryx-api.md` with the real
    `weight`/`size`/`color`/`display`/`maxLines`/`type` props (banked by the
    packet; would remove the need for a D004 escalation next time).
@@ -5086,16 +5233,16 @@ are on the integration branch `claude/swarm-plan-zl575z`.
 **Suite at the end of the wave: 66 test files / 1507 tests / 0 eslint errors / 355
 warnings.** Baseline at the start of the day was 63 / 1469 / 354.
 
-| Task | Merge | Checker verdict | What I verified myself before merging |
-|---|---|---|---|
-| T142 | `35b5dd1` | PASS (MINOR ×2) | HEAD moved; token-level diff reduces 770 lines to five substantive edits; `data-columns` mutation fails both new tests |
-| T143 | `9bf339a` | PASS (MINOR ×2, NIT) | Prototype-key guard probed with `constructor`, `toString`, `hasOwnProperty`, `__proto__`, `valueOf` — all `undefined`, nine real hues unaffected |
-| T145 | `24442fa` | PASS (NIT ×2) | Reorder mutation fails with a clean `toEqual` diff; empty-legend mutation fails with the improved `expected [] to have a length of 1` |
-| T146 | `23d6672` | PASS (NIT) | Reverting the select fails the new test; `outreach.ts` zero net diff; scope exactly two new files |
+| Task | Merge     | Checker verdict      | What I verified myself before merging                                                                                                                            |
+| ---- | --------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T142 | `35b5dd1` | PASS (MINOR ×2)      | HEAD moved; token-level diff reduces 770 lines to five substantive edits; `data-columns` mutation fails both new tests                                           |
+| T143 | `9bf339a` | PASS (MINOR ×2, NIT) | Prototype-key guard probed with `constructor`, `toString`, `hasOwnProperty`, `__proto__`, `valueOf` — all `undefined`, nine real hues unaffected                 |
+| T145 | `24442fa` | PASS (NIT ×2)        | Reorder mutation fails with a clean `toEqual` diff; empty-legend mutation fails with the improved `expected [] to have a length of 1`                            |
+| T146 | `23d6672` | PASS (NIT)           | Reverting the select fails the new test; `outreach.ts` zero net diff; scope exactly two new files                                                                |
 | T147 | `a44fb31` | PASS (MINOR, NIT ×2) | Root cause traced end to end (`teams.id uuid` → `events.team_ids uuid[]` → `meetings.ts:680`); two modified pre-existing tests ratified separately under item 10 |
-| T148 | `143a0ef` | PASS (MINOR) | Isolation fix present and suite green; MINOR closed before merge |
-| T149 | `49a2071` | PASS (NIT ×3) | Cap mutation 480→9999 fails cleanly; four bars carry the constant; zero `SegmentedControl` references remain |
-| T150 | `fdc7fd9` | PASS (NIT ×3) | Ceiling mutation at 450 fails with the right matcher; `CoachHome.tsx` zero net diff in the commit |
+| T148 | `143a0ef` | PASS (MINOR)         | Isolation fix present and suite green; MINOR closed before merge                                                                                                 |
+| T149 | `49a2071` | PASS (NIT ×3)        | Cap mutation 480→9999 fails cleanly; four bars carry the constant; zero `SegmentedControl` references remain                                                     |
+| T150 | `fdc7fd9` | PASS (NIT ×3)        | Ceiling mutation at 450 fails with the right matcher; `CoachHome.tsx` zero net diff in the commit                                                                |
 
 **T144 is not in this table.** It was closed as **no-change** with its branch preserved
 unmerged — see dispute-log D011 and its addendum. No variant reaches 3:1 against the
@@ -5114,19 +5261,19 @@ him.
 
 ## T154 — per-user theme seed (merged 2026-07-30)
 
-| Field | Value |
-|---|---|
-| Merged commit | `9586c35c0f077592460ee86e4cb857801f4d5add` (attempt 2) |
-| Verdict | **PASS with MINORs** (attempt 1: FAIL, 1 MAJOR) |
-| Attempts | 2 |
-| Worker / checker | `worker-implementer` (opus, worktree) / `checker-reviewer` (opus) |
-| tsc / build / format | clean / ✓ / clean |
-| eslint | 0 errors, 355 warnings (unchanged from baseline) |
-| vitest | 66 files, 1536 tests (from 1528) |
-| Post-merge on branch | re-measured after merge — see below |
+| Field                | Value                                                             |
+| -------------------- | ----------------------------------------------------------------- |
+| Merged commit        | `9586c35c0f077592460ee86e4cb857801f4d5add` (attempt 2)            |
+| Verdict              | **PASS with MINORs** (attempt 1: FAIL, 1 MAJOR)                   |
+| Attempts             | 2                                                                 |
+| Worker / checker     | `worker-implementer` (opus, worktree) / `checker-reviewer` (opus) |
+| tsc / build / format | clean / ✓ / clean                                                 |
+| eslint               | 0 errors, 355 warnings (unchanged from baseline)                  |
+| vitest               | 66 files, 1536 tests (from 1528)                                  |
+| Post-merge on branch | re-measured after merge — see below                               |
 
 **Owner authority.** George's ruling (`auto-mode-decisions.md`, his three rulings) covers the
-*design*: fix the shared-browser bleed properly, keyed per user. **The decision to fix
+_design_: fix the shared-browser bleed properly, keyed per user. **The decision to fix
 attempt 1's MAJOR rather than defer it was the orchestrator's**, not his, and is recorded
 that way in the ledger row and in the worker's output doc. The four re-keyed tests were
 authorized under the orchestrator's delegated authority satisfying `constitution.md:10`.
@@ -5156,17 +5303,17 @@ source and pinned by its own test.
 
 ## T155 — wire `CoachHome` to the real active season (merged 2026-07-30)
 
-| Field | Value |
-|---|---|
-| Merged commit | `7451fe801d35ff8cb1962044295d69e5ab7bf1b1` (attempt 1) |
-| Verdict | **PASS** — no BLOCKER, no MAJOR, no MINOR; 2 NITs logged only |
-| Attempts | 1 |
-| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus) |
-| Packet | revision 3 — gated twice, item 19a's cap spent, dispatched straight to a worker |
-| tsc / build / format | clean / ✓ / clean |
-| eslint | 0 errors, 355 warnings — **identical pre and post**, no new warning |
-| vitest | 66 files, **1536 → 1546** (+10, exactly the new `it(` blocks) |
-| `DashboardPage.tsx` | byte-identical, sha256 `4a5da47b46e14855dec428d545e0de70b12b73a51fc42c5ec7b1db3101fe7c81` |
+| Field                | Value                                                                                     |
+| -------------------- | ----------------------------------------------------------------------------------------- |
+| Merged commit        | `7451fe801d35ff8cb1962044295d69e5ab7bf1b1` (attempt 1)                                    |
+| Verdict              | **PASS** — no BLOCKER, no MAJOR, no MINOR; 2 NITs logged only                             |
+| Attempts             | 1                                                                                         |
+| Worker / checker     | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus)                       |
+| Packet               | revision 3 — gated twice, item 19a's cap spent, dispatched straight to a worker           |
+| tsc / build / format | clean / ✓ / clean                                                                         |
+| eslint               | 0 errors, 355 warnings — **identical pre and post**, no new warning                       |
+| vitest               | 66 files, **1536 → 1546** (+10, exactly the new `it(` blocks)                             |
+| `DashboardPage.tsx`  | byte-identical, sha256 `4a5da47b46e14855dec428d545e0de70b12b73a51fc42c5ec7b1db3101fe7c81` |
 
 **The bug.** `CoachHome.tsx` declared `seasonId = PLACEHOLDER_SEASON_ID`
 (`'season-placeholder-current'`) and `DashboardPage.tsx` rendered `<CoachHome />` with no
@@ -5228,16 +5375,16 @@ No authority-promotion finding.
 
 ## T157 — mount `ParentRsvp` in `OutreachDetail.tsx` (merged 2026-07-30)
 
-| Field | Value |
-|---|---|
-| Merged commits | `b0b15b0` (source) + `9924db4` (output doc), attempt 1 |
-| Verdict | **PASS** — 1 MINOR (fixed at merge), 1 NIT; no BLOCKER, no MAJOR |
-| Attempts | 1 |
-| Worker / checker | `worker-implementer` (opus, worktree) / `checker-reviewer` (opus) |
-| Packet | revision 2 — round 1 REVISE (4 MAJOR/6 MINOR/3 NIT), round 2 **DISPATCH** (5 MINOR/4 NIT) |
-| tsc / build / format | exit 0 / ✓ / **regressed, fixed at merge — see below** |
-| eslint | 0 errors, 355 → 356 warnings (+1, the new exported pure function) |
-| vitest | 66 files, **1546 → 1567** (+21 = 17 + 4 new tests, zero baseline broken) |
+| Field                | Value                                                                                     |
+| -------------------- | ----------------------------------------------------------------------------------------- |
+| Merged commits       | `b0b15b0` (source) + `9924db4` (output doc), attempt 1                                    |
+| Verdict              | **PASS** — 1 MINOR (fixed at merge), 1 NIT; no BLOCKER, no MAJOR                          |
+| Attempts             | 1                                                                                         |
+| Worker / checker     | `worker-implementer` (opus, worktree) / `checker-reviewer` (opus)                         |
+| Packet               | revision 2 — round 1 REVISE (4 MAJOR/6 MINOR/3 NIT), round 2 **DISPATCH** (5 MINOR/4 NIT) |
+| tsc / build / format | exit 0 / ✓ / **regressed, fixed at merge — see below**                                    |
+| eslint               | 0 errors, 355 → 356 warnings (+1, the new exported pure function)                         |
+| vitest               | 66 files, **1546 → 1567** (+21 = 17 + 4 new tests, zero baseline broken)                  |
 
 **What shipped.** `ParentRsvp` was a finished, fully-tested component imported by exactly one
 file — its own test. A parent had no way to RSVP on behalf of their linked student. It is now
@@ -5254,7 +5401,7 @@ worker's executed output the evidence of record and assigned independent re-exec
 checker. The checker re-ran **all nine** prescribed mutations plus four supplementary ones and
 found none unexecutable, reducing multi-line deletions to equivalent single-line edits.
 
-**Two results worth keeping.** Criterion 2a's two cases are *measurably* non-redundant: dropping
+**Two results worth keeping.** Criterion 2a's two cases are _measurably_ non-redundant: dropping
 the `parentProfileId` predicate fails only case 2 (1 failed / 59 passed), and case 1's exact-array
 `toEqual` is load-bearing — `toContain` would have passed. And criterion 4's omitted-prop mutation
 writes `respondedBy: 'profile-placeholder-current-parent'` into `rsvps.responded_by`, a column
@@ -5312,16 +5459,16 @@ keep **two** things byte-intact, not one.
 
 ## T176 — StudentHome loads the real student's identity (merged 2026-07-30)
 
-| Field | Value |
-|---|---|
-| Merged commit | `e5b2f1cf8e073549ee048191a5f430d0d14e12df` (attempt 2) |
-| Verdict | **PASS with MINORs** (attempt 1: FAIL, 1 MAJOR) |
-| Attempts | 2 |
-| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus) |
-| Premise gate | 2 rounds; round 1 REVISE (2 BLOCKER, 6 MAJOR), round 2 authored without re-gate per item 19a |
-| tsc / build / format | 0 errors / ✓ / clean |
-| eslint | 0 errors, 357 warnings (+1 verified benign, pre-existing class) |
-| vitest | 67 files, 1591 tests (from 66 / 1567) |
+| Field                | Value                                                                                        |
+| -------------------- | -------------------------------------------------------------------------------------------- |
+| Merged commit        | `e5b2f1cf8e073549ee048191a5f430d0d14e12df` (attempt 2)                                       |
+| Verdict              | **PASS with MINORs** (attempt 1: FAIL, 1 MAJOR)                                              |
+| Attempts             | 2                                                                                            |
+| Worker / checker     | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus)                          |
+| Premise gate         | 2 rounds; round 1 REVISE (2 BLOCKER, 6 MAJOR), round 2 authored without re-gate per item 19a |
+| tsc / build / format | 0 errors / ✓ / clean                                                                         |
+| eslint               | 0 errors, 357 warnings (+1 verified benign, pre-existing class)                              |
+| vitest               | 67 files, 1591 tests (from 66 / 1567)                                                        |
 
 **The bug.** `StudentHome`'s `studentId`/`teamId`/`seasonId` defaulted to placeholder
 constants and `DashboardPage.tsx:122` rendered `<StudentHome />` with zero props, so every
@@ -5378,16 +5525,16 @@ exposure is the open question and is T185's scope.
 
 ## T151 — the dialog `teams` prop is now required (merged 2026-07-30)
 
-| Field | Value |
-|---|---|
-| Merged commit | `d4326324170dde74355ce6b47cbeacc4f3438512` |
-| Verdict | **PASS** — zero findings at any severity, first attempt |
-| Attempts | 1 |
-| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-tests` |
-| Premise gate | **None** — skipped under constitution item 25 (mechanical, compiler-enforced, premise pre-measured) |
-| tsc / build / format | 0 errors / ✓ / clean |
-| eslint | 0 errors, 357 warnings (unchanged) |
-| vitest | 67 files, 1591 tests (unchanged — no new `it(` blocks) |
+| Field                | Value                                                                                               |
+| -------------------- | --------------------------------------------------------------------------------------------------- |
+| Merged commit        | `d4326324170dde74355ce6b47cbeacc4f3438512`                                                          |
+| Verdict              | **PASS** — zero findings at any severity, first attempt                                             |
+| Attempts             | 1                                                                                                   |
+| Worker / checker     | `worker-implementer` (sonnet, worktree) / `checker-tests`                                           |
+| Premise gate         | **None** — skipped under constitution item 25 (mechanical, compiler-enforced, premise pre-measured) |
+| tsc / build / format | 0 errors / ✓ / clean                                                                                |
+| eslint               | 0 errors, 357 warnings (unchanged)                                                                  |
+| vitest               | 67 files, 1591 tests (unchanged — no new `it(` blocks)                                              |
 
 **What it closed.** Three dialogs each had an optional `teams` prop backed by a module-level
 `DEFAULT_TEAMS` fixture — the shape behind seven instances of this project's dominant defect
@@ -5416,16 +5563,16 @@ measured cost to generalise from.
 
 ## T170 — `/outreach` resolves the real student (merged 2026-07-30)
 
-| Field | Value |
-|---|---|
-| Merged commit | `131f081c8a22f53cb528686a496cb3aee65c10df` (attempt 2) |
-| Verdict | **PASS with MINORs** (attempt 1: FAIL, 1 MAJOR) |
-| Attempts | 2 |
-| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus) |
-| Premise gate | 1 narrow round → REVISE (1 BLOCKER, 2 MAJOR); revision 2 dispatched without re-gate |
-| tsc / build / format | 0 errors / ✓ / clean |
-| eslint | 0 errors, 357 warnings (unchanged) |
-| vitest | 67 files, 1601 tests (from 1591) |
+| Field                | Value                                                                               |
+| -------------------- | ----------------------------------------------------------------------------------- |
+| Merged commit        | `131f081c8a22f53cb528686a496cb3aee65c10df` (attempt 2)                              |
+| Verdict              | **PASS with MINORs** (attempt 1: FAIL, 1 MAJOR)                                     |
+| Attempts             | 2                                                                                   |
+| Worker / checker     | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus)                 |
+| Premise gate         | 1 narrow round → REVISE (1 BLOCKER, 2 MAJOR); revision 2 dispatched without re-gate |
+| tsc / build / format | 0 errors / ✓ / clean                                                                |
+| eslint               | 0 errors, 357 warnings (unchanged)                                                  |
+| vitest               | 67 files, 1601 tests (from 1591)                                                    |
 
 **More than a display bug.** The premise gate found an eighth consumer of `viewerStudentId` that
 neither the packet nor the orchestrator had traced: `<SelfCheckoffDialog studentId={…} />` is not
@@ -5450,7 +5597,7 @@ right for the probe I ran but wrong for the prescribed design, where it is ~10 �
 proxy for the change rather than the change.
 
 **Verified rather than accepted:** the worker's audit claiming criteria 2/3/4 were structurally
-immune held up under both empirical and source-reading checks — though its stated *reason* was
+immune held up under both empirical and source-reading checks — though its stated _reason_ was
 imprecise, which the checker recorded rather than waving through.
 
 **Carried forward:** T190 (rekey the now-vestigial fixtures so the harness default can return a
@@ -5461,27 +5608,28 @@ updates, and unfoldable into T170 because that packet forbids assertion edits).
 
 ## T184 — a deactivated student is no longer told her record is missing (merged 2026-07-30)
 
-| Field | Value |
-|---|---|
-| Merged commit | `d63f7bad1a50892bfb7dc97c2f3b4cf094f0a387` |
-| Verdict | **PASS** — NITs only, first attempt |
-| Attempts | 1 |
-| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus) |
-| Premise gate | 1 full round → **DISPATCH** (3 MINOR, folded in as authoritative amendments) |
-| tsc / build / format | 0 errors / ✓ / clean |
-| eslint | 0 errors, 357 warnings (unchanged) |
-| vitest | 67 files, 1605 tests (+4, exactly the four added) |
+| Field                | Value                                                                        |
+| -------------------- | ---------------------------------------------------------------------------- |
+| Merged commit        | `d63f7bad1a50892bfb7dc97c2f3b4cf094f0a387`                                   |
+| Verdict              | **PASS** — NITs only, first attempt                                          |
+| Attempts             | 1                                                                            |
+| Worker / checker     | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus)          |
+| Premise gate         | 1 full round → **DISPATCH** (3 MINOR, folded in as authoritative amendments) |
+| tsc / build / format | 0 errors / ✓ / clean                                                         |
+| eslint               | 0 errors, 357 warnings (unchanged)                                           |
+| vitest               | 67 files, 1605 tests (+4, exactly the four added)                            |
 
 **Owner ruling honoured, and its unachievable half proven rather than assumed.** Blocking
 sign-in needs `guards.tsx`, which is Forbidden, and `is_active` appears **zero times** in both
 `auth.ts` and `guards.tsx`. So the owner's stated fallback — signs in, sees nothing — governs.
 
 **The orchestrator's first design would have shipped two bugs.** Routing to the existing
-`NoAccessPage`/`AccessDeniedPage` meant a force-sign-out on mount, copy that is *also* false for
+`NoAccessPage`/`AccessDeniedPage` meant a force-sign-out on mount, copy that is _also_ false for
 this user, and a dead-end loop back to the broken page. The foreman caught it by reading both
 surfaces instead of adopting the proposal.
 
 **Two orchestrator errors recorded, both caught by others:**
+
 1. I reported that the worker omitted its commit SHA under item 21. It did not — `T184-worker-output.md:3` states it. **I read the agent's summary message rather than its output document and asserted a reporting gap from the wrong artifact.** Struck from the record rather than carried forward.
 2. `DashboardPage.tsx:121` should be `:122`; I propagated the packet's off-by-one.
 
@@ -5503,27 +5651,27 @@ passing result.
 
 ## T181 — every parent's dashboard now shows real data (merged 2026-07-30)
 
-| Field | Value |
-|---|---|
-| Merged commit | `a0d02fbeab915c643060809e1ff29219df795eb4` |
-| Verdict | **PASS with MINORs**, first attempt |
-| Attempts | 1 |
-| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus) |
-| Premise gate | 1 full round → REVISE (2 BLOCKER, 5 MAJOR); revision 2 dispatched without re-gate |
-| tsc / build / format | 0 errors / ✓ / clean |
-| eslint | 0 errors, **356** warnings (predicted −1, an export deleted) |
-| vitest | 68 files, 1631 tests (+26, reconciled per-file exactly) |
+| Field                | Value                                                                             |
+| -------------------- | --------------------------------------------------------------------------------- |
+| Merged commit        | `a0d02fbeab915c643060809e1ff29219df795eb4`                                        |
+| Verdict              | **PASS with MINORs**, first attempt                                               |
+| Attempts             | 1                                                                                 |
+| Worker / checker     | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus)               |
+| Premise gate         | 1 full round → REVISE (2 BLOCKER, 5 MAJOR); revision 2 dispatched without re-gate |
+| tsc / build / format | 0 errors / ✓ / clean                                                              |
+| eslint               | 0 errors, **356** warnings (predicted −1, an export deleted)                      |
+| vitest               | 68 files, 1631 tests (+26, reconciled per-file exactly)                           |
 
 **The fabricated-dashboard class is now closed** — `CoachHome` (T155), `StudentHome` (T176) and
 `ParentHome` (this) were all rendering fixture data on live routes.
 
 **This one was invisible to the audit that swept `ParentHome` clean.** That discriminator looked for
-placeholder *identity* props; these were function-typed *fixture loaders*, wearing the codebase's own
+placeholder _identity_ props; these were function-typed _fixture loaders_, wearing the codebase's own
 legitimate `loadX` DI convention. Two discriminators were needed to see one defect family.
 
 **The finding of the session, and it is about our own process:** revision 1's regression proof was
-**vacuous inside the criterion written to prevent vacuity**. Its own words were *"State this ordering
-explicitly so the criterion cannot pass by accident."* The gate measured it passing with the entire
+**vacuous inside the criterion written to prevent vacuity**. Its own words were _"State this ordering
+explicitly so the criterion cannot pass by accident."_ The gate measured it passing with the entire
 fabrication bug restored — all three fixture cards hit their per-card error banner, so `displayName`
 never reached the DOM and "fixture names are gone" was trivially true.
 
@@ -5551,16 +5699,16 @@ trade-off).
 
 ## T169 (OutreachDetail half) — student self-service RSVP control mounted (merged 2026-07-30)
 
-| Field | Value |
-|---|---|
-| Merged commit | `7647820dab68cd89c5077faa5aa437219cc77dfa` |
-| Verdict | **PASS**, no BLOCKER/MAJOR/MINOR, 2 NIT (log-only) — first attempt |
-| Attempts | 1 |
-| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus) |
-| Premise gate | 2 rounds per item 19a: round 1 REVISE (1 MAJOR, 6 MINOR, 5 NIT); round 2 DISPATCH (4 MINOR, 6 NIT, folded in without a third round) |
-| tsc / build / format | 0 errors / n/a / clean |
-| eslint | 0 errors; `OutreachDetail.tsx` warnings 16→17 (expected `+1`, `react-refresh/only-export-components` on the new exported pure function, matching T157's identical precedent) |
-| vitest | `OutreachDetail.test.tsx` 60→73 (+13); full repo 1631→1644 (+13, 0 failures) |
+| Field                | Value                                                                                                                                                                        |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Merged commit        | `7647820dab68cd89c5077faa5aa437219cc77dfa`                                                                                                                                   |
+| Verdict              | **PASS**, no BLOCKER/MAJOR/MINOR, 2 NIT (log-only) — first attempt                                                                                                           |
+| Attempts             | 1                                                                                                                                                                            |
+| Worker / checker     | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus)                                                                                                          |
+| Premise gate         | 2 rounds per item 19a: round 1 REVISE (1 MAJOR, 6 MINOR, 5 NIT); round 2 DISPATCH (4 MINOR, 6 NIT, folded in without a third round)                                          |
+| tsc / build / format | 0 errors / n/a / clean                                                                                                                                                       |
+| eslint               | 0 errors; `OutreachDetail.tsx` warnings 16→17 (expected `+1`, `react-refresh/only-export-components` on the new exported pure function, matching T157's identical precedent) |
+| vitest               | `OutreachDetail.test.tsx` 60→73 (+13); full repo 1631→1644 (+13, 0 failures)                                                                                                 |
 
 **Context: this was run as a deliberate test** of doing the packet → premise-gate → worker →
 checker cycle through subagents rather than inline in the orchestrating session, to see whether it
@@ -5625,16 +5773,16 @@ rather than left as a comment.
 
 ## T177 — calendar-feed subscription link/loader wired to real data (merged 2026-07-30)
 
-| Field | Value |
-|---|---|
-| Merged commit | `ce1783f5802391c4b5ae1971e49929bedffaec0f` |
-| Verdict | **PASS with follow-ups**, no BLOCKER/MAJOR remaining — attempt 2 (attempt 1: FAIL, 1 MAJOR/1 MINOR) |
-| Attempts | 2 |
-| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus) |
-| Premise gate | 2 rounds per item 19a, both REVISE (round 1: 3 BLOCKER/2 MAJOR/4 MINOR/4 NIT; round 2: 1 new BLOCKER/2 new MAJOR, introduced by round 1's own fixes) — hit the two-round cap, escalated to the human owner, who authorized one bounded revision pass with no third gate round |
-| tsc / build / format | 0 errors / ✓ / clean on every file this task touched |
-| eslint | 0 errors, 358 warnings (+1, same already-tolerated `react-refresh/only-export-components` class) |
-| vitest | `.env.local` absent (mandated gate state): 69 files / 1654 tests, 0 failures (from 68/1644). `.env.local` present: exactly the 4 known pre-existing failures, no fifth |
+| Field                | Value                                                                                                                                                                                                                                                                         |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Merged commit        | `ce1783f5802391c4b5ae1971e49929bedffaec0f`                                                                                                                                                                                                                                    |
+| Verdict              | **PASS with follow-ups**, no BLOCKER/MAJOR remaining — attempt 2 (attempt 1: FAIL, 1 MAJOR/1 MINOR)                                                                                                                                                                           |
+| Attempts             | 2                                                                                                                                                                                                                                                                             |
+| Worker / checker     | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus)                                                                                                                                                                                                           |
+| Premise gate         | 2 rounds per item 19a, both REVISE (round 1: 3 BLOCKER/2 MAJOR/4 MINOR/4 NIT; round 2: 1 new BLOCKER/2 new MAJOR, introduced by round 1's own fixes) — hit the two-round cap, escalated to the human owner, who authorized one bounded revision pass with no third gate round |
+| tsc / build / format | 0 errors / ✓ / clean on every file this task touched                                                                                                                                                                                                                          |
+| eslint               | 0 errors, 358 warnings (+1, same already-tolerated `react-refresh/only-export-components` class)                                                                                                                                                                              |
+| vitest               | `.env.local` absent (mandated gate state): 69 files / 1654 tests, 0 failures (from 68/1644). `.env.local` present: exactly the 4 known pre-existing failures, no fifth                                                                                                        |
 
 **Context: this was T177's turn in the same subagent-pipeline test as T169** — packeting, premise-
 gating, implementation, and checking each ran in their own subagent transcript, with only dispatch
@@ -5694,16 +5842,16 @@ worker error, worth reconciling in the packet template rather than this task's o
 
 ## T178 — the end-meeting backend (build half) (merged 2026-07-31)
 
-| Field | Value |
-|---|---|
-| Merged commit | `64eeb83179295dabb36967f0790d8c2730cbe641` |
-| Verdict | **PASS with MINORs**, first attempt |
-| Attempts | 1 |
-| Worker / checker | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus) |
-| Premise gate | 1 full round → REVISE (3 BLOCKER, 3 MAJOR); revision 2 dispatched without re-gate |
-| tsc / build / format | 0 errors / ✓ / clean |
-| eslint | 0 errors, 358 warnings (**zero new**) |
-| vitest | 70 files, 1668 tests (+1 file, +14 tests, exact) |
+| Field                | Value                                                                             |
+| -------------------- | --------------------------------------------------------------------------------- |
+| Merged commit        | `64eeb83179295dabb36967f0790d8c2730cbe641`                                        |
+| Verdict              | **PASS with MINORs**, first attempt                                               |
+| Attempts             | 1                                                                                 |
+| Worker / checker     | `worker-implementer` (sonnet, worktree) / `checker-reviewer` (opus)               |
+| Premise gate         | 1 full round → REVISE (3 BLOCKER, 3 MAJOR); revision 2 dispatched without re-gate |
+| tsc / build / format | 0 errors / ✓ / clean                                                              |
+| eslint               | 0 errors, 358 warnings (**zero new**)                                             |
+| vitest               | 70 files, 1668 tests (+1 file, +14 tests, exact)                                  |
 
 **The ledger's framing was wrong and the foreman caught it before any code was written.** T178 was
 filed as a wiring gap — "finished and tested, mounted nowhere". All three of `EndMeetingDialog`'s
@@ -5729,7 +5877,7 @@ last, so every reachable partial state fails **safe** — absences written, sess
 doesn't. That is the actual reason no RPC (and therefore no migration) is needed.
 
 **Process notes worth keeping.** The foreman added a **proof step** to each rebuilt criterion — run
-the old mutation against the new test and confirm it *now* fails — which nobody asked for and which
+the old mutation against the new test and confirm it _now_ fails — which nobody asked for and which
 is the only thing that distinguishes a fixed criterion from a restated one. The checker disclosed
 its own false negative mid-review (a mutation that hit a module-doc line rather than code) and
 redid it. Both behaviours are why these reports are usable.
@@ -5756,7 +5904,7 @@ offset a gain elsewhere.
 
 **The premise gate found a defect in the packet's own prescribed code.** Revision 1 specified
 `void reloadDetail()` and claimed it stops a refetch failure masquerading as a write failure.
-`void` discards the promise's *value*, not its *rejection*. Measured: the test written to prove
+`void` discards the promise's _value_, not its _rejection_. Measured: the test written to prove
 that behaviour left **86 tests green and the suite at exit code 1**, with vitest warning "This
 might cause false positive tests." Now `.catch(() => {})` — and the identical latent leak already
 sat at `OutreachDetail.tsx:1907-1909`, the very mount revision 1 cited as the pattern to mirror,
@@ -5780,7 +5928,7 @@ tested the test fixture. The gate also measured that the page's **own** `FIXTURE
 obvious path would have got a red test blaming the wiring for something else entirely.
 
 **The checker invented six mutations the packet never named; four were caught, four survived.**
-Caught: a *student's* profile id reaching `attendance.recorded_by`, and the session id swapped for
+Caught: a _student's_ profile id reaching `attendance.recorded_by`, and the session id swapped for
 the event id (which reddened twice). Survived — and the checker proved with its own DOM probes
 that the shipped code is correct on every one, so these were coverage gaps, not defects:
 swapping `America/Chicago` for `'UTC'` (every existing instant was one where the two agree,
@@ -5825,7 +5973,7 @@ The mock is live for direct calls and for dynamic imports; it simply never reach
 `StudentMeetingView.tsx` resolves at render time. The worker substituted `vi.spyOn` on a namespace
 import, **flagged the deviation itself and asked to be checked** rather than quietly shipping it,
 and the checker confirmed the substitution is the only one of the two mechanisms that works —
-verifying it intercepts the *render path*, not just a test-file call, since the delta of exactly 1
+verifying it intercepts the _render path_, not just a test-file call, since the delta of exactly 1
 can only originate in the component's own default-parameter fallback.
 
 **Four of seven criteria in revision 1 did not discriminate**, and applying it verbatim left three
@@ -5837,10 +5985,10 @@ under its mutation because the two loaders' fixture id-spaces are **disjoint**, 
 against correct code under the other reading because Astryx exposes `ProgressBar` labels through
 `aria-labelledby`, not `aria-label`; C4 spied on a prop the mount never forwards, with an
 "at most once" threshold that 1 satisfies; and C5 stayed green while the coach's page rendered
-*"No student account linked yet"* as its first line.
+_"No student account linked yet"_ as its first line.
 
 **A claim of mine that was the wrong conclusion from a correct grep.** "No test asserts on the
-host's bar" — true of the *label*, false of the *output*: three tests asserted on it, one of which
+host's bar" — true of the _label_, false of the _output_: three tests asserted on it, one of which
 would have started passing again for a different reason off the strip's own em-dash. And deleting
 the JSX orphans the `ProgressBar` import, which fails the build under `noUnusedLocals`.
 
@@ -5859,13 +6007,13 @@ reddens, and mutating the dot separator now leaves it green.
 
 **An honesty note worth keeping.** The C4 root-cause narrative (a `checkin.ts` ↔
 `StudentMeetingView.tsx` circular import) was stated as measured in a permanent in-test comment.
-The checker verified the three *observable* claims but could not isolate the mechanism — its probe
+The checker verified the three _observable_ claims but could not isolate the mechanism — its probe
 was confounded, and it said so. The comment now states only what was measured and labels the
 mechanism a hypothesis. Item 2 makes that comment an audit-trail artefact; it should not claim
 more than was established.
 
 **Trap 2's own claim, restated honestly before dispatch:** the two participation numbers are
-*architecturally* free to disagree, but that is an inference — not reproducible from the shipped
+_architecturally_ free to disagree, but that is an inference — not reproducible from the shipped
 fixtures, whose id-spaces are disjoint. The gate had to cross them by hand to produce the screen.
 The product decision to delete the host's section stands on the architecture, not on a screenshot.
 
@@ -5883,7 +6031,7 @@ it was.
 Filed by T180's checker from a mutation the packet never named: deleting `participation === null`
 from `MeetingsList.tsx:2359` left **all 1696 tests green** — and green at base too, so the gap was
 pre-existing rather than a T180 regression. What it permitted: a student with zero history rows but
-a real participation row seeing *"No meeting history yet"* instead of their participation figure.
+a real participation row seeing _"No meeting history yet"_ instead of their participation figure.
 After T180 deleted the host's own `Participation` section, that clause is `participation`'s **only
 remaining render-path consumer**, which is why a latent gap was worth closing now.
 
@@ -5900,18 +6048,19 @@ Item 25 exists for exactly this.
 Harmless in this instance — nothing else was in flight on the branch, and its final commit and
 gates are clean — but worktree isolation is what has kept this session from colliding with the
 parallel one, so it should not become habit.
+
 ## T183 — `StudentHome`'s greeting is now the real signed-in student's name (merged 2026-07-30)
 
-| Field | Value |
-|---|---|
-| Merged commit | `b21a603` (branch `claude/t183-student-home-loader`, PR #6) |
-| Verdict | **PASS** — 1 MINOR, 2 NIT, first attempt |
-| Attempts | 1 |
-| Worker / checker | `worker-implementer` (sonnet) / `checker-reviewer` (opus) |
-| Premise gate | 2 rounds (item 19a cap) — REVISE, REVISE, then one owner-authorized bounded revision round, dispatched with no 3rd gate round |
-| tsc / build / format | 0 errors / ✓ / clean |
-| eslint | 0 errors, 358 warnings (unchanged) |
-| vitest | 69 files, **1660 tests** (+6 — see dispute ruling below; baseline was 1654) |
+| Field                | Value                                                                                                                         |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Merged commit        | `b21a603` (branch `claude/t183-student-home-loader`, PR #6)                                                                   |
+| Verdict              | **PASS** — 1 MINOR, 2 NIT, first attempt                                                                                      |
+| Attempts             | 1                                                                                                                             |
+| Worker / checker     | `worker-implementer` (sonnet) / `checker-reviewer` (opus)                                                                     |
+| Premise gate         | 2 rounds (item 19a cap) — REVISE, REVISE, then one owner-authorized bounded revision round, dispatched with no 3rd gate round |
+| tsc / build / format | 0 errors / ✓ / clean                                                                                                          |
+| eslint               | 0 errors, 358 warnings (unchanged)                                                                                            |
+| vitest               | 69 files, **1660 tests** (+6 — see dispute ruling below; baseline was 1654)                                                   |
 
 **Scope narrowed at packeting time, disclosed rather than silently cut.** `defaultLoadStudentHomeData`
 fabricated every real signed-in student's name as `'Ada Reyes'`, ignoring both its parameters — the
@@ -5969,16 +6118,16 @@ named and adding no assertions beyond what was mandated.
 
 ## T173 — `CoachHome`'s goal-hours denominator and Season-setup card are now real (merged 2026-07-31)
 
-| Field | Value |
-|---|---|
-| Merged commit | `7435e3b` (branch `claude/t183-student-home-loader`, PR #6) |
-| Verdict | **PASS** — 4 NIT, no BLOCKER/MAJOR/MINOR, first attempt |
-| Attempts | 1 |
-| Worker / checker | `worker-implementer` (sonnet) / `checker-reviewer` (opus) |
-| Premise gate | 2 rounds (item 19a cap, hit **twice** on this one packet — see below), then one owner-authorized bounded revision each time, dispatched with no 3rd gate round either time |
-| tsc / build / format | 0 errors / ✓ / clean |
-| eslint | 0 errors, 358 warnings (checker independently re-measured the baseline in an isolated worktree — zero delta) |
-| vitest | 70 files, 1673 tests (+13 from a 69/1660 baseline: +12 new `coachHome.test.ts`, +1 net from a Test A/B split) |
+| Field                | Value                                                                                                                                                                      |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Merged commit        | `7435e3b` (branch `claude/t183-student-home-loader`, PR #6)                                                                                                                |
+| Verdict              | **PASS** — 4 NIT, no BLOCKER/MAJOR/MINOR, first attempt                                                                                                                    |
+| Attempts             | 1                                                                                                                                                                          |
+| Worker / checker     | `worker-implementer` (sonnet) / `checker-reviewer` (opus)                                                                                                                  |
+| Premise gate         | 2 rounds (item 19a cap, hit **twice** on this one packet — see below), then one owner-authorized bounded revision each time, dispatched with no 3rd gate round either time |
+| tsc / build / format | 0 errors / ✓ / clean                                                                                                                                                       |
+| eslint               | 0 errors, 358 warnings (checker independently re-measured the baseline in an isolated worktree — zero delta)                                                               |
+| vitest               | 70 files, 1673 tests (+13 from a 69/1660 baseline: +12 new `coachHome.test.ts`, +1 net from a Test A/B split)                                                              |
 
 **Two on-screen surfaces from two fabricated fields survived T155's fix.** `defaultGoalHours`
 (hardcoded `10`) fed both the "Hours vs. team goal" tile's denominator (fabricating `0 / 38 hrs`)
@@ -6001,7 +6150,7 @@ one packet, both proven narrow by execution rather than open design disputes.** 
 BLOCKER by literally instrumenting and running the prescribed `DashboardPage.test.tsx` change: the
 assertion sat behind `CoachHome`'s `{dashboardData && (...)}` gate, which nothing in that file's
 existing mocks opened. Escalated to the owner (same structured-question shape as T183's two
-escalations); authorized. Round 2 independently rebuilt and ran the *entire* revised prescription,
+escalations); authorized. Round 2 independently rebuilt and ran the _entire_ revised prescription,
 confirmed the round-1 fix and the adopted redesign both genuinely correct (mutation-tested, not
 inspected) — and then found a **second, different** BLOCKER the redesign itself introduced: moving
 `defaultGoalHours` from a fixture (`10`) to the real active season (`100`) changed the denominator a
@@ -6023,22 +6172,23 @@ intrinsic to T198 being unresolved, not an oversight, and already disclosed in t
 small citation-drift line numbers in new code comments; one additional type-only import
 (`SupabaseClient`) beyond the packet's literal one-import count, mechanically required by the DI'd
 stub-client test helper; the honest-zero state rendering as `0 / 1 hrs` (a pre-existing `max={goalHours
+
 > 0 ? goalHours : 1}` ProgressBar floor, untouched by this task, resolves once T198 lands).
 
 ---
 
 ## T191 — a deactivated child's hours-vs-goal bar is now an honest marker, not a fabricated `1 h` (merged 2026-07-31)
 
-| Field | Value |
-|---|---|
-| Merged commit | `2e1b8ce` (branch `claude/t183-student-home-loader`, PR #6) |
-| Verdict | **PASS** — 3 NIT, no BLOCKER/MAJOR/MINOR, first attempt |
-| Attempts | 1 |
-| Worker / checker | `worker-implementer` (sonnet) / `checker-reviewer` (opus) |
-| Premise gate | 2 rounds (item 19a cap) — round 1 REVISE (1 MAJOR), round 2 DISPATCH per the gate's own verdict, no owner escalation needed |
-| tsc / build / format | 0 errors / ✓ / clean |
-| eslint | 0 errors, 358 warnings (checker independently re-measured the baseline — zero delta) |
-| vitest | 70 files, 1673 tests (net-zero delta — 2 existing tests rewritten, 0 added/removed) |
+| Field                | Value                                                                                                                       |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Merged commit        | `2e1b8ce` (branch `claude/t183-student-home-loader`, PR #6)                                                                 |
+| Verdict              | **PASS** — 3 NIT, no BLOCKER/MAJOR/MINOR, first attempt                                                                     |
+| Attempts             | 1                                                                                                                           |
+| Worker / checker     | `worker-implementer` (sonnet) / `checker-reviewer` (opus)                                                                   |
+| Premise gate         | 2 rounds (item 19a cap) — round 1 REVISE (1 MAJOR), round 2 DISPATCH per the gate's own verdict, no owner escalation needed |
+| tsc / build / format | 0 errors / ✓ / clean                                                                                                        |
+| eslint               | 0 errors, 358 warnings (checker independently re-measured the baseline — zero delta)                                        |
+| vitest               | 70 files, 1673 tests (net-zero delta — 2 existing tests rewritten, 0 added/removed)                                         |
 
 **A genuine product question, correctly not decided by a packet.** `ParentHome`'s per-child card
 rendered `0 / 1 h (0%)` for a deactivated linked student — the `1` a `ProgressBar` clamp artifact
@@ -6056,7 +6206,7 @@ is unaffected by this choice and filed separately as **T201**.
 
 **The fix mirrors an in-repo precedent exactly, at the correct granularity.** `ParentHome.tsx`'s own
 `StudentHomeCardProps.isActive` doc comment had already, during T181, explicitly reasoned that this
-page's situation is *not* `StudentHome.tsx`'s T184 three-way union ("a parent viewing their
+page's situation is _not_ `StudentHome.tsx`'s T184 three-way union ("a parent viewing their
 deactivated child's card is an unaffected observer, not a blocked actor") — so the fix does not copy
 T184's whole-page swap. Instead it mirrors `ConsistencyStrip`'s own `participation === null` branch
 (same file family, same "one metric inside a card" granularity), replacing just the Hours-vs.-goal
@@ -6066,7 +6216,7 @@ JSX consuming them becomes conditional.
 
 **Premise gate found a genuine MAJOR: a criterion true only by fixture coincidence, the same shape
 that cost two other tasks a round each this session.** The original test-rewrite prescription counted
-*all* `[role="progressbar"]` elements page-wide to prove "zero bars for an inactive card, one for an
+_all_ `[role="progressbar"]` elements page-wide to prove "zero bars for an inactive card, one for an
 active card" — but `ConsistencyStrip` (mounted in every card) renders its own progressbar whenever
 `participation !== null`, independent of `isActive`. The claim held only because both test fixtures
 happen to pin `participation: null`. Fixed via a new `hoursVsGoalProgressBars` test helper that
@@ -6091,16 +6241,16 @@ wrong).
 
 ## T158 — real Supabase data for `Leaderboard.tsx`, via a new RLS-safe view (merged 2026-07-31)
 
-| Field | Value |
-|---|---|
-| Merged commit | `b703ed6` (branch `claude/t183-student-home-loader`, PR #6) |
-| Verdict | **PASS** — 1 MINOR (follow-up: T205), no BLOCKER/MAJOR, first attempt |
-| Attempts | 1 |
-| Worker / checker | `worker-implementer` (**opus**, item 18 trigger 1 — migration) / `checker-reviewer` (**opus**) |
-| Premise gate | **3 rounds** (item 19a's 2-round cap hit and owner-authorized twice on this one packet — the heaviest gate history this session), full round throughout (item 19b: migration + novel pattern, no light-gate eligibility) |
-| tsc / build / format | 0 errors / ✓ / clean |
-| eslint | 0 errors, 358 warnings (unchanged) |
-| vitest | 71 files, 1685 tests (+12, exactly the new loader's own test file) |
+| Field                | Value                                                                                                                                                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Merged commit        | `b703ed6` (branch `claude/t183-student-home-loader`, PR #6)                                                                                                                                                              |
+| Verdict              | **PASS** — 1 MINOR (follow-up: T205), no BLOCKER/MAJOR, first attempt                                                                                                                                                    |
+| Attempts             | 1                                                                                                                                                                                                                        |
+| Worker / checker     | `worker-implementer` (**opus**, item 18 trigger 1 — migration) / `checker-reviewer` (**opus**)                                                                                                                           |
+| Premise gate         | **3 rounds** (item 19a's 2-round cap hit and owner-authorized twice on this one packet — the heaviest gate history this session), full round throughout (item 19b: migration + novel pattern, no light-gate eligibility) |
+| tsc / build / format | 0 errors / ✓ / clean                                                                                                                                                                                                     |
+| eslint               | 0 errors, 358 warnings (unchanged)                                                                                                                                                                                       |
+| vitest               | 71 files, 1685 tests (+12, exactly the new loader's own test file)                                                                                                                                                       |
 
 **Scope narrowed to the real data layer only.** `Leaderboard.tsx` had two gaps: never mounted, and
 no real loader (`LoadLeaderboardDataFn` declared, implemented nowhere). This task closes the second
@@ -6153,7 +6303,7 @@ gate round covered: the new view is also readable by Supabase's fully unauthenti
 (ships in the public frontend bundle), not just logged-in users — the first view in this schema to
 expose `display_name` that way (hours-only anon exposure was pre-existing and unrelated to this
 task). Not graded security-class per constitution item 25, but also not decided unilaterally, since
-it's a different threat model than T185's already-settled "any *authenticated* caller can read
+it's a different threat model than T185's already-settled "any _authenticated_ caller can read
 hours" ruling. George ruled "close it off" — a one-line follow-up migration, not yet dispatched.
 
 **T204 also carried in this task's filing** (a second, previously-undisclosed instance of the
@@ -6172,7 +6322,7 @@ contradicted each other in one viewport.
 
 **Owner ruling: "12h recorded is right, just fix the wording to say 'scheduled'."** Implemented as a
 status-aware noun rather than a literal swap, because a blind swap moves the lie instead of removing
-it: once a day is marked complete those hours genuinely do count, and *scheduled* would be false in
+it: once a day is marked complete those hours genuinely do count, and _scheduled_ would be false in
 exactly that case. `resolveEventHoursNoun` is a small exported pure function; `eventTotalHours` is
 byte-for-byte unchanged.
 
@@ -6199,8 +6349,8 @@ directly.
 
 **Merged `f19992f`.** One worker attempt; the **packet** needed two rounds.
 
-The defect: real last-5 attendance dots rendered directly beside *"— (no completed meetings
-recorded yet this season)"*. Neither the id resolution nor the dot row filters `is_active`; only the
+The defect: real last-5 attendance dots rendered directly beside _"— (no completed meetings
+recorded yet this season)"_. Neither the id resolution nor the dot row filters `is_active`; only the
 participation figure does.
 
 ### The premise gate rejected v1 with two BLOCKERs and was right both times
@@ -6213,7 +6363,7 @@ seasons the view returns no row for **anyone**. `StudentHome` is immune only bec
 told every student their account was deactivated the moment a season lapsed** — worse than the bug.
 
 The orchestrator's error underneath it: **following a precedent past the point where its
-preconditions hold.** T184's inference was sound *for StudentHome*, never in general. v2 reads
+preconditions hold.** T184's inference was sound _for StudentHome_, never in general. v2 reads
 `students.is_active` directly — no season coupling, no false-positive state, no migration.
 
 **v1 also broke five green tests without disclosing it** (76 → 71). They take the resolved path and
@@ -6230,11 +6380,11 @@ regression guards mislabelled as proofs.
 
 Three mutations replayed by the orchestrator rather than relayed:
 
-| Mutation | Result |
-|---|---|
-| kill the inactive branch | **C1 + C6 red** |
+| Mutation                                                | Result                                |
+| ------------------------------------------------------- | ------------------------------------- |
+| kill the inactive branch                                | **C1 + C6 red**                       |
 | detect via `participation === null` (the newcomer trap) | **C4 red**, plus 7 pre-existing tests |
-| drop the history sections from the inactive branch | **C2 red** |
+| drop the history sections from the inactive branch      | **C2 red**                            |
 
 The second is the one that matters: it is the exact wrong design v1 nearly shipped, and C4 exists
 solely to make it fail loudly.
@@ -6245,18 +6395,19 @@ Gates: `tsc` 0, build ✓, prettier clean, eslint **0 errors / 360 warnings (unc
 **Worker disclosed** that under its `Promise.all` shape only 3 of the packet's 5 named call sites
 actually failed pre-injection. Reported rather than smoothed over — the right instinct, and the
 remedy was identical.
+
 ## T203 — `<Leaderboard>` embedded in `CoachHome`'s dashboard (merged 2026-07-31)
 
-| Field | Value |
-|---|---|
-| Merged commit | `cfa438e` (branch `claude/t203-leaderboard-embed`) |
-| Verdict | **PASS** — 2 NIT, no BLOCKER/MAJOR/MINOR, first attempt |
-| Attempts | 1 |
-| Worker / checker | `worker-implementer` (sonnet, own worktree) / `checker-reviewer` (default tier — no PII/security dimension, item 25) |
-| Premise gate | 2 rounds (item 19a cap) — round 1 REVISE (2 BLOCKER), round 2 REVISE (1 BLOCKER, narrower), then one owner-authorized bounded revision round, dispatched with no 3rd gate round |
-| tsc / build / format | 0 errors / ✓ / clean |
-| eslint | 0 errors, 359 warnings (unchanged) |
-| vitest | CoachHome 101→103, DashboardPage 5→5 (+6 assertion lines), full suite 1730/1730 |
+| Field                | Value                                                                                                                                                                           |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Merged commit        | `cfa438e` (branch `claude/t203-leaderboard-embed`)                                                                                                                              |
+| Verdict              | **PASS** — 2 NIT, no BLOCKER/MAJOR/MINOR, first attempt                                                                                                                         |
+| Attempts             | 1                                                                                                                                                                               |
+| Worker / checker     | `worker-implementer` (sonnet, own worktree) / `checker-reviewer` (default tier — no PII/security dimension, item 25)                                                            |
+| Premise gate         | 2 rounds (item 19a cap) — round 1 REVISE (2 BLOCKER), round 2 REVISE (1 BLOCKER, narrower), then one owner-authorized bounded revision round, dispatched with no 3rd gate round |
+| tsc / build / format | 0 errors / ✓ / clean                                                                                                                                                            |
+| eslint               | 0 errors, 359 warnings (unchanged)                                                                                                                                              |
+| vitest               | CoachHome 101→103, DashboardPage 5→5 (+6 assertion lines), full suite 1730/1730                                                                                                 |
 
 **Second half of T158, deliberately split off at packeting time.** `Leaderboard.tsx` (T044, real
 data via T158) was finished, tested, and mounted nowhere. This task embeds it in `CoachHome.tsx`'s
@@ -6332,21 +6483,21 @@ instead of reading it**. That single methodological choice produced every signif
   `ignoreDuplicates: true`. Accurate citation, **wrong loader** — that is T178's meetings backend,
   not this dialog's write path.
 - **v2 was not implementable inside its own Allowed Files.** Making `buildAttendanceWriteRows`' new
-  parameter required breaks a fifth, *production* call site at `MarkEventCompleteDialog.tsx:187`.
+  parameter required breaks a fifth, _production_ call site at `MarkEventCompleteDialog.tsx:187`.
   Measured `TS2554`, `tsc` exit 2. Every worker would have hit a mandatory dispute on first
   typecheck — Definition of Ready item 3.
 - **v2's scoping of the destruction was also wrong, and the truth was worse.** The gate found the
-  *bulk* path destroys recorded rows **today**, with one click and no coach intent. Split out as
+  _bulk_ path destroys recorded rows **today**, with one click and no coach intent. Split out as
   **T307** and upgraded from contained debt to a live bug.
 - **Six criteria across v2/v3 could not fail**, two of which the packet's own text argued were
   sound. W1's override arm went green under its own mutation because the seeding put the recorded
-  value into the coach map, so correct and mutated coincided. W2's named mutation was *impossible* —
+  value into the coach map, so correct and mutated coincided. W2's named mutation was _impossible_ —
   the guard it targeted is dead code, since `isAttendingStatus` returns `false` for `undefined`.
   S3's mutation was ambiguous across two distinct RSVP fallbacks. S3b was vacuous through the DOM.
   And v2's mock-hardening list was **inverted**: measured against a broken mock, the two criteria it
   named fail on their own while six it omitted pass silently.
 - **v3 shipped a real design bug that round 2 caught by execution.** Seeding the hours map only for
-  students who *start* checked meant an `absent`-recorded student with `hoursOverride: 3`, whom the
+  students who _start_ checked meant an `absent`-recorded student with `hoursOverride: 3`, whom the
   coach then deliberately checks, displayed **7 h** and counted **7 h** on the confirm button while
   the write emitted **3** — `LABEL: 1 attended · 7 h` vs `WRITTEN hoursOverride: 3`. That also
   falsified module doc #2(b), the constitution-item-3 legitimacy argument for
@@ -6356,10 +6507,10 @@ instead of reading it**. That single methodological choice produced every signif
 
 **The worker refused a bad criterion rather than shipping past it.** §8's S8b named a mutation
 ("drop the same-session check from the guard") that leaves the suite green. The worker measured
-that, found a different mutation that *does* redden (proving the protection real but differently
+that, found a different mutation that _does_ redden (proving the protection real but differently
 sourced), and reported it — the packet's own "report a green mutation instead of shipping it" rule,
 honoured. **The checker then reached a stronger conclusion than the worker's:** the two stale-load
-guards are *mutually redundant*, not one-dead-one-live. Deleting either alone leaves 44/44 green;
+guards are _mutually redundant_, not one-dead-one-live. Deleting either alone leaves 44/44 green;
 only deleting both reddens. `isMounted` wins the race in tests only because `act()` flushes passive
 effects synchronously — under React 18's real async scheduling the refs update during render while
 cleanup is still pending, which is exactly the window the same-session check covers. **Both stay**,
@@ -6367,7 +6518,7 @@ and the mutual redundancy is now documented in-source so a future reader who see
 deleting one does not then delete the other (checker NIT-1, fixed in place, item 25).
 
 **Checker MINOR-1, fixed in place rather than filed.** Two properties §4 prescribes and calls
-load-bearing had *no* criterion: reversing the hours merge so recorded values clobber a coach's
+load-bearing had _no_ criterion: reversing the hours merge so recorded values clobber a coach's
 typed hours left the suite fully green, as did removing the touched-ref set from
 `setStudentHoursOverride`. Shipped code was correct; the coverage was missing. Closed with one
 `describe` (`W3b`, two tests) using the existing `createDeferred` harness. **Both mutations
@@ -6378,7 +6529,7 @@ reproduced by the orchestrator, not relayed** — reversing the merge reddens ex
 **The checker invented edge cases the packet never named; all behaved correctly.** An `'excused'`
 recorded row starts unchecked and, if deliberately checked, writes `present` with `method: 'import'`
 and timestamps preserved. Two rows for one student resolve last-wins deterministically, and because
-the *same* keyed map drives both the seed and the write, label and payload cannot disagree (moot in
+the _same_ keyed map drives both the seed and the write, label and payload cannot disagree (moot in
 production — `attendance` has `unique(session_id, student_id)`). A recorded row for a non-roster
 student is ignored by the seed and structurally unwritable. `hoursOverride: 0` survives both, the
 code correctly using `!== null`/`??` rather than truthiness. **And the T179-class defect — a
@@ -6436,7 +6587,7 @@ carries no limit, and `createLoader` throws only on `result.error`.
 a write, never permit one, and it turns the design's own assumption — that the resolved array is
 complete — from assumed into checked. Entirely inside Allowed Files. **Both mutations reproduced by
 the orchestrator, not relayed:** forcing the guard off reddens exactly the new F4 test
-(`1 failed | 24 passed`), and a companion test one row *below* the cap proves the guard is not a
+(`1 failed | 24 passed`), and a companion test one row _below_ the cap proves the guard is not a
 blanket block. The proper fix — `.range()` pagination at the loader — needs a Forbidden file and is
 filed as **T320**.
 
@@ -6459,14 +6610,14 @@ partial-visibility gap for the acting coach.
 **The checker disproved the packet's own F1b claim.** The packet stated the `handleConfirm` guard was
 untestable because jsdom's `disabled` suppresses clicks. The real reason a DOM-level force fails is
 different — Astryx's `Button` guards on the `isDisabled` **prop**, not the attribute. By mutation
-layering the checker proved the guard is live and load-bearing: removing *only* the button's
+layering the checker proved the guard is live and load-bearing: removing _only_ the button's
 `isDisabled` clause still blocks the write (so `handleConfirm`'s guard is doing real work), and
-removing *both* lets one write through. §3's rule holds at two independent layers. The worker
+removing _both_ lets one write through. §3's rule holds at two independent layers. The worker
 correctly followed the packet in not inventing a criterion here; the packet was wrong, not the
 worker.
 
 **The worker found a real fact the packet did not know, and its fix solves rather than masks.**
-`MarkEventCompleteDialog` is mounted for *any* signed-in user and its content sits in the DOM even
+`MarkEventCompleteDialog` is mounted for _any_ signed-in user and its content sits in the DOM even
 when `isOpen={false}` — `Dialog` only hides it visually — so the first loading-state implementation
 leaked `aria-busy="true"` onto every page. The checker confirmed the `isOpen` render gate is
 load-bearing by removing it and reddening **two pre-existing accessibility tests** (T157 parent,
@@ -6516,7 +6667,7 @@ teams 4 · seasons 1 · students 20 · events 16 · event_sessions 117 · rsvps 
 with **zero** unmatched teams, **zero** unparseable times and **zero** attendees-backfill
 mismatches. The 79 attendance rows carry **341.75 hours**.
 
-All eight figures match measurements taken from the raw JSON *before the ETL was built* — an
+All eight figures match measurements taken from the raw JSON _before the ETL was built_ — an
 independent check, not a restatement.
 
 **What it does not prove.** The dry run writes nothing. The transform is verified; the write path is
@@ -6551,7 +6702,7 @@ no write path, no schema/RLS/auth change, no exported signature another module i
 reduced — the mutation was run, all six gates were run, and the change went through a PR.
 
 **What the fast tier caught that a packet round would have paid full price for.** An existing
-*passing* test was pinning the defect as correct behaviour: it asserted Edit is "still present" for a
+_passing_ test was pinning the defect as correct behaviour: it asserted Edit is "still present" for a
 signed-in student with `.toBe(true)`, commented "unaffected by this task". It was inverted, with the
 reason recorded inline. Five further tests drove this menu with **no signed-in user at all** and
 passed only because the items were ungated; they now render as `ADMIN_USER`, which is what they were
@@ -6569,18 +6720,18 @@ student test).
 
 **The defect.** An expired check-in credential was a dead end. The error state's only action was
 "Try again", which called `runCheckin()` — a function whose only credential source was
-`searchParamsKey`, the URL. So it re-sent the *same expired token* and could never succeed. Nothing
+`searchParamsKey`, the URL. So it re-sent the _same expired token_ and could never succeed. Nothing
 anywhere let a student type the 6-character short code the kiosk displays, even though `callCheckin`
 has always known how to send one (`body.code`) and T032's backend has always accepted it.
 
-**Why it was untracked.** The file pointed twice at *"T054's future manual-entry sub-path"*
+**Why it was untracked.** The file pointed twice at _"T054's future manual-entry sub-path"_
 (module doc and the query-param section). **T054 is Student Home / HOME-02** — unrelated. The
 pointer tracked nothing, so no row existed until the external audit re-found it as LIVE-002. Both
 references are corrected.
 
 **The scoping finding, which neither the audit nor the ledger row had.** Both describe this as a
-*"UI-only gap on a working backend"*. That is true for the expiry case and **false** for the case
-the audit actually named — *"a student who cannot scan has no fallback."* Verified rather than
+_"UI-only gap on a working backend"_. That is true for the expiry case and **false** for the case
+the audit actually named — _"a student who cannot scan has no fallback."_ Verified rather than
 assumed, by reading T032's shipped code:
 
 - `validateCheckinRequest` (`validation.ts`) rejects any body without a **uuid `session_id`**
@@ -6611,19 +6762,19 @@ not a simulated-browser claim.
 **Mutations — all four run in the worktree after committing (item 26's "commit before mutating"),
 each reverted and re-verified. Exit codes asserted, not just pass counts:**
 
-| Mutation | Result |
-|---|---|
+| Mutation                                                                       | Result            |
+| ------------------------------------------------------------------------------ | ----------------- |
 | manual submit calls `runCheckin()` (replays URL credential — the pre-T321 bug) | **2 red, exit 1** |
-| drop `isWellFormedShortCode` guard | **1 red, exit 1** |
-| render the form regardless of `manualSessionId` | **1 red, exit 1** |
-| drop the `0`→`O` / `1`→`I` mapping | **2 red, exit 1** |
+| drop `isWellFormedShortCode` guard                                             | **1 red, exit 1** |
+| render the form regardless of `manualSessionId`                                | **1 red, exit 1** |
+| drop the `0`→`O` / `1`→`I` mapping                                             | **2 red, exit 1** |
 
 **Tier justification (item 26 requires this be stated and defended).** STANDARD, not FAST: the change
 exceeds ~20 lines of production code and adds five new exported symbols. Not HEAVY: it introduces no
 write path of its own — the attendance write is server-side in T032's already-shipped, HMAC-gated
 function, unchanged here — touches no schema, RLS, migration, metric SQL, or auth logic, and cannot
 corrupt data or misreport a user's own data. The one judgement worth flagging for correction: a
-reasonable reviewer could argue check-in *is* a write path and demand HEAVY. The counter is that the
+reasonable reviewer could argue check-in _is_ a write path and demand HEAVY. The counter is that the
 credential plumbing already existed and this change only supplies an alternative credential to an
 existing call; the server remains the sole authority on whether the write happens.
 
@@ -6659,7 +6810,7 @@ produced the fixture shell. T161 was sequenced ahead of T320 for this reason, pe
 - **`makeGetAccessToken`** — all three documented degrade-to-null paths plus no-session and happy.
   This seam feeds `/checkin`; a rejection here would hide the deployed function's real 401 behind a
   generic client-side error.
-- **`makeLoadLinkedStudents`** — both early returns (asserting the *later* queries are never issued,
+- **`makeLoadLinkedStudents`** — both early returns (asserting the _later_ queries are never issued,
   not just the return value), parent scoping from the real session, the client-side join, and the
   `''` display-name fallback. Ordering is asserted with the students response deliberately
   **reversed**, proving order comes from `guardian_links` rather than from response coincidence.
@@ -6669,16 +6820,16 @@ produced the fixture shell. T161 was sequenced ahead of T320 for this reason, pe
 
 **The finding worth recording: a mutation ran clean and caught the orchestrator's own vacuous test.**
 
-| Mutation | Result |
-|---|---|
-| drop the `greatest(…, 1)` divide-by-zero guard | **2 red, exit 1** |
-| aggregate across seasons (drop the season filter) | **1 red, exit 1** |
+| Mutation                                                              | Result                |
+| --------------------------------------------------------------------- | --------------------- |
+| drop the `greatest(…, 1)` divide-by-zero guard                        | **2 red, exit 1**     |
+| aggregate across seasons (drop the season filter)                     | **1 red, exit 1**     |
 | `getAccessToken` rejects on session error instead of returning `null` | **passed, exit 0** ❌ |
-| drop the `attendance` `student_id` filter | **1 red, exit 1** |
+| drop the `attendance` `student_id` filter                             | **1 red, exit 1**     |
 
 The third mutation was first written as "throw inside the `try`", which the enclosing `catch`
 swallows — a badly chosen mutation, not a finding. Rewritten to **delete the `if (error)` check
-outright**, it *still* passed. The cause was the test's own fixture: it returned
+outright**, it _still_ passed. The cause was the test's own fixture: it returned
 `{ session: null, error: {...} }`, so the error branch and the no-session branch produce the
 identical value and no edit to the error branch can be detected. Fixed by giving the errored lookup
 a **usable token** alongside the error; the mutation then went red.
@@ -6696,7 +6847,7 @@ divergence is unreachable at any scale this team will reach (the live database h
 
 **Tier justification (item 26).** STANDARD: test-only, no production change, no write path, no
 schema/RLS/auth. Not FAST because it adds a new test module rather than a ≤20-line edit. Not HEAVY
-because nothing it touches can corrupt data — though note the *subject* under test includes metric
+because nothing it touches can corrupt data — though note the _subject_ under test includes metric
 arithmetic, which is why the SQL-pinning test exists.
 
 **Gates** (`.env.local` absent): `tsc` **0** · `vite build` **✓** · prettier **clean** · eslint
@@ -6715,7 +6866,7 @@ Paginating is the only way to see past the cap.
 
 **Fix — pagination, the stronger of the two options the row offered** (the other was
 detect-and-error). `makeLoadAttendanceForSessions` pages until a **short** page returns. A full page
-means *"at least this many"*, never *"exactly this many"* — that ambiguity **is** the bug — so a
+means _"at least this many"_, never _"exactly this many"_ — that ambiguity **is** the bug — so a
 result set that is an exact multiple of the page size costs one extra empty request rather than
 silently dropping whatever followed it. Disclosed, and asserted by its own test.
 
@@ -6745,11 +6896,11 @@ weakening the fix.** Both edits are stub-only; neither page's production source 
 **Mutations — all four run after committing (item 26), reverted and re-verified. Exit codes
 asserted:**
 
-| Mutation | Result |
-|---|---|
-| stop after page 0 (restore the original bug) | **4 red, exit 1** |
-| drop `.order('id')` — paginate without a stable sort | **8 red, exit 1** |
-| never advance the range offset (page 0 forever) | **1 red, exit 1** |
+| Mutation                                                   | Result            |
+| ---------------------------------------------------------- | ----------------- |
+| stop after page 0 (restore the original bug)               | **4 red, exit 1** |
+| drop `.order('id')` — paginate without a stable sort       | **8 red, exit 1** |
+| never advance the range offset (page 0 forever)            | **1 red, exit 1** |
 | return a partial set at the page bound instead of throwing | **1 red, exit 1** |
 
 **Two follow-ups filed, both in W2's files and both W2's to execute:**
@@ -6767,7 +6918,7 @@ asserted:**
 no schema/RLS/auth/migration. Not FAST — it exceeds ~20 lines and changes behaviour that four
 consumer modules depend on. A reviewer could argue HEAVY on the grounds that truncated attendance
 feeds a write path in `MarkEventCompleteDialog`; the counter is that T307's fail-closed guard
-already sits between this loader and that write, and this change only ever gives that guard *more*
+already sits between this loader and that write, and this change only ever gives that guard _more_
 complete data. Flagging it rather than leaving the call silent.
 
 **Gates** (`.env.local` absent): `tsc` **0** · `vite build` **✓** · prettier **clean** · eslint
@@ -6780,15 +6931,15 @@ complete data. Flagging it rather than leaving the call silent.
 **Scope correction, recorded because it was nearly got wrong.** The orchestrator initially framed
 "does the `EndMeetingDialog` mount land in this PR" as its own scoping decision. **It is not W1's
 call.** `EndMeetingDialog.tsx` is in W3's owned files; T196 sits on both workflow lists split in
-half, and W3's kickoff prompt says of the mount *"BLOCKED on W1 making LiveConsole real. Do not
-start it."* The owner caught it. T403 is W1's half; **T196 remains W3's row.**
+half, and W3's kickoff prompt says of the mount _"BLOCKED on W1 making LiveConsole real. Do not
+start it."_ The owner caught it. T403 is W1's half; **T196 remains W3's row.**
 
 **The defect.** `loadDisplayToken` defaulted to a fixture resolving `FIXTURE_QR_TOKEN` and the short
-code `'FXTURE'`, under a `Banner` reading *"This QR code and check-in code aren't live yet."*
+code `'FXTURE'`, under a `Banner` reading _"This QR code and check-in code aren't live yet."_
 `loadKioskDisplayToken` (`loaders/kiosk.ts`) has called the deployed `checkin-token` Edge Function
 since **T103** and returns the real HMAC token and short code that `Kiosk.tsx` displays and T032's
-`/checkin` verifies. This console simply never used it. The module doc still claimed *"there is
-still no endpoint anywhere in this repo that MINTS one"* — false since T103, now corrected.
+`/checkin` verifies. This console simply never used it. The module doc still claimed _"there is
+still no endpoint anywhere in this repo that MINTS one"_ — false since T103, now corrected.
 
 `KioskDisplayToken` is a structural superset of `LiveConsoleDisplayToken`, so the real loader
 satisfies the seam with no adapter and **no re-derivation of the token math**, which lives in one
@@ -6836,13 +6987,13 @@ below.
 ### The settled design was wrong, and only building it exposed that
 
 The T403 row prescribed composing `makeLoadLiveConsoleData` from `loadEndMeetingSummary`
-(`loaders/endMeeting.ts`, W3's file, import-only), on the stated premise that *"`AttendanceRecordState`
-is already shared in the reverse direction, so the shapes line up."* **Both halves are false.**
+(`loaders/endMeeting.ts`, W3's file, import-only), on the stated premise that _"`AttendanceRecordState`
+is already shared in the reverse direction, so the shapes line up."_ **Both halves are false.**
 
 There is no sharing. `AttendanceRecordState` is declared **twice, independently** —
 `LiveConsole.tsx:436` and `EndMeetingDialog.tsx:313` — with no import between the files.
-`EndMeetingDialog.tsx`'s own module doc §6 says so outright: its ground truth is *"re-derived
-directly … NOT imported from `LiveConsole.tsx`."*
+`EndMeetingDialog.tsx`'s own module doc §6 says so outright: its ground truth is _"re-derived
+directly … NOT imported from `LiveConsole.tsx`."_
 
 And the shapes do not line up. `LiveConsole`'s requires **`updatedAt`**; `EndMeetingDialog`'s has no
 such field (`status`, `checkInAt`, `checkOutAt`, `method`, `recordedBy`). `endMeeting.ts:324-333`
@@ -6851,8 +7002,8 @@ prescribed composition therefore **cannot populate a required field**; it is a t
 style preference, and `endMeeting.ts` is W3's file, unfixable from W1.
 
 **The anti-duplication rationale was also inverted.** The row justified the import as avoiding
-re-derived roster logic. But `endMeeting.ts:127-130` describes its own roster resolution as *"the
-`loaders/kiosk.ts` pattern, **re-derived locally**"* — `kiosk.ts` is the **original**, `endMeeting.ts`
+re-derived roster logic. But `endMeeting.ts:127-130` describes its own roster resolution as _"the
+`loaders/kiosk.ts` pattern, **re-derived locally**"_ — `kiosk.ts` is the **original**, `endMeeting.ts`
 the copy. `makeLoadKioskTally` already runs the identical active-student + team-scope filter; it only
 ever **counted** those rows instead of **naming** them. Importing the copy into the original to avoid
 duplication would have inverted the dependency direction.
@@ -6868,8 +7019,8 @@ does not carry `startsAt`.
 session pushed `309325d` to the same branch, correcting the same `updatedAt` premise on the T403 row
 from a read of the same two files. The two findings were reached separately and agree on premise (a);
 this session found premise (b), the inverted duplication direction, which `309325d` did not. Its
-corrected design named the redundant-read variant first but explicitly allowed *"or query the roster
-directly instead, but do NOT re-derive the event → team_ids → active-students filter"* — the branch
+corrected design named the redundant-read variant first but explicitly allowed _"or query the roster
+directly instead, but do NOT re-derive the event → team_ids → active-students filter"_ — the branch
 taken here, and taken by **reusing** kiosk.ts's existing filter rather than re-deriving one, so that
 constraint holds. Rebased onto `309325d` rather than over it; both records are kept on the row.
 
@@ -6897,12 +7048,12 @@ would have meant the test suite could not detect the failure of the thing this t
 
 ### Mutations (all run; committed at `ec4e340` before mutating, per item 23)
 
-| # | Mutation | Result |
-|---|---|---|
-| 1 | `loadData` default pointed back at a fixture roster | **1 red, exit 1** |
-| 2 | `updatedAt` sourced from `check_in_at` | **0 red, exit 0** → after fixture fix, **1 red, exit 1** |
-| 3 | team-scope filter dropped from the roster | **1 red, exit 1** |
-| 4 | `startsAt` sourced from `ends_at` | **1 red, exit 1** |
+| #   | Mutation                                            | Result                                                   |
+| --- | --------------------------------------------------- | -------------------------------------------------------- |
+| 1   | `loadData` default pointed back at a fixture roster | **1 red, exit 1**                                        |
+| 2   | `updatedAt` sourced from `check_in_at`              | **0 red, exit 0** → after fixture fix, **1 red, exit 1** |
+| 3   | team-scope filter dropped from the roster           | **1 red, exit 1**                                        |
+| 4   | `startsAt` sourced from `ends_at`                   | **1 red, exit 1**                                        |
 
 Mutation 2 also confirms `tsc` alone cannot catch a same-typed wrong-column read: it exited **0**
 with the mutation in place.
@@ -6927,7 +7078,7 @@ no fixture loader exported for any call site to inherit.
 **STANDARD, as the row prescribed, and it still fits after the design change.** Item 26's HEAVY
 trigger is a **write path or destructive operation**, RLS/auth/role logic, a migration, or an
 exported artifact another session builds against. This step is **read-only** — four `select`s and a
-client-side filter; it writes nothing. The design substitution changed *which* module is imported,
+client-side filter; it writes nothing. The design substitution changed _which_ module is imported,
 not the risk class. **Step 3 is the write path and takes HEAVY**, undiluted, with the premise gate
 on Fable building its prescription in its own worktree.
 
@@ -6965,8 +7116,8 @@ onward, on a roll-call console whose entire purpose is repeated clicking.
 
 1. **The gate returned DISPATCH on a prescription it never exercised across repeated edits.** It
    built the fix and proved it correct for one write. The defect only exists on the second.
-   *Building the prescription is necessary but not sufficient — it must be built against the usage
-   pattern, not a single call.*
+   _Building the prescription is necessary but not sufficient — it must be built against the usage
+   pattern, not a single call._
 2. **The packet's own instruction would have made it worse.** "Capture `previousRecord` inside the
    functional updater, not in render scope" — extended to `wireMethod`, as it implicitly steered —
    is strictly worse, because `prev[studentId].method` is `'coach'` the instant the first updater
@@ -6988,8 +7139,8 @@ M7_FULL_SUITE_EXIT=0     (77 files / 1878 tests, all passing)
 
 Same family as T161, T403 step 1, T403 step 2's fixture, and the pre-existing microtask-timing
 tests. **Five instances in one session.** The recurring shape is now well enough evidenced to
-promote into the constitution: *a boundary that cannot be stubbed cannot be tested, and an untestable
-boundary is where the exit-0 mutation lives.*
+promote into the constitution: _a boundary that cannot be stubbed cannot be tested, and an untestable
+boundary is where the exit-0 mutation lives._
 
 ### What the checker confirmed was RIGHT
 
@@ -7049,25 +7200,25 @@ gates on a FAILED review — which is the point: the gates never had a chance of
 ### The rework was not the one the checker prescribed
 
 The checker's MAJOR-1 said: a coach edit degrades a `qr` row's `method` to `coach` from the second
-click onward, violating acceptance criterion 3 (*"external `'qr'`/`'import'` provenance is
-preserved"*). Its prescribed fix was to carry the true DB provenance separately, or reconcile it
+click onward, violating acceptance criterion 3 (_"external `'qr'`/`'import'` provenance is
+preserved"_). Its prescribed fix was to carry the true DB provenance separately, or reconcile it
 from the returned row.
 
 Presented with both options in plain language, **the owner rejected the premise of both** and stated
-a different rule, unprompted and in his own words: *"in all cases, last record wins."* His case:
-*"If a coach touches absent, but then the student comes late and scans the qr, the student entry
-should be saved."* Asked whether it extends to the `method` label itself: *"it should follow last
-write wins so we do not have a mixmatching on the record."*
+a different rule, unprompted and in his own words: _"in all cases, last record wins."_ His case:
+_"If a coach touches absent, but then the student comes late and scans the qr, the student entry
+should be saved."_ Asked whether it extends to the `method` label itself: _"it should follow last
+write wins so we do not have a mixmatching on the record."_
 
 Recorded verbatim in `auto-mode-decisions.md`.
 
 ### Checking the ruling against the spec found that criterion 3 was wrong
 
-`VOLT_Portal_PRD.md:307` (MTG-11) contains two claims. The ruling **overturns the second** — *"always
-wins over QR values"* — which is exactly what discarded the late scanner's check-in and left them
+`VOLT_Portal_PRD.md:307` (MTG-11) contains two claims. The ruling **overturns the second** — _"always
+wins over QR values"_ — which is exactly what discarded the late scanner's check-in and left them
 `absent` while standing in the room. Annotated as superseded, along with §12's acceptance item 4.
 
-**But the first clause reads:** *"A coach tap upserts with `method='coach'`, `recorded_by=coach`."*
+**But the first clause reads:** _"A coach tap upserts with `method='coach'`, `recorded_by=coach`."_
 The PRD had always said a coach tap writes `'coach'`.
 
 **So acceptance criterion 3 contradicted the PRD.** It was taken from
@@ -7086,7 +7237,7 @@ the owner.
 criterion. The lesson is that **a wrong acceptance criterion is invisible to every downstream stage**
 — packet, premise gate, worker, and checker all reasoned faithfully from it, and only the owner
 reading the behaviour in plain language caught it. The premise gate fact-checks the packet against
-the *codebase*; nothing in the chain fact-checked it against the *PRD*. That is a real gap in this
+the _codebase_; nothing in the chain fact-checked it against the _PRD_. That is a real gap in this
 process, not a one-off.
 
 ### What changed
@@ -7116,24 +7267,24 @@ call was wrong.
 
 ### Mutations (committed at `521d4c7` before mutating, per item 23)
 
-| # | Mutation | Result |
-|---|---|---|
-| M7 | corrupt the adapter's arg mapping (swap ids, hardcode status/method) | **RED, exit 1** targeted AND full suite — was **green at exit 0** before the rework |
-| M8 | restore the old provenance behaviour on the wire | **RED, exit 1**, 2 tests |
-| M9 | restore MTG-11 coach precedence in the Realtime path | **RED, exit 1** |
+| #   | Mutation                                                             | Result                                                                              |
+| --- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| M7  | corrupt the adapter's arg mapping (swap ids, hardcode status/method) | **RED, exit 1** targeted AND full suite — was **green at exit 0** before the rework |
+| M8  | restore the old provenance behaviour on the wire                     | **RED, exit 1**, 2 tests                                                            |
+| M9  | restore MTG-11 coach precedence in the Realtime path                 | **RED, exit 1**                                                                     |
 
 M7 going red is the specific thing MAJOR-2 demanded.
 
 ### Known limit, disclosed rather than solved
 
-"Last write wins" means *last applied* — arrival order, not a timestamp comparison.
+"Last write wins" means _last applied_ — arrival order, not a timestamp comparison.
 `attendance.updated_at` cannot order writes (T405: the database never bumps it on conflict-update),
 so there is nothing trustworthy to sort by. Moot today because the Realtime seam is still an honest
 no-op; it becomes real when Realtime does.
 
 ### Scope held
 
-`resolveAttendanceWriteMethod` implements the *other* meaning of `method` and is used by W2's
+`resolveAttendanceWriteMethod` implements the _other_ meaning of `method` and is used by W2's
 `AttendancePanel` and `MarkDayCompleteDialog`. **Owner ruled (option A): the ruling is scoped to
 `LiveConsole` only, NOT table-wide.** So `attendance.method` deliberately means two different things
 depending on which screen wrote the row — `'coach'` here, `'qr'` preserved there. **That divergence
@@ -7144,7 +7295,6 @@ row filed (there is no pending work — a row would misrepresent a settled decis
 
 **Gates** (`.env.local` absent): `tsc` **0** · `vite build` **✓** · prettier **clean** · eslint
 **0 errors / 363 warnings** · vitest **77 files / 1877 tests, exit 0**.
-
 
 ## T403 step 3 — re-review PASSED; step 3 and T403 are done
 
@@ -7200,7 +7350,7 @@ the last-write-wins ruling. `/meetings/live/:sessionId` accepts any session id a
 convention and by how the app routes users, not by a guard. Not introduced by this work.
 
 **NIT-4 (process, judged defensible by the reviewer):** the PRD was edited in place rather than a
-`dispute-log` entry filed per the D002 precedent. The owner *changed* the requirement rather than
+`dispute-log` entry filed per the D002 precedent. The owner _changed_ the requirement rather than
 deviating from it, the original wording is preserved under strikethrough, and the annotation cites
 the ruling — the reviewer judged this more honest than a silent deviation. Recorded so the departure
 from D002's pattern is visible.
@@ -7235,7 +7385,7 @@ shipped a green-by-race test.
 
 **The generalisable lesson: a count delta answers "did anything break", not "is anything now passing
 for the wrong reason".** This project has shipped seven-plus assertions that passed for the wrong
-reason; this is the first time the *detection procedure itself* was the thing passing for the wrong
+reason; this is the first time the _detection procedure itself_ was the thing passing for the wrong
 reason.
 
 **MAJOR 2 — "mirror `RsvpControl`'s rollback" was impossible here.** That component rolls back a
@@ -7250,10 +7400,10 @@ the bug. The gate had already built and run the correct shape — an array snaps
 
 Two mutations replayed by the orchestrator rather than relayed:
 
-| Mutation | Result |
-|---|---|
-| delete the rollback | **C3 red** — the phantom RSVP survives a rejected write |
-| revert to local-only | **3 red**, including the pre-existing live-update test |
+| Mutation             | Result                                                  |
+| -------------------- | ------------------------------------------------------- |
+| delete the rollback  | **C3 red** — the phantom RSVP survives a rejected write |
+| revert to local-only | **3 red**, including the pre-existing live-update test  |
 
 Gates: `tsc` 0, build ✓, prettier clean, eslint **0 errors / 361 warnings (unchanged)**, vitest
 **75 files / 1821 tests** (+4), targeted file exit 0.
@@ -7275,7 +7425,7 @@ the packet needed two.**
 
 `buildAttendanceWriteRows` mapped only `checkedStudentIds`, and `markDayComplete` upserts exactly
 the rows it is handed — so unchecking a student emitted **nothing** for them and their recorded row
-survived. T305 is what made it reachable: before it, a recorded student never *started* checked, so
+survived. T305 is what made it reachable: before it, a recorded student never _started_ checked, so
 there was nothing to uncheck.
 
 The fix is one new exported pure function, `buildAttendanceAbsenceRows`, plus a concat at
@@ -7285,12 +7435,12 @@ The fix is one new exported pure function, `buildAttendanceAbsenceRows`, plus a 
 
 George ruled `status: 'absent'` over DELETE. **The orchestrator recommended it without discovering
 that the question was already settled** — `loaders/attendance.ts:34-50` records D-7, his own
-2026-07-20 override (*"As coach I am ultimate authority and should be able to overwrite an RSVP or
-check-ins"*), under which T119 **deleted** an earlier `status: 'absent'` branch in favour of an
+2026-07-20 override (_"As coach I am ultimate authority and should be able to overwrite an RSVP or
+check-ins"_), under which T119 **deleted** an earlier `status: 'absent'` branch in favour of an
 unconditional DELETE. He was asked to choose between two options, one of which he had already ruled
 against, with no indication that he had.
 
-**The answer survived the correction** — D-7 governs *authority*, not mechanism, and authority is
+**The answer survived the correction** — D-7 governs _authority_, not mechanism, and authority is
 untouched: `v_student_hours` sums `where a.status in ('present','late')`, so an `absent` row yields
 zero hours exactly as a deleted row does. `absent` also avoids a second write step in a path already
 disclosed as non-atomic (T327). **The process failure was real regardless of the outcome:
@@ -7310,7 +7460,7 @@ harness rather than the real one** — despite the trap being documented verbati
 The gate slot keeps paying for itself on exactly this failure.
 
 Four more findings folded into v2: **C5's fixture constraint** (under the shared guard-deletion
-mutation a row-less roster student crash-reds *first* and masks C5's assertion entirely, making the
+mutation a row-less roster student crash-reds _first_ and masks C5's assertion entirely, making the
 packet's own "at least one arm fails on an assertion" requirement unmeetable over the shared
 4-student roster); **C10 deleted** as redundant with C9 (item 25) after the gate measured C9's
 full-label button lookup already catching it; a **stale test-range citation** (`:206-216`) that had
@@ -7318,14 +7468,14 @@ been propagating since T307's packet; and **five module-doc claims** this diff f
 
 ### Verification — every mutation replayed by the orchestrator, not relayed
 
-| Criterion | Mutation | Result |
-|---|---|---|
-| C1/C7 | `return []` from `buildAttendanceAbsenceRows` | **5 red** |
-| C2 | pre-T305 hardcode (null timestamps, `method: 'coach'`) | **2 red** |
-| C3 | `recordedBy: existing.recordedBy` (vitest-only — does not typecheck) | **2 red** |
-| C4/C5 | delete the `isAttendingStatus` guard | **13 red**; C5 fails on an **AssertionError**, not a crash |
-| C6 | iterate `Object.keys(recordedRowByStudentId)` instead of `roster` | **1 red — exactly C6** |
-| C9 | drop the absence spread from `handleSubmit` | **1 red — exactly C9** |
+| Criterion | Mutation                                                             | Result                                                     |
+| --------- | -------------------------------------------------------------------- | ---------------------------------------------------------- |
+| C1/C7     | `return []` from `buildAttendanceAbsenceRows`                        | **5 red**                                                  |
+| C2        | pre-T305 hardcode (null timestamps, `method: 'coach'`)               | **2 red**                                                  |
+| C3        | `recordedBy: existing.recordedBy` (vitest-only — does not typecheck) | **2 red**                                                  |
+| C4/C5     | delete the `isAttendingStatus` guard                                 | **13 red**; C5 fails on an **AssertionError**, not a crash |
+| C6        | iterate `Object.keys(recordedRowByStudentId)` instead of `roster`    | **1 red — exactly C6**                                     |
+| C9        | drop the absence spread from `handleSubmit`                          | **1 red — exactly C9**                                     |
 
 C5's assertion-red is the one that confirms the packet's fixture constraint was honoured rather than
 nominally satisfied: `AssertionError: expected [ …(2) ] to have a length of +0 but got 2`.
@@ -7383,8 +7533,8 @@ retry-that-works-later, not rescue from total loss** — and the packet was rewr
 **MAJOR 2 — v1's proposal to close T330 collapsed.** See the T330 ledger row; the short version is
 that the closure rested on a code branch that is **dead on the surface that mattered**.
 
-**The generalisable lesson, and it is the sibling of T193's:** *reading that a branch exists is not
-evidence that it renders.* Both citations v1 leaned on (`OutreachList.tsx:1565`, and the implied
+**The generalisable lesson, and it is the sibling of T193's:** _reading that a branch exists is not
+evidence that it renders._ Both citations v1 leaned on (`OutreachList.tsx:1565`, and the implied
 "dialog closed" behaviour) were real lines of real code that do not execute on the path being
 described.
 
@@ -7400,15 +7550,15 @@ packet forbade moving it and **C4 is its guard**.
 
 ### Verification — every mutation replayed by the orchestrator, not relayed
 
-| Mutation | Result |
-|---|---|
-| restore flip-before-attendance | **3 red — C1, C2 and C4 each independently** |
-| drop the attendance `length > 0` guard | **1 red — C3** |
-| move the flip after step (3) | **2 red — C4** |
-| remove the adult-volunteer delta guard | **1 red — C5** |
+| Mutation                               | Result                                       |
+| -------------------------------------- | -------------------------------------------- |
+| restore flip-before-attendance         | **3 red — C1, C2 and C4 each independently** |
+| drop the attendance `length > 0` guard | **1 red — C3**                               |
+| move the flip after step (3)           | **2 red — C4**                               |
+| remove the adult-volunteer delta guard | **1 red — C5**                               |
 
-C2 is the one worth naming: it pairs *"`event_sessions` was never flipped"* with *"the attendance
-write **was** attempted"*, so the absence half cannot pass because the fake threw early. This repo
+C2 is the one worth naming: it pairs _"`event_sessions` was never flipped"_ with _"the attendance
+write **was** attempted"_, so the absence half cannot pass because the fake threw early. This repo
 has shipped 7+ absence-only assertions that passed for the wrong reason.
 
 Gates: `tsc` 0, `vite build` ✓, prettier clean, eslint **0 errors / 361 warnings — unchanged**,
@@ -7445,13 +7595,13 @@ it was interrupted without changing the worktree. A replacement `gpt-5.6-terra` 
 the bounded four-file implementation and committed it. The primary orchestrator independently
 reviewed the committed diff and replayed both named mutations.
 
-| Evidence | Result |
-|---|---|
-| Remove `.eq('season_id', seasonId)` | Loader scope test red, exit 1 |
-| Disconnect the real production default loader | Production-default UUID test red, exit 1 |
-| Targeted calendar suites after restoration | 39/39, exit 0 |
-| Full Vitest suite | 76 files / 1825 tests, exit 0 |
-| Typecheck / format / lint / build | all exit 0; lint 0 errors with existing warnings |
+| Evidence                                      | Result                                           |
+| --------------------------------------------- | ------------------------------------------------ |
+| Remove `.eq('season_id', seasonId)`           | Loader scope test red, exit 1                    |
+| Disconnect the real production default loader | Production-default UUID test red, exit 1         |
+| Targeted calendar suites after restoration    | 39/39, exit 0                                    |
+| Full Vitest suite                             | 76 files / 1825 tests, exit 0                    |
+| Typecheck / format / lint / build             | all exit 0; lint 0 errors with existing warnings |
 
 **Scope:** five changed paths including the active worker packet; no subscription, calendar-feed,
 ICS, migration, router, provider, W1, or W2 source changed. T195/T194 remain the next W6 work and
@@ -7517,32 +7667,32 @@ affected mutations, targeted suite, and gates, then returned **PASS — no findi
 
 ### Mutation evidence
 
-| Mutation | Required red result |
-|---|---|
-| Remove existing-profile backfill | SQL lifecycle fails existing-profile assertion |
-| Remove provisioning trigger | Invite/future provisioning assertion fails |
-| Remove partial unique index | Migration/backfill or invariant assertion fails |
-| Defeat RLS + ownership and replace the target profile's row | Cross-owner assertion fails |
-| Send profile id instead of named active feed id | RPC argument test fails |
-| Replace the production reset default with a local fake | Real-writer default test fails |
-| Remove rejection reconciliation | lost-response and unknown-status UI tests fail |
-| Remove `PUBLIC` execute revoke | privilege/anonymous assertion fails |
+| Mutation                                                    | Required red result                             |
+| ----------------------------------------------------------- | ----------------------------------------------- |
+| Remove existing-profile backfill                            | SQL lifecycle fails existing-profile assertion  |
+| Remove provisioning trigger                                 | Invite/future provisioning assertion fails      |
+| Remove partial unique index                                 | Migration/backfill or invariant assertion fails |
+| Defeat RLS + ownership and replace the target profile's row | Cross-owner assertion fails                     |
+| Send profile id instead of named active feed id             | RPC argument test fails                         |
+| Replace the production reset default with a local fake      | Real-writer default test fails                  |
+| Remove rejection reconciliation                             | lost-response and unknown-status UI tests fail  |
+| Remove `PUBLIC` execute revoke                              | privilege/anonymous assertion fails             |
 
 No mutation stayed green. The independent checker replayed all eight before rework and the five
 SQL-sensitive mutations after rework; TypeScript blobs were byte-identical for the remaining three.
 
 ### Final post-rebase verification
 
-| Gate | Result |
-|---|---|
-| Calendar feed loader + popover suites | 2 files / 29 tests, exit 0 |
+| Gate                                    | Result                                                               |
+| --------------------------------------- | -------------------------------------------------------------------- |
+| Calendar feed loader + popover suites   | 2 files / 29 tests, exit 0                                           |
 | PostgreSQL 17 lifecycle/security runner | 10 named assertions, exit 0; skips exactly `20260719000000_cron.sql` |
-| Wrong same-named index drift probe | migration fails loudly, SQLSTATE `42P07` |
-| Typecheck | exit 0 |
-| Format check | exit 0 |
-| Lint | exit 0; 0 errors / 360 warnings |
-| Full Vitest suite, run alone | 76 files / 1850 tests, exit 0 |
-| Production build | exit 0; 2,397 modules transformed |
+| Wrong same-named index drift probe      | migration fails loudly, SQLSTATE `42P07`                             |
+| Typecheck                               | exit 0                                                               |
+| Format check                            | exit 0                                                               |
+| Lint                                    | exit 0; 0 errors / 360 warnings                                      |
+| Full Vitest suite, run alone            | 76 files / 1850 tests, exit 0                                        |
+| Production build                        | exit 0; 2,397 modules transformed                                    |
 
 One earlier parallel full-suite run had a single existing OutreachList test hit its 5-second
 timeout while duplicate suite/lint/build processes competed for resources; the isolated rerun above
@@ -7713,16 +7863,16 @@ byte-unchanged.**
 
 ### Verification — every mutation replayed by the orchestrator, not relayed
 
-| Criterion | Mutation | Result |
-|---|---|---|
-| C1 | kill the loop, return the first page only | **3 red**, AssertionError |
-| C2 | delete `.order('id', …)` | **6 red** — `expected 1463 to be 1500` |
-| C3 | return the partial set instead of throwing at the page bound | **1 red**, AssertionError |
-| C4 | remove the short-page break | **4 red** |
-| C5 | swallow a page error and return `[]` | **1 red**, AssertionError |
+| Criterion | Mutation                                                     | Result                                 |
+| --------- | ------------------------------------------------------------ | -------------------------------------- |
+| C1        | kill the loop, return the first page only                    | **3 red**, AssertionError              |
+| C2        | delete `.order('id', …)`                                     | **6 red** — `expected 1463 to be 1500` |
+| C3        | return the partial set instead of throwing at the page bound | **1 red**, AssertionError              |
+| C4        | remove the short-page break                                  | **4 red**                              |
+| C5        | swallow a page error and return `[]`                         | **1 red**, AssertionError              |
 
 **C2 is the one worth naming.** The packet warned it was the criterion most likely to be written
-vacuously — asserting *"`.order` was called"* is a call-shape check and proves nothing about
+vacuously — asserting _"`.order` was called"_ is a call-shape check and proves nothing about
 correctness, which is the "passes for the wrong reason" shape this repo has shipped 7+ times. The
 worker instead built a fake whose physical row order **drifts between page requests**, so dropping the
 ordering duplicates 37 ids and loses 37 others. The failure is `expected 1463 to be 1500` — an
@@ -7780,7 +7930,7 @@ that states it and false on the branch that would act on it.**
 
 ### The premise was proven by execution, not read
 
-The gate built a paging fake serving **1500 rows over two `.range()` pages** through the *real*
+The gate built a paging fake serving **1500 rows over two `.range()` pages** through the _real_
 `makeLoadAttendanceForSessions`, resolved **1500 distinct rows** (`rangeCalls [[0,999],[1000,1999]]`)
 with a `qr` / `hoursOverride: 6.5` / check-in row intact, and showed the current guard calling that
 complete load **failed**. It then hunted for a surviving path where the guard does real work and
@@ -7794,7 +7944,7 @@ The orchestrator predicted **two** dependent tests would redden. Only `:774` doe
 **`:812` stays GREEN while testing nothing** — vite-node resolves the deleted named export as
 `undefined`, so `Array.from({ length: ATTENDANCE_ROW_CAP - 1 })` gets a `NaN` length and builds `[]`.
 **Only `tsc` catches the dangling import** (`TS2614`, exit 2). This repo has shipped 7+ assertions
-that passed for the wrong reason; this is the first recorded case of one going *vacuous* on deletion
+that passed for the wrong reason; this is the first recorded case of one going _vacuous_ on deletion
 rather than red. `:812` was deleted (the gate's subset argument: any mutation reddening a 999-row
 test also reddens the 1000-row one, but not conversely).
 
@@ -7804,15 +7954,15 @@ It committed the implementation (`3765f4f`) and left one uncommitted change, but
 packet-§7 output doc**. Per item 23's corollary the uncommitted change was assessed before being
 touched: a comment refinement, real work, committed rather than reverted. **The code is therefore
 unattested by its author** — every piece of evidence below is the orchestrator's own replay, and the
-checker was told to treat the diff as having had *less* scrutiny than usual, not more.
+checker was told to treat the diff as having had _less_ scrutiny than usual, not more.
 
 ### Verification — every mutation replayed by the orchestrator
 
-| Criterion | Mutation | Result |
-|---|---|---|
-| C1 + C5 | reinstate the `>= 1000` fail-closed guard | **2 red** — both the injected-array test **and** the real-loader test |
-| C2 | delete the `.catch()` error branch | **2 red** — F1 (load rejects blocks the write), F3 (retry re-runs the load) |
-| C4 | re-add the `ATTENDANCE_ROW_CAP` export | **1 red** |
+| Criterion | Mutation                                  | Result                                                                      |
+| --------- | ----------------------------------------- | --------------------------------------------------------------------------- |
+| C1 + C5   | reinstate the `>= 1000` fail-closed guard | **2 red** — both the injected-array test **and** the real-loader test       |
+| C2        | delete the `.catch()` error branch        | **2 red** — F1 (load rejects blocks the write), F3 (retry re-runs the load) |
+| C4        | re-add the `ATTENDANCE_ROW_CAP` export    | **1 red**                                                                   |
 
 **C5 is the criterion the packet was missing until the gate found it.** C1 is satisfiable with an
 injected array, which pins the dialog but not the premise the whole task depends on. C5 drives the
@@ -7821,7 +7971,7 @@ real loader through a paging fake.
 ### The checker FAILed it — on the packet's error, not the worker's
 
 **MAJOR-1: the disproved F1b claim lived in TWO places and §3.5 named one.** The worker correctly
-fixed the inline copy; the survivor in module doc #6 (`:162-166`) is the *more authoritative* one —
+fixed the inline copy; the survivor in module doc #6 (`:162-166`) is the _more authoritative_ one —
 it is what the inline comment cites by name. So the file shipped saying the `handleConfirm` guard is
 "untestable" in one place and mutation-proven load-bearing in another, **about a guard on the
 data-destroying write path**. That is this project's recurring T301 defect, and it was the packet
@@ -7864,15 +8014,15 @@ replacement change, run directly.
 The gate was dispatched against the T404+T405 packet and returned **REVISE (MAJOR)**. Its corrections
 held up:
 
-| Packet claim | Gate verdict | Confirmed by re-test |
-|---|---|---|
-| Widening the trigger could abort a student's QR check-in | **REFUTED** — `checkSessionLiveness` (`liveness.ts:30-32`, called `index.ts:174`) returns 409 before any write | ✅ |
-| `old.status` on INSERT *raises* | **WRONG** — yields NULL in PG16; the abort was the `actor` NOT NULL constraint alone | ✅ |
-| Trigger name is load-bearing for ordering | **REFUTED** — BEFORE always precedes AFTER; proven by renaming to sort after and re-running green | ✅ |
-| A BEFORE trigger would overwrite client-supplied `updated_at` | **CONFIRMED** — this is what made `0703e6d` dead code | ✅ |
-| `moddatetime` can cover both legs | **WRONG** — errors `moddatetime: cannot process INSERT events` | ✅ |
+| Packet claim                                                  | Gate verdict                                                                                                   | Confirmed by re-test |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------- |
+| Widening the trigger could abort a student's QR check-in      | **REFUTED** — `checkSessionLiveness` (`liveness.ts:30-32`, called `index.ts:174`) returns 409 before any write | ✅                   |
+| `old.status` on INSERT _raises_                               | **WRONG** — yields NULL in PG16; the abort was the `actor` NOT NULL constraint alone                           | ✅                   |
+| Trigger name is load-bearing for ordering                     | **REFUTED** — BEFORE always precedes AFTER; proven by renaming to sort after and re-running green              | ✅                   |
+| A BEFORE trigger would overwrite client-supplied `updated_at` | **CONFIRMED** — this is what made `0703e6d` dead code                                                          | ✅                   |
+| `moddatetime` can cover both legs                             | **WRONG** — errors `moddatetime: cannot process INSERT events`                                                 | ✅                   |
 
-**What the gate missed, and the owner caught:** that the *whole model* was wrong for this team.
+**What the gate missed, and the owner caught:** that the _whole model_ was wrong for this team.
 The gate fact-checks a packet against the **codebase**; nothing in the chain fact-checks it against
 **how the app is actually used**. Second occurrence — see T403's entry for the first.
 
@@ -7883,13 +8033,13 @@ the migrations actually reference; `20260719000000_cron.sql` **skipped** — `pg
 Supabase-hosted and unavailable locally, and is untouched by this change). Identical scenarios run
 against both.
 
-| # | Scenario | Before | After |
-|---|---|---|---|
-| A | Post-completion attendance UPDATE, **no resolvable actor** | **ABORTED** — `null value in column "actor" violates not-null constraint`; row stayed `absent`, **the correction was destroyed** | Saves; `status = present` |
-| B | Post-completion attendance UPDATE, actor present | 1 `audit_log` row | **0** rows — attendance is no longer audited |
-| C | **The owner's actual workflow** — INSERT a student who was there but never marked | Saves, 0 audit rows | Saves, 0 audit rows |
-| D | Does `updated_at` advance on UPDATE? | **NO** — stuck at the seeded `2020-01-01` | **YES** — advances to `now()` |
-| E | Profile role change, **no resolvable actor** | **ABORTED** — role stayed `coach`, **the change was destroyed** | Succeeds; audit row written with `actor = null` |
+| #   | Scenario                                                                          | Before                                                                                                                           | After                                           |
+| --- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| A   | Post-completion attendance UPDATE, **no resolvable actor**                        | **ABORTED** — `null value in column "actor" violates not-null constraint`; row stayed `absent`, **the correction was destroyed** | Saves; `status = present`                       |
+| B   | Post-completion attendance UPDATE, actor present                                  | 1 `audit_log` row                                                                                                                | **0** rows — attendance is no longer audited    |
+| C   | **The owner's actual workflow** — INSERT a student who was there but never marked | Saves, 0 audit rows                                                                                                              | Saves, 0 audit rows                             |
+| D   | Does `updated_at` advance on UPDATE?                                              | **NO** — stuck at the seeded `2020-01-01`                                                                                        | **YES** — advances to `now()`                   |
+| E   | Profile role change, **no resolvable actor**                                      | **ABORTED** — role stayed `coach`, **the change was destroyed**                                                                  | Succeeds; audit row written with `actor = null` |
 
 **E is the finding nobody was looking for.** It has nothing to do with attendance — it is a live
 pre-existing bug in `fn_audit_profile_role_change`, reachable by any service-role or background-job
@@ -7928,16 +8078,16 @@ every reference was a comment describing the trigger. Those comments were correc
 
 ---
 
-## T205 — `v_leaderboard_students` stops being readable *and writable* by the unauthenticated `anon` role
+## T205 — `v_leaderboard_students` stops being readable _and writable_ by the unauthenticated `anon` role
 
 **Tier: HEAVY, unconditional** — constitution item 18 trigger 1 (`constitution.md:75`, "creates or
 edits a file under `supabase/migrations/`") and item 26. FAST is barred by its own text
-(`constitution.md:311`). The owner's ruling says the same: *"no exception for a one-line revoke"*
+(`constitution.md:311`). The owner's ruling says the same: _"no exception for a one-line revoke"_
 (`auto-mode-decisions.md:1313-1316`).
 
 **Authority.** Line 1 of the migration rests on the owner's ruling of 2026-07-31, structured
 selection, **"Close it off"** (`auto-mode-decisions.md:1297-1316`), using that ruling's own
-*"or equivalent"* latitude. **Line 2 is an orchestrator scope extension, NOT an owner ruling** —
+_"or equivalent"_ latitude. **Line 2 is an orchestrator scope extension, NOT an owner ruling** —
 logged as decision **D2** under "W4+W5 auto-mode window" in `auto-mode-decisions.md`, taken while
 the owner was away, and explicitly reversible by him.
 
@@ -7953,11 +8103,11 @@ Measured on Postgres 16.13 with Supabase's stock
 `alter default privileges ... grant all on tables to anon, authenticated, service_role` applied
 before the migrations — by the gate, then **independently replayed by the orchestrator**:
 
-| Revoke applied | `anon` runs `delete from public.v_leaderboard_students` | `students` rows |
-|---|---|---|
-| none | `DELETE 2` | 2 → **0** |
-| `revoke select ... from anon` *(the ruling's literal text)* | `DELETE 2` | 2 → **0** |
-| `revoke all ... from anon` | `ERROR: permission denied for view` | 2 → 2 |
+| Revoke applied                                              | `anon` runs `delete from public.v_leaderboard_students` | `students` rows |
+| ----------------------------------------------------------- | ------------------------------------------------------- | --------------- |
+| none                                                        | `DELETE 2`                                              | 2 → **0**       |
+| `revoke select ... from anon` _(the ruling's literal text)_ | `DELETE 2`                                              | 2 → **0**       |
+| `revoke all ... from anon`                                  | `ERROR: permission denied for view`                     | 2 → 2           |
 
 **Had the literal one-liner shipped, this log would have recorded the exposure as closed while an
 anonymous internet request could still empty the students table.** That is exactly the
@@ -7987,13 +8137,13 @@ line the entire suite passes vacuously, because nothing was ever granted.
 
 ### Mutation evidence — all five, run independently three times over
 
-| # | Mutation | Result |
-|---|---|---|
-| 1 | Blank the `revoke all` statement, keep the file | exit 3 — `FAIL anon-select-denied: anon read 1 row(s)` |
-| 2 | `revoke all` → `revoke select` | exit 3 — `FAIL anon-delete-denied: unauthenticated DELETE via view succeeded` |
-| 3 | `revoke all ... from anon, authenticated` | exit 3 — `permission denied for view` inside `authenticated-select-active` |
-| 4 | Add `create policy read_all on students for select to anon` | exit 3 — `FAIL anon-base-table-control: anon read 2 row(s)` |
-| 5 | Delete migration line 2 | exit 3 — `FAIL authenticated-delete-denied: logged-in non-staff DELETE via view succeeded` |
+| #   | Mutation                                                    | Result                                                                                     |
+| --- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 1   | Blank the `revoke all` statement, keep the file             | exit 3 — `FAIL anon-select-denied: anon read 1 row(s)`                                     |
+| 2   | `revoke all` → `revoke select`                              | exit 3 — `FAIL anon-delete-denied: unauthenticated DELETE via view succeeded`              |
+| 3   | `revoke all ... from anon, authenticated`                   | exit 3 — `permission denied for view` inside `authenticated-select-active`                 |
+| 4   | Add `create policy read_all on students for select to anon` | exit 3 — `FAIL anon-base-table-control: anon read 2 row(s)`                                |
+| 5   | Delete migration line 2                                     | exit 3 — `FAIL authenticated-delete-denied: logged-in non-staff DELETE via view succeeded` |
 
 Run by the worker, by the orchestrator (2 and 5), and by the checker (all five). **No mutation left
 the suite green.** Criterion 1 blanks the statement rather than removing the file, because the T195
@@ -8036,6 +8186,7 @@ The grant is genuinely open and worth closing, and the mechanism (measured: `ano
 `students` emptied) is exactly as described above — but the reachability premise the urgency rested
 on was assumed, not verified. Recorded rather than quietly edited, because "measured, not assumed"
 has to apply to the orchestrator's own risk framing too, not just to the code.
+
 ## T306 — a session with recorded attendance shows what happened, not what was promised
 
 **STANDARD tier (item 26)** — display-only, single module, **no write path**. Worker implemented; the
@@ -8048,18 +8199,18 @@ pure functions — the same pattern this file already carries 18 instances of) �
 
 ### The owner reframed his own defect, and that changed the task
 
-Filed as *"the tallies are wrong"* — students with recorded attendance sit under **No response**. His
-actual account: *"i was on the UI and adding who attended an outreach event... What was not clear to
+Filed as _"the tallies are wrong"_ — students with recorded attendance sit under **No response**. His
+actual account: _"i was on the UI and adding who attended an outreach event... What was not clear to
 me on the UI was what to do with the RSVP. I belive i left it no response. it create a mental
-challenge from a user standpoint and was not clear."*
+challenge from a user standpoint and was not clear."_
 
 **The defect is that the RSVP section looks actionable.** He was asking whether recording attendance
 also obliged him to go and fix each RSVP. It does not, and nothing on screen said so. He ruled: replace
-the buckets with what happened. *Alongside* and *keep-RSVP-with-a-note* were both offered and declined.
+the buckets with what happened. _Alongside_ and _keep-RSVP-with-a-note_ were both offered and declined.
 
 ### His follow-up constraint killed both obvious implementations
 
-> *"pleae be cognizant of what a 'past' event is. i may be doing this on the same day of the event."*
+> _"pleae be cognizant of what a 'past' event is. i may be doing this on the same day of the event."_
 
 - **Not the date** — he records on the day, so a date test still shows RSVP buckets during the exact
   workflow that confused him, and it re-opens T304 where he settled that these surfaces ignore dates.
@@ -8074,7 +8225,7 @@ comparison) reddens **exactly one test**, the same-day scenario he described.
 ### The packet was wrong, and the worker caught it by refusing to edit an assertion
 
 The packet **omitted a staff gate**. Implemented literally, the new load fired for every viewer, and a
-pre-existing assertion — *the attendance loader is not called for a non-staff viewer* — went red. The
+pre-existing assertion — _the attendance loader is not called for a non-staff viewer_ — went red. The
 worker **reported it rather than fixing it by editing the assertion**, which is the rule, and it was
 right to: that assertion was protecting something real.
 
@@ -8095,15 +8246,15 @@ run would have got no attendance.
 
 ### Verification — every mutation replayed by the orchestrator
 
-| Criterion | Mutation | Result |
-|---|---|---|
-| C1 | trigger always chooses attendance | **7 red** |
-| C2 | trigger always chooses RSVP | **6 red** |
-| C3 | replace imported `isAttendingStatus` with `status === 'present'` | **1 red — exactly C3** |
-| C4 | route `excused` into Attended | **1 red — exactly C4** |
-| C6 | add `&& session.status === 'completed'` to the switch | **4 red**, incl. C6 |
-| C7 | add a date comparison to the switch | **1 red — exactly C7** |
-| C10 | remove the staff gate | **2 red** — C10 **and** the pre-existing role-gating assertion |
+| Criterion | Mutation                                                         | Result                                                         |
+| --------- | ---------------------------------------------------------------- | -------------------------------------------------------------- |
+| C1        | trigger always chooses attendance                                | **7 red**                                                      |
+| C2        | trigger always chooses RSVP                                      | **6 red**                                                      |
+| C3        | replace imported `isAttendingStatus` with `status === 'present'` | **1 red — exactly C3**                                         |
+| C4        | route `excused` into Attended                                    | **1 red — exactly C4**                                         |
+| C6        | add `&& session.status === 'completed'` to the switch            | **4 red**, incl. C6                                            |
+| C7        | add a date comparison to the switch                              | **1 red — exactly C7**                                         |
+| C10       | remove the staff gate                                            | **2 red** — C10 **and** the pre-existing role-gating assertion |
 
 **C10 was added by the orchestrator** after the worker's report, with both arms: a student keeps the
 RSVP buckets and the loader is **never called**; a coach on the **same event** gets the attendance
@@ -8152,7 +8303,7 @@ warnings — no rise** · vitest **78 files / 1944 tests** (+1) · targeted file
 ### The honest finding: this fix reddened nothing, and that is the point
 
 **No existing test asserted anything about these values.** Checked before implementing: T157's parent
-tests inject their own correctly-id-spaced `loadData` (`makeParentLoadData`) precisely *because* the
+tests inject their own correctly-id-spaced `loadData` (`makeParentLoadData`) precisely _because_ the
 fixture was broken, and the one test that renders the default fixture as a parent
 (`OutreachDetail.test.tsx:1009`) asserts only menu items. So the defect was **invisible to the entire
 suite** — there was no mutation to run, because there was nothing to redden.
@@ -8178,6 +8329,7 @@ stranger answered for their child.
 **Why a zero-production-impact fixture still mattered:** the fixture is what a future task reads to
 learn the shape of a real `RsvpRow`, so the confusion propagates by imitation. That was T157's own
 stated reason for deferring rather than dismissing it (item 20).
+
 ## T702 — RPT-03's adult-volunteer season totals are removed; students only
 
 **Tier: STANDARD**, stated and defended. None of constitution item 26's required HEAVY triggers
@@ -8186,23 +8338,23 @@ exactly two consumers, both inside W4's own files. Not FAST either — it remove
 exported type across four files including the PRD.
 
 **Authority.** Owner ruling, 2026-08-03, structured selection: **"Drop it — students only"**
-(`auto-mode-decisions.md`, "George's ruling on T702"). Verbatim: *"we only nee to count student
-hours per rules we already established"* and *"this should just be a change in the sql queries"*,
+(`auto-mode-decisions.md`, "George's ruling on T702"). Verbatim: _"we only nee to count student
+hours per rules we already established"_ and _"this should just be a change in the sql queries"_,
 clarified to one screen.
 
 That ruling authorized **two things no agent may do alone**, both recorded as citations rather than
 left to inference:
 
 1. **Amending RPT-03** (`VOLT_Portal_PRD.md:370`) — constitution item 1 puts PRD requirement IDs
-   above the constitution and above agent judgment. The line now reads *"…team subtotal rows; season
-   totals for people reached."* People-reached retained; the adult-volunteer clause removed.
+   above the constitution and above agent judgment. The line now reads _"…team subtotal rows; season
+   totals for people reached."_ People-reached retained; the adult-volunteer clause removed.
 2. **Changing a passing test** — `HoursTab.test.tsx:327` asserted the deleted fields. The
    Non-Negotiables require explicit owner approval; this ruling is it.
 
 ### A premise correction the owner's own instruction contained
 
-He asked for *"just a change in the sql queries"*. **There is no SQL here.** Module doc #6 states it
-directly — *"no metric-view formula being re-derived here, since no view computes this sum at all"*.
+He asked for _"just a change in the sql queries"_. **There is no SQL here.** Module doc #6 states it
+directly — _"no metric-view formula being re-derived here, since no view computes this sum at all"_.
 These are raw `events` columns fetched by a PostgREST `.select()` and summed in TypeScript. Acting on
 the instruction unexamined would have sent a worker hunting a view that does not exist. The nearest
 equivalent — dropping two column names from `queryHoursEvents`'s select — is what shipped.
@@ -8244,17 +8396,17 @@ The branch carries `671e0b4`/`de02ea0` — T500's sessionless-event filter and i
 before the owner's ruling arrived, then removed by `e1c0119` as dead code. **The T500 worker had
 already committed when it was stopped mid-run.** That is also the honest explanation of the
 `1950 → 1948` baseline discrepancy the T702 worker reported and could not resolve: the packet's 1950
-came from the T500 *premise gate's own worktree*, which carried the gate's added tests, and was
+came from the T500 _premise gate's own worktree_, which carried the gate's added tests, and was
 quoted as a baseline for a different commit. **The orchestrator's error, not the worker's** — and the
 worker was right to report it unexplained rather than reconcile it silently.
 
 ### Mutation evidence — orchestrator replayed 1 and 3 personally
 
-| # | Mutation | Result |
-|---|---|---|
-| 1 | Re-add an "Adult volunteers" KPI card | exit 1 — `expected 'Season totalsPeople reached125…' not to contain 'Adult volunteers'`, 1 failed / 30 passed |
-| 2 | Break `peopleReachedTotal`'s reduce | 2 failed / 29 passed — the surviving `:327` assertion `expected 127 to be 125` |
-| 3 | Strip adult columns from `queryEventsEvents` (RPT-04) | 1 failed / 26 passed — `loadEventSessionsData` real-load test, `adultVolunteer* : undefined` vs `4`/`2` |
+| #   | Mutation                                              | Result                                                                                                        |
+| --- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| 1   | Re-add an "Adult volunteers" KPI card                 | exit 1 — `expected 'Season totalsPeople reached125…' not to contain 'Adult volunteers'`, 1 failed / 30 passed |
+| 2   | Break `peopleReachedTotal`'s reduce                   | 2 failed / 29 passed — the surviving `:327` assertion `expected 127 to be 125`                                |
+| 3   | Strip adult columns from `queryEventsEvents` (RPT-04) | 1 failed / 26 passed — `loadEventSessionsData` real-load test, `adultVolunteer* : undefined` vs `4`/`2`       |
 
 **Mutation 3 is the over-deletion guard and it needed two attempts to replay.** The orchestrator's
 first attempt changed only the select string and the suite stayed **green** — because the test's mock
@@ -8288,14 +8440,14 @@ no-stub render sees an empty viewer.
 
 ### The ledger row's own cost estimate was wrong, and measuring is what caught it
 
-The row claimed *"Measured cost: exactly 3 test assertions need their expected figures updated."*
+The row claimed _"Measured cost: exactly 3 test assertions need their expected figures updated."_
 Applying the rekey before packeting produced **`6 failed | 101 passed`**. The three it named, plus
 `getUnansweredRsvpCount`'s fixture-count test and — the ones that mattered — **T193's C3 and C6**,
 acceptance criteria of a HEAVY task merged the previous day. **All six of the row's source citations
 were also stale**; T330 had grown the file ~150 lines.
 
 **The prescription was changed as a result.** The row said update the expected figures. That would have
-silently weakened T193's evidence, whose subject is *what a rejected write restores*. Instead the
+silently weakened T193's evidence, whose subject is _what a rejected write restores_. Instead the
 affected tests **stub the viewer they need**, which leaves every `expect(...)` byte-identical **and**
 serves the task's own goal: a test that needs a real viewer now has to say so. Verified — T193's C3
 gained only a `renderAsUser` stub, its assertions untouched, and C6 changed not at all.
@@ -8308,15 +8460,15 @@ framing rather than quietly doing it, which is the behaviour the rule exists to 
 
 ### The worker refuted one of the packet's own criteria, and the orchestrator confirmed it
 
-**C3's named mutation was wrong.** The packet said *"re-key `FIXTURE_STUDENTS` back to the
-placeholder"* would redden C3's property (a no-stub render sees an empty viewer). Replayed both ways:
+**C3's named mutation was wrong.** The packet said _"re-key `FIXTURE_STUDENTS` back to the
+placeholder"_ would redden C3's property (a no-stub render sees an empty viewer). Replayed both ways:
 
-| Mutation | Result |
-|---|---|
+| Mutation                                          | Result                                                                                                                                     |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | rekey `FIXTURE_STUDENTS` (as the packet named it) | **4 red — but none of them C3's own guard**; the failures are coach-view and pure-function tests, where the students fixture drives counts |
-| rekey `FIXTURE_RSVPS` (the worker's correction) | **10 red** — this is what actually drives the viewer's emptiness |
+| rekey `FIXTURE_RSVPS` (the worker's correction)   | **10 red** — this is what actually drives the viewer's emptiness                                                                           |
 
-The packet's mutation reddened *something*, which is exactly how a wrong criterion survives review: a
+The packet's mutation reddened _something_, which is exactly how a wrong criterion survives review: a
 count delta looks like evidence. It is not evidence unless it reddens **the property the criterion
 claims**. The worker also added a direct C3 guard, because no existing test literally exercised the
 no-stub case.
@@ -8375,16 +8527,16 @@ change is a **pure append**; `head -652` of the new file diffs empty against bas
 students; the test asserts full physical row state. **Zero `toHaveBeenCalledWith` assertions were
 added.** The fake's `filters.every(...)` is vacuously true on an empty array, so a zero-filter
 `.update()` matches every row — mirroring a real unfiltered PostgREST UPDATE. The checker verified
-that semantic specifically, since a fake that instead matched *nothing* would redden for the wrong
+that semantic specifically, since a fake that instead matched _nothing_ would redden for the wrong
 reason and prove nothing about scoping.
 
 ### Mutations — replayed independently by orchestrator AND checker, not relayed
 
-| Mutation | Result | Why the shape matters |
-|---|---|---|
-| C1 — drop `.eq('session_id', …)` | **red, exit 1** | fails on the same-student/other-session row |
-| C2 — drop `.eq('student_id', …)` | **red, exit 1** | fails on the same-session/other-student row |
-| C3 — drop both | **red, exit 1** (full suite `1 failed \| 1944 passed`) | all three non-target rows flip — the table-wide write, observed as an outcome |
+| Mutation                         | Result                                                 | Why the shape matters                                                         |
+| -------------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| C1 — drop `.eq('session_id', …)` | **red, exit 1**                                        | fails on the same-student/other-session row                                   |
+| C2 — drop `.eq('student_id', …)` | **red, exit 1**                                        | fails on the same-session/other-student row                                   |
+| C3 — drop both                   | **red, exit 1** (full suite `1 failed \| 1944 passed`) | all three non-target rows flip — the table-wide write, observed as an outcome |
 
 Each single deletion reddens **on its own**, on the specific row it exposes. A test that only caught
 both-deleted would be half a test.
@@ -8394,7 +8546,7 @@ both-deleted would be half a test.
 This is the part worth copying. The packet named three mutations; the checker invented four more.
 
 - **Arg swap** — `.eq('student_id', args.sessionId)`, the copy-paste defect that makes a coach's edit
-  silently match zero rows and do nothing: **RED**. It fails on the *target* row still reading
+  silently match zero rows and do nothing: **RED**. It fails on the _target_ row still reading
   `absent`. This is the failure a "no other rows changed" test would have missed entirely — the test
   proves the intended write **happened**, not merely that collateral writes did not.
 - **T401 vacuity probe** — replace the whole mutation body with a resolved `{data:null,error:null}`
@@ -8406,7 +8558,7 @@ This is the part worth copying. The packet named three mutations; the checker in
 ### Both NITs closed in-branch, not deferred
 
 **NIT-1** was real: with one fixture scenario, a filter pinned to that scenario's literals is
-indistinguishable from an args-derived one. The plausible *production* form of that defect is caught
+indistinguishable from an args-derived one. The plausible _production_ form of that defect is caught
 (the arg swap above), which is why the checker rated it NIT — but the gap was cheap to close. Fixed
 by a second scenario targeting a different `(session, student)` pair with a distinct `late` status.
 **The orchestrator re-ran the checker's own hardcode mutation against the fix: now `1 failed |
@@ -8419,8 +8571,8 @@ findings provided it says they are unreviewed.
 **NIT-2:** a dangling `:510-511` cite in the module doc, pointing at what is now an unrelated
 `LiveConsoleDisplayToken` interface. Removed.
 
-Also folded in (packet §5, comment-only): `endMeeting.ts:12-19` still claimed T196 was *blocked*,
-`LiveConsole`'s attendance marking an *intentional no-op*, and its roster a *fixture*. All three
+Also folded in (packet §5, comment-only): `endMeeting.ts:12-19` still claimed T196 was _blocked_,
+`LiveConsole`'s attendance marking an _intentional no-op_, and its roster a _fixture_. All three
 false since T403. The checker verified every claim in the replacement text against the repo rather
 than against the comment.
 
@@ -8500,10 +8652,10 @@ reviewed — the three mutation proofs below are the evidence.**
 
 ### The row was mostly phantom work, and that is the headline
 
-T162 said *"`loaders/meetings.ts` has 0 tests across 726 lines."* **False.**
+T162 said _"`loaders/meetings.ts` has 0 tests across 726 lines."_ **False.**
 `MeetingsList.test.tsx:1803-2272` already unit-tests the module in six describes / 17 tests. The
 claim came from an external audit that counted **files named `meetings.test.ts`** rather than tests
-*of* the module — the same error on T161 and T163 (D5).
+_of_ the module — the same error on T161 and T163 (D5).
 
 **The premise gate caught it at round 2.** Item 19a capped the loop and the row was **parked for the
 owner** rather than gated a third time or overridden.
@@ -8518,11 +8670,11 @@ site for the MET-01 arithmetic (**T600**).
 Each was measured before being fixed, and each is proven by its own mutation replayed against the
 final tree.
 
-| # | Gap | Mutation | Result |
-|---|---|---|---|
-| a | `Math.max(expectedCt - excusedCt, 1)` floor (`meetings.ts:477`) had **no test** — deleting it left all 1946 tests green | drop the floor | `expected NaN to be +0` — **exit 1** |
-| b | `MeetingsList.test.tsx:2017` used `toEqual(row)`, which **survives** deleting the single-row short-circuit | drop the `rows.length === 1` branch (`:469`) | `expected {…} to be {…} // Object.is equality` — **exit 1** |
-| c | `:2166` asserted `orderSpy` was **called**, not that sorting **worked** | drop `.order('created_at', {ascending:true})` (`:512`) | `expected 'student-later' to be 'student-earliest'` — **exit 1** |
+| #   | Gap                                                                                                                     | Mutation                                               | Result                                                           |
+| --- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------- |
+| a   | `Math.max(expectedCt - excusedCt, 1)` floor (`meetings.ts:477`) had **no test** — deleting it left all 1946 tests green | drop the floor                                         | `expected NaN to be +0` — **exit 1**                             |
+| b   | `MeetingsList.test.tsx:2017` used `toEqual(row)`, which **survives** deleting the single-row short-circuit              | drop the `rows.length === 1` branch (`:469`)           | `expected {…} to be {…} // Object.is equality` — **exit 1**      |
+| c   | `:2166` asserted `orderSpy` was **called**, not that sorting **worked**                                                 | drop `.order('created_at', {ascending:true})` (`:512`) | `expected 'student-later' to be 'student-earliest'` — **exit 1** |
 
 **(a)** Without the floor, a student whose every expected session was excused is shown `NaN` instead
 of a participation figure. The fixture is **view-possible by construction** — if every expected
@@ -8556,6 +8708,7 @@ earliest-linked-child rule, where a parent with two children silently resolves t
   completeness.
 - **Packet v2 was never dispatched.** It is retained at `active/T162-worker-packet.md` as the record
   of what this row was believed to require, and of the two BLOCKERs the gate found in it.
+
 ## T322 — volunteer hours become `type = 'outreach'` ONLY, in both the season KPI and every student's own total
 
 **Tier: HEAVY, unconditional.** Constitution item 18 trigger 1 (`constitution.md:75`, "creates or
@@ -8563,12 +8716,12 @@ edits a file under `supabase/migrations/`") **and** trigger 3 (a SQL view contai
 Full chain ran: packet → premise gate (**DISPATCH**, 4 MINOR / 4 NIT) → worker → orchestrator replay.
 
 **Three rulings, all in `auto-mode-decisions.md`:** 2026-08-02 (meetings excluded), 2026-08-03
-(competitions excluded — *"Volunteer hours = `type = 'outreach'` ONLY"*), 2026-08-04 (*"fix both"* —
+(competitions excluded — _"Volunteer hours = `type = 'outreach'` ONLY"_), 2026-08-04 (_"fix both"_ —
 extend beyond the staff card to `v_student_hours`).
 
 ### The ledger row's account of this bug was wrong, and the correction is the task
 
-T322's row states `v_season_kpis` sums *"across all types including `meeting`"*. **Incomplete and
+T322's row states `v_season_kpis` sums _"across all types including `meeting`"_. **Incomplete and
 misleading.** The `hours_by_type` CTE already joins `and e.counts_volunteer_hours`, and meetings are
 created with that flag hardcoded `false` (`loaders/meetings.ts:690`) with no app path that edits it.
 **Meeting hours never reached the total.** The gate confirmed this by measurement: a seeded meeting
@@ -8592,7 +8745,7 @@ editing an applied migration, so both views are `create or replace`d:
   have zeroed the `meeting_hours`/`competition_hours` breakdown, which the 2026-08-03 ruling requires
   to survive.
 - **`KpiStrip.tsx:286`** — label now reads **"Volunteer hours"**, per the 2026-08-02 ruling's
-  *"label the card so it reads as volunteer hours rather than all hours."*
+  _"label the card so it reads as volunteer hours rather than all hours."_
 
 **`goal_pct` needed no separate change** — the gate resolved the packet's admitted open question by
 measurement: it derives from `total_hours` (`kpi_views.sql:237`) and inherits the fix. **NULL path
@@ -8609,12 +8762,12 @@ that mistake.** Not authorized, and not done: retyping any event.
 
 ### Mutation evidence — the two halves fail in mirror image
 
-| # | Mutation | Result |
-|---|---|---|
-| 1 | Revert `total_hours` to the all-type sum | exit 3 — `total_hours 7.0` (expected `4.0`); `confirmed_hours` stayed correct at 4.0 |
-| 2 | Drop `and e.type = 'outreach'` from `v_student_hours` | exit 3 — `confirmed_hours 7.0` (expected `4.0`); `total_hours` stayed correct at 4.0 |
-| 4 | Filter by event title instead of type | exit 3 — fails **only** `fll-titled-outreach-counts-in-full`, assertions 1-4 unaffected |
-| 5 | Revert the card label | exit 1 — 6 failed / 9 passed |
+| #   | Mutation                                              | Result                                                                                  |
+| --- | ----------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| 1   | Revert `total_hours` to the all-type sum              | exit 3 — `total_hours 7.0` (expected `4.0`); `confirmed_hours` stayed correct at 4.0    |
+| 2   | Drop `and e.type = 'outreach'` from `v_student_hours` | exit 3 — `confirmed_hours 7.0` (expected `4.0`); `total_hours` stayed correct at 4.0    |
+| 4   | Filter by event title instead of type                 | exit 3 — fails **only** `fll-titled-outreach-counts-in-full`, assertions 1-4 unaffected |
+| 5   | Revert the card label                                 | exit 1 — 6 failed / 9 passed                                                            |
 
 **M1 and M2 failing in opposite directions is the proof that "fix both" was two independent fixes,
 not one change with a side effect** — each half breaks exactly one figure and leaves the other
@@ -8640,24 +8793,25 @@ regression.
 `v_team_hours`, `v_season_roster_stats`, `v_student_goal_projection`, `loaders/leaderboard.ts:138`,
 `loaders/reports.ts:398`, `send-reminders/index.ts:512`, and all three home dashboards now carry
 outreach-only semantics. **That is the ruling's intent.** Dependents `coalesce` absent rows to honest
-zeros (gate-measured). One disclosed nuance: a student whose *only* hours came from a flag-on
+zeros (gate-measured). One disclosed nuance: a student whose _only_ hours came from a flag-on
 competition drops off the leaderboard rather than showing 0 — no live data is in that state.
 
 ### Filed, not fixed here
 
 **T704** — `v_season_kpis.meeting_hours` is structurally frozen at `0.0` (the CTE's flag join plus
 meetings' hardcoded `false`), yet `KpiStrip` renders `Meetings 0.0h` beside real figures. That
-contradicts the 2026-08-03 ruling's expectation that meeting hours stay *"displayed as their own
-figure"*. Needs an owner ruling; out of this task's scope.
+contradicts the 2026-08-03 ruling's expectation that meeting hours stay _"displayed as their own
+figure"_. Needs an owner ruling; out of this task's scope.
 
 ### Not deployed
 
 The migration lands in the repo only. **Constitution item 16 reserves hosted-Supabase cutover for the
 owner**, so the live project keeps the old view definitions until he applies it.
+
 ## T325 — the mobile student row stops overflowing, and the fix is proven by measurement rather than by tests
 
 **Owner-chosen shape (option A).** Put in plain English with three options and a recommendation; his
-answer: *"let's go with A option"* — move the two row actions out of Astryx's `endContent` slot into
+answer: _"let's go with A option"_ — move the two row actions out of Astryx's `endContent` slot into
 the row body, rather than overriding the slot's styling or writing custom CSS against the design
 system's internals. Constitution item 11's escalation order exists to prefer exactly that.
 
@@ -8666,14 +8820,14 @@ warnings — no rise** · vitest **78 files / 1946 tests**.
 
 ### Measured, at every step, in real Chromium at 390×844
 
-| | overflow | action buttons |
-|---|---|---|
-| baseline | **213px** (`scrollWidth` 603 vs `clientWidth` 390) | 5 present |
-| `maxWidth="100%"` on our `HStack` | **213px — no change** | 5 present |
-| **option A (shipped)** | **0px** | **5 present, labels unchanged** |
+|                                   | overflow                                           | action buttons                  |
+| --------------------------------- | -------------------------------------------------- | ------------------------------- |
+| baseline                          | **213px** (`scrollWidth` 603 vs `clientWidth` 390) | 5 present                       |
+| `maxWidth="100%"` on our `HStack` | **213px — no change**                              | 5 present                       |
+| **option A (shipped)**            | **0px**                                            | **5 present, labels unchanged** |
 
 **The audit's description was misleading and the obvious suspect was wrong.** Nothing "collapses" —
-the row *overflows*. And it is not the RSVP `SegmentedControl`, which is what reading the source
+the row _overflows_. And it is not the RSVP `SegmentedControl`, which is what reading the source
 suggests; the orchestrator guessed that and was wrong. The offender is Astryx's own `endContent` slot
 wrapper: `flex-shrink: 0`, `max-width: none`, sizing to its 563px content inside a 342px row.
 
@@ -8694,7 +8848,7 @@ were attempted and none survived scrutiny:
 1. An ancestor walk asserting the button shares a body ancestor — **measured vacuous.** Reverting the
    fix left it green: the `<li>` contains the `endContent` slot and the row body alike.
 2. A sharpened nearest-shared-ancestor check — **also measured vacuous**, for the same reason, and
-   because the string it keyed on is the event *title* (the `label` slot), not body text.
+   because the string it keyed on is the event _title_ (the `label` slot), not body text.
 3. A presence-and-labels guard — **redundant.** Mutating either the presence or the labels reddens
    existing **T170** (criterion 10) and **T126** tests, which already locate these buttons by exact
    label text.
@@ -8731,8 +8885,8 @@ cross-module signature change, well under ~20 lines of production change, and a 
 exists. **Verification was not reduced** — FAST removes coordination, not evidence. Implemented
 directly by the orchestrator, which is what FAST prescribes.
 
-**Authority.** Owner ruling 2026-08-04, verbatim *"for T704, drop the meetings term from the
-breakdown"* — option (a) of three the row offered. It also authorized updating the two passing
+**Authority.** Owner ruling 2026-08-04, verbatim _"for T704, drop the meetings term from the
+breakdown"_ — option (a) of three the row offered. It also authorized updating the two passing
 assertions that asserted the removed string (`KpiStrip.test.tsx:306`, `:362`); the Non-Negotiables
 require explicit owner approval for that, and it covers those two only.
 
@@ -8745,12 +8899,12 @@ rather than folding it into that task. The figure is **structurally frozen at `0
 rendered it beside two live numbers, presenting a dead figure as a live one.
 
 **This resolved a genuine tension in the owner's own earlier ruling.** The 2026-08-03 T322 ruling
-said meeting and competition hours are *"still tracked and still displayed as their own figure."*
+said meeting and competition hours are _"still tracked and still displayed as their own figure."_
 Competition is. **Meeting could not be.** Rather than leave the contradiction unremarked, it was put
 to him.
 
-Consistent with the same ruling's other half — *"meeting participation stays its own separate
-figure"* — meeting attendance is measured as a **participation percentage**, not as hours. Removing
+Consistent with the same ruling's other half — _"meeting participation stays its own separate
+figure"_ — meeting attendance is measured as a **participation percentage**, not as hours. Removing
 an always-zero hours term removes no meeting measurement, only a misleading one.
 
 ### What changed, and what deliberately did not
@@ -8765,10 +8919,10 @@ that it is not rendered.
 
 ### Mutation evidence
 
-| Mutation | Result |
-|---|---|
+| Mutation                                              | Result                                                                                                                                                                                                |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Restore the `Meetings` term to `formatHoursBreakdown` | **RED on both intended assertions** — `expected 'Volunteer hours20.5Meetings 0.0h · Ou…' not to contain 'Meetings'` and `expected 'Volunteer hours10.5Meetings 2.0h · Ou…' not to contain 'Meetings'` |
-| Revert | 15 passed |
+| Revert                                                | 15 passed                                                                                                                                                                                             |
 
 Committed before mutating (item 26's own rule, learned from T323 and re-learned by this orchestrator
 earlier today).
@@ -8798,14 +8952,14 @@ arrangements that are genuinely serial.
 ### The blind spot is wider than the ledger row said — measured, not argued
 
 The row claimed one missed direction (teams hoisted ahead of the batch) and that serializing teams
-*after* the batch is correctly caught. Running all three:
+_after_ the batch is correctly caught. Running all three:
 
-| Mutation | Before T152 | After T152 |
-|---|---|---|
-| **A** — `loadTeams()` hoisted to a serial `await` **before** the batch | **PASSED** (filed) | **RED** |
-| **B** — `loadTeams()` serialized **between** the two batches | **PASSED** — *not filed; a second, unknown blind spot* | **RED** |
-| **C** — `loadTeams()` serialized after `rsvps`/`attendance` | RED (`expected 4 to be greater than 6`) | RED |
-| **D** — `loadStudents()` serialized ahead | **never guarded at all** — the test only ever watched `teams` | **RED** |
+| Mutation                                                               | Before T152                                                   | After T152 |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------- | ---------- |
+| **A** — `loadTeams()` hoisted to a serial `await` **before** the batch | **PASSED** (filed)                                            | **RED**    |
+| **B** — `loadTeams()` serialized **between** the two batches           | **PASSED** — _not filed; a second, unknown blind spot_        | **RED**    |
+| **C** — `loadTeams()` serialized after `rsvps`/`attendance`            | RED (`expected 4 to be greater than 6`)                       | RED        |
+| **D** — `loadStudents()` serialized ahead                              | **never guarded at all** — the test only ever watched `teams` | **RED**    |
 
 **B is a genuine extra serial round trip** and slipped through because moving `teams` to just after
 the first batch keeps it inside slice positions 1-4. **D** was never in scope of the original
@@ -8843,9 +8997,9 @@ time.
 
 ## T300 — `OutreachEventDialog`'s placeholder coach id becomes impossible, not merely unreachable
 
-**Tier: STANDARD** (constitution item 26), stated and defended: no write-path *logic* change, no
+**Tier: STANDARD** (constitution item 26), stated and defended: no write-path _logic_ change, no
 schema/RLS/auth, and it rolls out a pattern already built, reviewed and merged as **T179** for the two
-sibling dialogs on this same page — item 19b's *"applying a proven pattern to a second surface"*. It is
+sibling dialogs on this same page — item 19b's _"applying a proven pattern to a second surface"_. It is
 **not FAST**, because making `currentUserProfileId` required **changes a signature another module
 imports**, which item 26's FAST tier explicitly excludes. Worker implemented; **orchestrator replayed
 every mutation independently**; no separate checker round.
@@ -8868,13 +9022,13 @@ distinction the whole T179 family exists to draw.
 
 Every criterion re-run by the orchestrator on its own worktree, not taken from the worker's report:
 
-| # | Mutation | Result |
-|---|---|---|
-| **C1** | re-add the export | vitest **exit 1** — `expected true to be false`, asserted against the real **module namespace object**, not a grep |
-| **C2** | prop required, call site omits it | `tsc` **exit 2** — `TS2741: Property 'currentUserProfileId' is missing … but required in type 'OutreachEventDialogProps'` |
-| **C2 (control)** | *same* omission, optional+default restored | `tsc` **exit 0** — proving the default is exactly what removes the guard |
-| **C3** | hardcode a different id into `respondedBy` | vitest **exit 1**, 2 real assertions |
-| **C4** | restore `user?.id` at the call site | `tsc` **exit 2** — `TS18047: 'user' is possibly 'null'` |
+| #                | Mutation                                   | Result                                                                                                                    |
+| ---------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| **C1**           | re-add the export                          | vitest **exit 1** — `expected true to be false`, asserted against the real **module namespace object**, not a grep        |
+| **C2**           | prop required, call site omits it          | `tsc` **exit 2** — `TS2741: Property 'currentUserProfileId' is missing … but required in type 'OutreachEventDialogProps'` |
+| **C2 (control)** | _same_ omission, optional+default restored | `tsc` **exit 0** — proving the default is exactly what removes the guard                                                  |
+| **C3**           | hardcode a different id into `respondedBy` | vitest **exit 1**, 2 real assertions                                                                                      |
+| **C4**           | restore `user?.id` at the call site        | `tsc` **exit 2** — `TS18047: 'user' is possibly 'null'`                                                                   |
 
 **C2 and C4 are typecheck criteria and that is the whole point of this task** — the fix converts a
 runtime substitution into a compile-time impossibility, and a green vitest run demonstrates neither.
@@ -8895,8 +9049,8 @@ runtime substitution into a compile-time impossibility, and a green vitest run d
 
 `{user !== null && ( … )}`, **not** `isStaffViewer && user !== null`. This call site is edit-mode only
 and its sole trigger (`openEditDialog`) is reachable only through the staff-only "Edit" `MoreMenu`
-item, so `isStaffViewer` would be redundant *and* would narrow who can open the dialog. The file's
-closer precedent for staff-only-*triggered* dialogs (`MarkEventCompleteDialog` /
+item, so `isStaffViewer` would be redundant _and_ would narrow who can open the dialog. The file's
+closer precedent for staff-only-_triggered_ dialogs (`MarkEventCompleteDialog` /
 `MarkDayCompleteDialog`) already uses plain `user !== null`. **This task removes a placeholder; it does
 not change who can open the dialog.**
 
@@ -8917,9 +9071,9 @@ orchestrator implemented it directly; no worker, no gate.
 ### The claim, and it is false
 
 Two gate comments stated that the `user !== null` beside `isParentViewer` / `isStudentViewer` was
-**"LOAD-BEARING, not redundant"**, because those flags are *"a plain boolean, not a type predicate,
+**"LOAD-BEARING, not redundant"**, because those flags are _"a plain boolean, not a type predicate,
 so TypeScript does not narrow `user` through it and `currentUserProfileId={user.id}` would not
-compile."*
+compile."_
 
 TypeScript 4.4+ narrows through **aliased conditions**. `user` is a `const` destructured binding
 (`const { user } = useAuth()`) and each viewer flag is itself a `const` initialised from a condition
@@ -8931,9 +9085,9 @@ T179's premise gate had already measured `tsc exit=0` after deleting all three n
 necessary but **not sufficient** — exit 0 is equally consistent with the narrowing arriving from
 somewhere else entirely. So this task ran the discriminating pair:
 
-| Mutation | Result |
-|---|---|
-| delete the three `user !== null` conjuncts, keep the flags `const` | **`tsc` exit 0** — the checks are not load-bearing |
+| Mutation                                                                                                               | Result                                                                                                                                       |
+| ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| delete the three `user !== null` conjuncts, keep the flags `const`                                                     | **`tsc` exit 0** — the checks are not load-bearing                                                                                           |
 | delete them **and** weaken the three flags `const` → `let` (which is exactly what defeats aliased-condition narrowing) | **`tsc` exit 2**, three errors: `TS18047: 'user' is possibly 'null'` at `:2357`, `:2387`, `:2405` — one per `currentUserProfileId={user.id}` |
 
 The second run is the evidence: it localises the narrowing to the `const` flags rather than merely
@@ -9000,7 +9154,7 @@ and T300's C1 was written to avoid.
 
 **Tier: HEAVY** (constitution item 26), stated and defended: this changes **what columns reach a write
 on the `attendance` table** — the surface T305 and T307 exist to protect. Item 26's trigger question,
-*can a mistake here corrupt data?*, is **yes**, and in the worst direction: narrow the wrong column and
+_can a mistake here corrupt data?_, is **yes**, and in the worst direction: narrow the wrong column and
 the fix nulls `check_in_at` for every student on every day-completion, strictly worse than the bug.
 Full chain run: packet → premise gate → **REVISE** → packet v2 → worker → orchestrator replay.
 
@@ -9012,18 +9166,18 @@ The check-in disappears silently.
 
 ### The premise gate proved the load-bearing claim by EXECUTION, not documentation
 
-Everything rested on one claim: *a PostgREST upsert with a narrowed column list leaves the unsent
-columns untouched on the conflict path.* The gate stood up a scratch **PostgreSQL 16.13** with this
+Everything rested on one claim: _a PostgREST upsert with a narrowed column list leaves the unsent
+columns untouched on the conflict path._ The gate stood up a scratch **PostgreSQL 16.13** with this
 repo's real migrations, and cross-checked the installed `@supabase/postgrest-js` v2.110.7 source and
 PostgREST's own `mutatePlanToQuery`:
 
-| | Result |
-|---|---|
-| **E1** | narrowed upsert over a seeded `check_in_at = 14:07:33+00`, `method='qr'` → **`check_in_at` survived** |
-| **E2** | `updated_at` trigger fires on the **UPDATE** leg; an explicitly-sent stale value was **overwritten by the trigger** |
+|        | Result                                                                                                                                                                                                                                      |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **E1** | narrowed upsert over a seeded `check_in_at = 14:07:33+00`, `method='qr'` → **`check_in_at` survived**                                                                                                                                       |
+| **E2** | `updated_at` trigger fires on the **UPDATE** leg; an explicitly-sent stale value was **overwritten by the trigger**                                                                                                                         |
 | **E3** | `method` cannot be dropped: `ERROR: null value in column "method" … violates not-null constraint` — **on BOTH legs**, since PostgreSQL checks NOT NULL on the candidate tuple before conflict arbitration. Stronger than the packet claimed |
-| **E4** | the bug reproduced: full-column payload + stale snapshot → `14:07:33+00` → **NULL** |
-| **E5** | batch-uniformity trap reproduced — the client sets `columns=` to the **union of `Object.keys` across all rows**, so a key missing from *some* rows null-fills them |
+| **E4** | the bug reproduced: full-column payload + stale snapshot → `14:07:33+00` → **NULL**                                                                                                                                                         |
+| **E5** | batch-uniformity trap reproduced — the client sets `columns=` to the **union of `Object.keys` across all rows**, so a key missing from _some_ rows null-fills them                                                                          |
 
 The gate returned **REVISE** with two MAJORs, **both independently re-verified by the orchestrator**:
 
@@ -9038,20 +9192,20 @@ The gate returned **REVISE** with two MAJORs, **both independently re-verified b
 
 Re-run by the orchestrator, not taken from the worker's report:
 
-| # | Mutation | Result |
-|---|---|---|
-| **C1** | re-add `updated_at` to the payload | **2 failed** / 74, exit 1 |
-| **C2** | re-add `check_in_at` to **every** row | **red** — `expected null to be '2026-08-04T14:07:33.000Z'` |
-| **C2 (discriminating)** | re-add `check_in_at` to only a **SUBSET** of rows | **red** — `expected null to be '…15:00:00.000Z'`, the union-columns null-fill, which **no shape assertion can catch** |
-| **C4** | drop `recorded_by` | **3 failed** / 74, exit 1 |
-| **C6** | `buildAttendanceWriteRows` byte-identical | sha256 `0385ea2bc77a10ba…`, **22 lines, identical at both revisions**; `MarkDayCompleteDialog.tsx` has **zero** diff |
-| **C7** | move the adult-volunteer RMW above the session flip | **2 failed** / 19, exit 1 — T327's ordering genuinely pinned |
+| #                       | Mutation                                            | Result                                                                                                                |
+| ----------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **C1**                  | re-add `updated_at` to the payload                  | **2 failed** / 74, exit 1                                                                                             |
+| **C2**                  | re-add `check_in_at` to **every** row               | **red** — `expected null to be '2026-08-04T14:07:33.000Z'`                                                            |
+| **C2 (discriminating)** | re-add `check_in_at` to only a **SUBSET** of rows   | **red** — `expected null to be '…15:00:00.000Z'`, the union-columns null-fill, which **no shape assertion can catch** |
+| **C4**                  | drop `recorded_by`                                  | **3 failed** / 74, exit 1                                                                                             |
+| **C6**                  | `buildAttendanceWriteRows` byte-identical           | sha256 `0385ea2bc77a10ba…`, **22 lines, identical at both revisions**; `MarkDayCompleteDialog.tsx` has **zero** diff  |
+| **C7**                  | move the adult-volunteer RMW above the session flip | **2 failed** / 19, exit 1 — T327's ordering genuinely pinned                                                          |
 
 **C2 asserts `setup.store.get(…)` — real post-write row state from a stateful fake modelling the
 proven union-of-keys semantics — never `mock.calls`.** That was the whole point of packet v2.
 
 **C3 and C5 were run by the worker with transcripts in `T406-worker-output.md` but were not
-independently replayed by the orchestrator.** C3's database half is the gate's E3 above, which *was*
+independently replayed by the orchestrator.** C3's database half is the gate's E3 above, which _was_
 proven by execution. Recorded here rather than implied.
 
 ### One vacuous-verification catch worth recording
@@ -9064,11 +9218,11 @@ line count is what exposed it.
 
 ### THIS IS A PARTIAL FIX — say so, do not imply otherwise
 
-**`method` cannot be dropped** (NOT NULL, no default, and E3 shows it fails on *both* legs). So a
+**`method` cannot be dropped** (NOT NULL, no default, and E3 shows it fails on _both_ legs). So a
 concurrent scan's `method: 'qr'` **can still be clobbered** by the dialog's stale snapshot — the gate
 observed exactly that in E1, `qr` → `coach`, in the same run that preserved `check_in_at`.
 
-The student's real **`check_in_at` survives — the harm the owner described** — but the *provenance*
+The student's real **`check_in_at` survives — the harm the owner described** — but the _provenance_
 that they scanned rather than being coach-marked does not. Closing that half needs either a schema
 default (a migration on a table W1 owns) or an insert/update split (re-introducing the multi-step
 shape T327 exists to avoid). Neither is proportionate for a provenance flag on a ~20-student team
@@ -9092,7 +9246,7 @@ replayed mutations and added one test the replay proved missing.
 
 ### The ledger row's numbers were wrong, and so was the packet's correction of them
 
-The row says *"21 of 23 exports untested"*. Measured at `b9742b8`: the file has **27 `export`
+The row says _"21 of 23 exports untested"_. Measured at `b9742b8`: the file has **27 `export`
 statements, 9 of them `type`/`interface`** → **18 value exports**, not 23. And the row names
 `makeMarkDayComplete` as a target while it is one of the **best-covered symbols in the file** after
 T327 and T406.
@@ -9101,21 +9255,21 @@ T327 and T406.
 **only inside `outreach.test.ts`** and concluded five symbols were untested. A repo-wide search shows
 all five are already referenced by sibling page test files:
 
-| Symbol | Already referenced in |
-|---|---|
-| `computeExpectedAttendeeRsvpPlan` | `OutreachEventDialog.test.tsx` |
-| `makeSubmitRsvpChange` | `RsvpControl.test.tsx` |
-| `makeSaveOutreachEvent` | `OutreachEventDialog.test.tsx`, `OutreachList.test.tsx` |
-| `makeCancelOutreachEvent` | `OutreachDetail.test.tsx` |
-| `makeLoadOutreachEventRoster` | `OutreachEventDialog.test.tsx` |
+| Symbol                            | Already referenced in                                   |
+| --------------------------------- | ------------------------------------------------------- |
+| `computeExpectedAttendeeRsvpPlan` | `OutreachEventDialog.test.tsx`                          |
+| `makeSubmitRsvpChange`            | `RsvpControl.test.tsx`                                  |
+| `makeSaveOutreachEvent`           | `OutreachEventDialog.test.tsx`, `OutreachList.test.tsx` |
+| `makeCancelOutreachEvent`         | `OutreachDetail.test.tsx`                               |
+| `makeLoadOutreachEventRoster`     | `OutreachEventDialog.test.tsx`                          |
 
 **Verified independently by the orchestrator.** The work still earns its place — several of the new
 tests are **outcome**-based where the pre-existing sibling coverage was **shape**-only
 (`toHaveBeenCalledWith`), and several branches were genuinely unguarded — but the packet overstated
 the gap, and this entry records that rather than quietly keeping the flattering framing.
 
-**The lesson, and it is the same one three times this session:** *scope your measurement to the claim
-you are making.* "Untested" is a repo-wide claim; measuring one file cannot establish it.
+**The lesson, and it is the same one three times this session:** _scope your measurement to the claim
+you are making._ "Untested" is a repo-wide claim; measuring one file cannot establish it.
 
 ### 19 tests, 19 named mutations — plus one the replay proved missing
 
@@ -9137,7 +9291,7 @@ The existing test that looked like it covered this passes an **empty** checked-s
 conditions; only one was pinned.
 
 **The orchestrator added the missing test.** The packet's own C4 required this
-(*"`computeExpectedAttendeeRsvpPlan`'s branches are covered, not just one path"*), so it is a
+(_"`computeExpectedAttendeeRsvpPlan`'s branches are covered, not just one path"_), so it is a
 criterion miss, not scope creep. It now reddens:
 
 ```
@@ -9146,7 +9300,7 @@ AssertionError: expected [ 'rsvp-keep', 'rsvp-drop' ] to deeply equal [ 'rsvp-dr
 ```
 
 **This is the fourth mutation this session that was named in good faith and did not actually redden
-anything** (T401's row count, T190's C3, T300's C2, now this). Every one was found by *running* it.
+anything** (T401's row count, T190's C3, T300's C2, now this). Every one was found by _running_ it.
 
 ### C1 and C3, verified by the orchestrator
 
@@ -9176,16 +9330,16 @@ tests**, targeted `outreach.test.ts` **39 passed, exit 0** (from a 19-test basel
 (**W7's file — W7 unassigned, taken here and declared**). Full chain ran: packet → premise gate
 (REVISE, 1 BLOCKER) → revised packet → worker → orchestrator verification.
 
-**Owner rulings, both in `auto-mode-decisions.md`:** *"T187 + T800 as one wave"*, and on the test
-edits — *"i dont like the idea of making the code have a workaround to avoid writing tests… I would
-prefer we write the code correctly and test should validate that."*
+**Owner rulings, both in `auto-mode-decisions.md`:** _"T187 + T800 as one wave"_, and on the test
+edits — _"i dont like the idea of making the code have a workaround to avoid writing tests… I would
+prefer we write the code correctly and test should validate that."_
 
 ### The row was wrong about its own mechanism — the fifth such row this session
 
 T187's row says `resolveStudentScope` reads `students.team_id`. **It reads
 `v_student_goal_projection.team_id`** (`students.ts:407-408`), whose column is `s.team_id`
-(`dashboard_views.sql:326`) — documented as *"used here ONLY for the row's display badge … never for
-any rollup math."* A live route was scoping off a column the schema calls display-only. **That is
+(`dashboard_views.sql:326`) — documented as _"used here ONLY for the row's display badge … never for
+any rollup math."_ A live route was scoping off a column the schema calls display-only. **That is
 also T186; they are one mechanism seen from two sides.**
 
 ### What shipped
@@ -9214,11 +9368,11 @@ loosened.** New two-team cases were added alongside, not substituted for old one
 
 ### Mutation evidence — orchestrator replayed personally
 
-| # | Mutation | Result |
-|---|---|---|
-| 1 | Revert the predicate to a single-id test | **5 failed / 210 passed** — the two-team tests |
-| 3 | Drop `.is('left_on', null)` from the new read | **RED on the query-shape spy** — `expect(isSpy).toHaveBeenCalledWith('left_on', null)` |
-| — | Restore | 361 passed, tree clean |
+| #   | Mutation                                      | Result                                                                                 |
+| --- | --------------------------------------------- | -------------------------------------------------------------------------------------- |
+| 1   | Revert the predicate to a single-id test      | **5 failed / 210 passed** — the two-team tests                                         |
+| 3   | Drop `.is('left_on', null)` from the new read | **RED on the query-shape spy** — `expect(isSpy).toHaveBeenCalledWith('left_on', null)` |
+| —   | Restore                                       | 361 passed, tree clean                                                                 |
 
 **Criterion 3 only works because the gate caught it.** As first written it was a fixture-visibility
 test, and the gate proved every fake client in this repo returns configured rows regardless of
@@ -9252,13 +9406,13 @@ comment nor the loader records that dependency. **T186's documentation fix remai
 transpiled with `removeComments` emit byte-identical output (`sha256 1036f71ba86a09ed…`, 10095 bytes
 each). Orchestrator-implemented.
 
-**The stale claim** (`:190-192`) said a re-written row differs *"EXCEPT `attendance.recorded_by` (and
-`updated_at`), which `makeMarkDayComplete`'s upsert also names (`loaders/outreach.ts:1139-1149`)"*.
+**The stale claim** (`:190-192`) said a re-written row differs _"EXCEPT `attendance.recorded_by` (and
+`updated_at`), which `makeMarkDayComplete`'s upsert also names (`loaders/outreach.ts:1139-1149`)"_.
 
 **Both halves were wrong after T406.** Measured: the upsert names `updated_at` **zero** times, and the
 `:1139-1149` citation points at unrelated loader code — `upsertAttendance` is at `:1304`.
 
-**The corrected text keeps the real cost and fixes only the mechanism.** `recorded_by` *is* still named
+**The corrected text keeps the real cost and fixes only the mechanism.** `recorded_by` _is_ still named
 and still re-attributes the row, so that disclosure stands. `updated_at` still moves too — but because
 W1's `trg_attendance_touch_updated_at` (`20260803000000_simplify_attendance_audit.sql:78-83`, `before
 insert or update`) sets it on both legs, **not** because this write sends it. The new text says so and
@@ -9288,14 +9442,14 @@ The row describes fixture data. Measured, there were **two** things:
 1. **Nine `FIXTURE_RSVPS.respondedBy` values** keyed `student-*`, in a field mirroring
    `rsvps.responded_by` — a `profiles.id` column. Rekeyed to `profile-*`.
 2. **`withRsvpOverride`'s locally-appended row** set `respondedBy: studentId` — **runtime code**, not
-   fixture data. `OutreachList.tsx`'s own module doc already disclosed this as *"T174's exact open
-   defect… out of scope here"*.
+   fixture data. `OutreachList.tsx`'s own module doc already disclosed this as _"T174's exact open
+   defect… out of scope here"_.
 
 ### Why the runtime fix is `null` rather than a profile id
 
 `withRsvpOverride`'s **signature is frozen by T193's packet §4** — the freeze is recorded in the
 function's own doc comment, and the reason is that `getUnansweredRsvpCount`, `computeStudentHours` and
-the goal bar all read the `rsvps` state it returns. So the caller's `viewerProfileId` (which *is* in
+the goal bar all read the `rsvps` state it returns. So the caller's `viewerProfileId` (which _is_ in
 scope at `:3929`, and is used correctly for the real write) **cannot be threaded in without breaking
 that freeze**.
 
@@ -9344,19 +9498,19 @@ tests**, exit 0 · build ✓. `.env.local` absent.
 
 A non-staff viewer's Signups buckets showed **every teammate under "No response"**, whatever they had
 answered. `groupSessionSignups` diffs the roster against the rsvps RLS lets it read, so the page was
-treating *"I am not allowed to read this row"* as *"this student did not answer"* — a false statement
+treating _"I am not allowed to read this row"_ as _"this student did not answer"_ — a false statement
 on screen, not a privacy protection. **Pre-existing; T306 deliberately did not extend it.**
 
 ### The owner's two rulings
 
-Product (2026-08-03): *"it is ok if students see other teammates rsvp's… we quite frankly do that
-currently through thumbs up in chat."* Scope (2026-08-04): *"let's go with the first option, anyone on
-the team"* — the widest of three offered.
+Product (2026-08-03): _"it is ok if students see other teammates rsvp's… we quite frankly do that
+currently through thumbs up in chat."_ Scope (2026-08-04): _"let's go with the first option, anyone on
+the team"_ — the widest of three offered.
 
 ### The MAJOR: this is a PRD deviation, and v1 of the packet missed it entirely
 
-**Constitution item 3:** *"RLS policies and metric SQL come **only** from PRD Section 8.4, copied
-verbatim. Re-deriving either → **BLOCKER**."* PRD §8.3's `rsvps` row says `read/write own`.
+**Constitution item 3:** _"RLS policies and metric SQL come **only** from PRD Section 8.4, copied
+verbatim. Re-deriving either → **BLOCKER**."_ PRD §8.3's `rsvps` row says `read/write own`.
 
 **The gate caught that the packet had no deviation record, which would have made this
 BLOCKER-able.** The orchestrator had misremembered item 3 as covering only metric formulas in
@@ -9372,15 +9526,15 @@ user's RLS. That decided the blast radius: nothing, or every student's planned-h
 The gate settled it on a scratch **PostgreSQL 16.13** with this repo's real migrations. A view without
 `security_invoker` **executes as its owner** and never applied the querying user's RLS:
 
-| | Result |
-|---|---|
-| direct `rsvps` read, non-staff session | **1 row** |
-| `v_planned_rsvp_hours`, same session, same instant | **3 rows — teammates' included** |
-| `set (security_invoker = on)` / `reset` | **1 row** / **3 rows** |
-| after the new policy | direct read **3 rows**; all three planned-hours views **byte-identical** |
+|                                                    | Result                                                                   |
+| -------------------------------------------------- | ------------------------------------------------------------------------ |
+| direct `rsvps` read, non-staff session             | **1 row**                                                                |
+| `v_planned_rsvp_hours`, same session, same instant | **3 rows — teammates' included**                                         |
+| `set (security_invoker = on)` / `reset`            | **1 row** / **3 rows**                                                   |
+| after the new policy                               | direct read **3 rows**; all three planned-hours views **byte-identical** |
 
 It re-ran with a **NOSUPERUSER, NOBYPASSRLS** owner — strictly weaker than hosted Supabase's
-`postgres` — so the result holds there *a fortiori*.
+`postgres` — so the result holds there _a fortiori_.
 
 ### What shipped
 
@@ -9393,16 +9547,16 @@ policies, so this suffices, and 8.4's verbatim policy survives.
 The worker's suite passed end-to-end (**exit 0**), including `PASS c2-update-denied (UPDATE 0, no
 exception)`. Then each mutation, re-run:
 
-| # | Mutation | Real failure |
-|---|---|---|
-| **C1** | drop the new policy | `FAIL c1-select-all: expected 4 rows visible to Student One, got 1` |
+| #      | Mutation                        | Real failure                                                                     |
+| ------ | ------------------------------- | -------------------------------------------------------------------------------- |
+| **C1** | drop the new policy             | `FAIL c1-select-all: expected 4 rows visible to Student One, got 1`              |
 | **C2** | **also** widen the write policy | `FAIL c2-update-denied: cross-student UPDATE matched a row (should be UPDATE 0)` |
-| **C3** | grant to `anon` as well | `FAIL c3-anon-denied: anon read 4 row(s) from rsvps` |
-| **C5** | write policies untouched | the RLS migration is **not in the diff at all** — only the new file is |
-| **C6** | no app code | `git diff -- src/` against the **merge-base** is **empty** |
+| **C3** | grant to `anon` as well         | `FAIL c3-anon-denied: anon read 4 row(s) from rsvps`                             |
+| **C5** | write policies untouched        | the RLS migration is **not in the diff at all** — only the new file is           |
+| **C6** | no app code                     | `git diff -- src/` against the **merge-base** is **empty**                       |
 
-**C2 is the criterion that keeps the ruling honest.** The owner authorised *seeing*, not *answering for
-other people*; a migration widening both would have satisfied C1 and silently exceeded him.
+**C2 is the criterion that keeps the ruling honest.** The owner authorised _seeing_, not _answering for
+other people_; a migration widening both would have satisfied C1 and silently exceeded him.
 
 **A diff-direction trap worth recording:** `git diff origin/main HEAD -- src/` showed 42 changed lines
 and looked like a C6 violation. It was an artifact — the branch predates T504, so the diff rendered
@@ -9411,15 +9565,15 @@ moved `main` measures the wrong thing.
 
 ### Two corrections that would have produced broken evidence
 
-- **Cross-student UPDATE denial manifests as `UPDATE 0`, NOT an exception.** The row is *visible* but
-  not *updatable*, so RLS filters it out of the UPDATE's scope rather than raising. **T205's
+- **Cross-student UPDATE denial manifests as `UPDATE 0`, NOT an exception.** The row is _visible_ but
+  not _updatable_, so RLS filters it out of the UPDATE's scope rather than raising. **T205's
   exception-catch shape would have mis-asserted this and passed anyway.**
 - The before/after view comparison needed the **migration loop split** — apply all-but-the-new →
   snapshot → apply → re-snapshot.
 
 ### D010 closed here, per the owner's "option B"
 
-The false claim *"plain views run under the querying session's own RLS"* appears in
+The false claim _"plain views run under the querying session's own RLS"_ appears in
 `kpi_views.sql:136-152` (D010, 2026-07-29) and was copied into `dashboard_views.sql:50-56`. **Item 10
 forbids editing an applied migration**, so the correction rides in **this migration's header**,
 covering both occurrences. **Neither file was edited.** Third in-repo occurrence of the same false
@@ -9451,8 +9605,8 @@ only reads).
 
 ### The one true row of four
 
-T161, T162 and T163's *"0 tests"* claims were all retracted this week — an audit had counted **files
-named `<module>.test.ts`** rather than tests *of* the module (D5, D7). **T164 survived every check.**
+T161, T162 and T163's _"0 tests"_ claims were all retracted this week — an audit had counted **files
+named `<module>.test.ts`** rather than tests _of_ the module (D5, D7). **T164 survived every check.**
 Verified three times before packeting and a fourth time by the checker at base: **0 runtime imports,
 0 invocations of either export.** The two apparent references are `import type` (erased at runtime),
 and every use of `loadKpiStripData` in `KpiStrip.test.tsx` is the component's **injected prop being
@@ -9468,7 +9622,7 @@ independently and it held** — so the skip was sound. Same reasoning as D1/T197
 
 `mapKpisDbRowToKpiStripData` is a **verbatim 11-field column rename with no logic**. Swap any two
 and **nothing crashes** — a coach is simply shown meeting hours labelled as outreach hours. Item
-26's *"lie to a user about their own data"*, exactly.
+26's _"lie to a user about their own data"_, exactly.
 
 **A lazy fixture makes that undetectable.** If two fields share a value, a swap between them is
 invisible and the suite stays green. **The fixture carries 11 distinct values across 11 fields** —
@@ -9481,20 +9635,20 @@ All seven packet criteria red at exit 1. The orchestrator independently replayed
 
 **The checker then ran eight mutations of its own — 7 caught, 1 survivor:**
 
-| Its own mutation | Result |
-|---|---|
-| `total_hours`↔`competition_hours` | red |
-| `most_recent_event_title`↔`most_recent_event_date` (the string/date pair) | red |
-| single field nulled | red |
-| `mapTeamCountDbRowToBreakdownRow`: `team_id`↔`team_name` | red |
-| `activeStudentsCount` ← `team_sort_order` | red |
-| map path passed `[]` instead of `teamBreakdown` | red |
-| `activeStudentsCount: 0` hardcoded | red |
-| **`seasonId: row.season_id` → hardcoded constant** | **SURVIVED, exit 0** |
+| Its own mutation                                                          | Result               |
+| ------------------------------------------------------------------------- | -------------------- |
+| `total_hours`↔`competition_hours`                                         | red                  |
+| `most_recent_event_title`↔`most_recent_event_date` (the string/date pair) | red                  |
+| single field nulled                                                       | red                  |
+| `mapTeamCountDbRowToBreakdownRow`: `team_id`↔`team_name`                  | red                  |
+| `activeStudentsCount` ← `team_sort_order`                                 | red                  |
+| map path passed `[]` instead of `teamBreakdown`                           | red                  |
+| `activeStudentsCount: 0` hardcoded                                        | red                  |
+| **`seasonId: row.season_id` → hardcoded constant**                        | **SURVIVED, exit 0** |
 
 **The survivor, honestly scoped:** every mapping test passes the loader the same id the fixture row
 carries, so the `season_id` **passthrough** is coincidentally satisfied rather than discriminated.
-**Narrow:** all *swaps* involving `season_id` are still caught (values distinct), the zero path does
+**Narrow:** all _swaps_ involving `season_id` are still caught (values distinct), the zero path does
 discriminate it (`'season-missing'`), and `KpiStrip.tsx` **never renders** `KpiStripData.seasonId`.
 **No user-visible lie today. Filed, not fixed** — one-line fixture change, W4's T700 block.
 
@@ -9516,13 +9670,12 @@ absent.
 ### Gates
 
 `tsc` **0** · eslint **0 errors** / 364 pre-existing warnings · prettier **clean** · vitest
-**79 files / 1960 tests, exit 0**. Base `08a1092` re-measured in the checker's own worktree: 78 /
-1952. **Delta exactly +1 file / +8 tests.**
+**79 files / 1960 tests, exit 0**. Base `08a1092` re-measured in the checker's own worktree: 78 / 1952. **Delta exactly +1 file / +8 tests.**
 
 ### Environment note, chased and cleared
 
-The checker observed 12 failures on the shared tree mid-review and correctly flagged it as *"captured
-on a tree in flux"*. **Chased: not real.** `origin/main` measured green in an isolated worktree
+The checker observed 12 failures on the shared tree mid-review and correctly flagged it as _"captured
+on a tree in flux"_. **Chased: not real.** `origin/main` measured green in an isolated worktree
 (78 files / 1993 tests, exit 0), and the T196 branch at `02af8d7` also exits 0. The shared tree had
 simply been switched branches by the orchestrator mid-merge. **Worth copying: the checker reported
 an anomaly it could not attribute rather than ignoring it or blaming the task.**
@@ -9560,7 +9713,7 @@ collapsed the ruling.
 
 ### The false banner copy is gone
 
-It read *"Attendance stays editable below; **corrections are recorded automatically**."* The second
+It read _"Attendance stays editable below; **corrections are recorded automatically**."_ The second
 clause described `trg_audit_attendance_post_completion`, **removed 2026-08-03 by this same owner**.
 False on every screen that rendered it. Verified true in both contexts now.
 
@@ -9569,10 +9722,10 @@ False on every screen that rendered it. Verified true in both contexts now.
 `loadEndMeetingSummary`/`onEndMeeting` are default-parameter **references to module-level consts**.
 Measured with a call-counter over five keystrokes:
 
-| | mount | after 5 keystrokes |
-|---|---|---|
-| **as shipped** | **1** | **1** |
-| rewritten as an inline factory call | **4** | **9** |
+|                                     | mount | after 5 keystrokes |
+| ----------------------------------- | ----- | ------------------ |
+| **as shipped**                      | **1** | **1**              |
+| rewritten as an inline factory call | **4** | **9**              |
 
 Exactly reproducing the packet's own numbers. `onEditAttendance` uses
 `useCallback(() => user?.id ?? null, [user])` — no empty-dep closure over `user`.
@@ -9628,10 +9781,10 @@ strongest evidence this class of task can produce, and it was run rather than as
 
 ### The row's premise had already moved before the task was worked
 
-T186 was filed saying *"a live route **now** scopes off it"*. True when filed. **False by the time it
+T186 was filed saying _"a live route **now** scopes off it"_. True when filed. **False by the time it
 was worked** — T187 (PR #67, merged earlier the same day) moved every scope predicate onto ACTIVE
-`student_teams` memberships. So `dashboard_views.sql:311-320`'s claim that the column is used *"ONLY
-for the row's display badge"* is **true again today**.
+`student_teams` memberships. So `dashboard_views.sql:311-320`'s claim that the column is used _"ONLY
+for the row's display badge"_ is **true again today**.
 
 **That is not a reason to close the row unfixed.** The claim was silently false in between, and the
 dependency edge survives: `team_id` still reaches `StudentScope.teamId` → `ResolvedStudentIdentity.teamId`.
@@ -9643,7 +9796,7 @@ separately as **T802**.
 
 ### The prescribed fix was half-impossible, and that was checked rather than assumed
 
-The row says *"record it in both the migration comment and the loader."* `20260723000001_dashboard_views.sql`
+The row says _"record it in both the migration comment and the loader."_ `20260723000001_dashboard_views.sql`
 is applied, and **constitution item 10: "editing an applied migration file → BLOCKER."** The row was
 written without checking item 10. Rather than pick unilaterally, three options went to the owner —
 TS-only, a new additive `comment on view` migration, or an item-10 amendment. **Ruled: TS-only**, residual
@@ -9654,7 +9807,7 @@ reader still sees both wrong comments.
 
 `students.ts:365-370` did not merely fail to document the dependency — it **repeated the migration's own
 false RLS sentence**, asserting `v_student_goal_projection` "runs under the CALLING session's own RLS".
-It does not. `security_definer` is a *function* attribute; the view-level knob is `security_invoker`
+It does not. `security_definer` is a _function_ attribute; the view-level knob is `security_invoker`
 (PG15+), which defaults **OFF** and appears zero times in `supabase/`, so these views execute as their
 OWNER and bypass base-table RLS.
 
@@ -9670,8 +9823,8 @@ read safe under `security_invoker=on`, so it is belt-and-braces rather than wron
 
 ### A stale caveat retired
 
-The same paragraph closed by saying the composition *"has no DIRECT precedent elsewhere in this codebase
-to point to as a live-tested example"* and asked a checker to confirm it. Stale in the half that matters:
+The same paragraph closed by saying the composition _"has no DIRECT precedent elsewhere in this codebase
+to point to as a live-tested example"_ and asked a checker to confirm it. Stale in the half that matters:
 the bypass **mechanism** is live-tested at the leaderboard migration. Corrected rather than left to send a
 future reader looking for evidence that already exists.
 
@@ -9689,8 +9842,8 @@ reason, not left implicit.
 ## T198 — CoachHome goes season-wide: six real queries, and the page stops pretending it has a team
 
 **Tier: HEAVY.** It changes what a coach sees, edits two production files and two test files, and
-retires a public prop. Owner ruled the product question **2026-08-03** (*"yes, season-wide is fine
-option b"*) and approved the test approach **2026-08-04**.
+retires a public prop. Owner ruled the product question **2026-08-03** (_"yes, season-wide is fine
+option b"_) and approved the test approach **2026-08-04**.
 
 ### Both halves had to ship together, and that is why the task was bigger than the row
 
@@ -9703,8 +9856,8 @@ what the queries returned. The de-scoping is not scope creep; it is what makes t
 **The row also undercounted the work: six helpers took a `teamId`, not four.** `sumGoalHours` and
 `sumConfirmedHours` were missed by the row's framing.
 
-`isEventInTeamScope` — which this file's own comment called *"the ONLY team-scope predicate in this
-file"* — is **deleted**, not left unused. A dead scope predicate is how a placeholder scope creeps
+`isEventInTeamScope` — which this file's own comment called _"the ONLY team-scope predicate in this
+file"_ — is **deleted**, not left unused. A dead scope predicate is how a placeholder scope creeps
 back in. `StudentHome.tsx`/`ParentHome.tsx` keep their own same-named predicates; those are real,
 student-scoped, and untouched.
 
@@ -9722,32 +9875,32 @@ filed as **T803** rather than smoothed over:
    which means they can legitimately disagree on screen.
 
 The tile is relabelled "Team participation" → "Participation". **"Hours vs. team goal" is deliberately
-NOT relabelled** — D-2's *"we are just a team"* framing keeps that one honest.
+NOT relabelled** — D-2's _"we are just a team"_ framing keeps that one honest.
 
 ### The test edits were NOT shape-only, and were approved on that basis
 
 T187's approval covered shape-only, behaviour-preserving edits with byte-identical expectations. **This
 task's do not qualify and were not claimed to.** Owner approved them explicitly on 2026-08-04
-(*"yes recompute the expectations and delete that test block"*). Every recomputation, with its cause:
+(_"yes recompute the expectations and delete that test block"_). Every recomputation, with its cause:
 
-| Assertion | Was | Now | Why |
-|---|---|---|---|
-| `sumGoalHours` (unit) | 18 | **23** | s4 (`team-b`, active, override 5) now counts |
-| `sumConfirmedHours` (unit) | 7 | **107** | same student's 100h now counts |
-| fixture goal hours | 38 | **48** | the Titans student's 10h default now counts |
-| last-meeting rate | 75% | **60%** | rosterSize 4 → 5; present+late unchanged at 3 |
-| upcoming in 7 days | 2 | **4** | Titans sessions now count |
-| T173 stub hours | `0 / 1 hrs` | **`0 / 18 hrs`** | that student's own `goal_hours_override` |
+| Assertion                  | Was         | Now              | Why                                           |
+| -------------------------- | ----------- | ---------------- | --------------------------------------------- |
+| `sumGoalHours` (unit)      | 18          | **23**           | s4 (`team-b`, active, override 5) now counts  |
+| `sumConfirmedHours` (unit) | 7           | **107**          | same student's 100h now counts                |
+| fixture goal hours         | 38          | **48**           | the Titans student's 10h default now counts   |
+| last-meeting rate          | 75%         | **60%**          | rosterSize 4 → 5; present+late unchanged at 3 |
+| upcoming in 7 days         | 2           | **4**            | Titans sessions now count                     |
+| T173 stub hours            | `0 / 1 hrs` | **`0 / 18 hrs`** | that student's own `goal_hours_override`      |
 
-That last one is worth naming: the fixture's `goal_hours_override: 18` carried the comment *"not
-asserted directly"*. It is now load-bearing — the change turned an inert fixture field into a
+That last one is worth naming: the fixture's `goal_hours_override: 18` carried the comment _"not
+asserted directly"_. It is now load-bearing — the change turned an inert fixture field into a
 measured one.
 
 **`describe('isEventInTeamScope')` is deleted outright.** Tests for a deleted export cannot be
 preserved; keeping them disabled would be pretending.
 
-**Two exclusion assertions were INVERTED, not deleted** — *"excludes an otherwise-eligible meeting
-outside the team scope"* → *"INCLUDES it"*, and `not.toContain('Titans Strategy Session')` →
+**Two exclusion assertions were INVERTED, not deleted** — _"excludes an otherwise-eligible meeting
+outside the team scope"_ → _"INCLUDES it"_, and `not.toContain('Titans Strategy Session')` →
 `toContain(...)`. Same fixtures, opposite expectations. These are the sharpest available proof the
 scoping actually changed, and M2 below confirms they earn their place.
 
@@ -9770,16 +9923,16 @@ crashed. Fixed at the stub, **not** by loosening the guard to `?.` — a missing
 fail loudly, and here it did.
 
 A second over-correction, also caught: blanket-replacing `'Team participation'` with `'Participation'`
-hit two NEGATIVE assertions that used the old label as a *CoachHome-unique marker*. "Participation"
+hit two NEGATIVE assertions that used the old label as a _CoachHome-unique marker_. "Participation"
 is not unique — Student/Parent pages use the word. Retargeted to "Events in next 7 days".
 
 ### Mutations, replayed personally
 
-| # | Mutation | Result |
-|---|---|---|
-| 1 | Drop `.eq('season_id', seasonId)` from the events query | **RED** on the query-shape spy |
-| 2 | Re-introduce a team filter in `selectCheckInSession` | **RED, 2 tests** — including the inverted one |
-| — | Restore both | 1996 passed, tree clean |
+| #   | Mutation                                                | Result                                        |
+| --- | ------------------------------------------------------- | --------------------------------------------- |
+| 1   | Drop `.eq('season_id', seasonId)` from the events query | **RED** on the query-shape spy                |
+| 2   | Re-introduce a team filter in `selectCheckInSession`    | **RED, 2 tests** — including the inverted one |
+| —   | Restore both                                            | 1996 passed, tree clean                       |
 
 ### Gates, `.env.local` absent, after merging current `main`
 
@@ -9800,8 +9953,8 @@ deletes code · `vitest` **78 files / 1996 tests** · `vite build` 0.
 > `checkin.ts`/`reports.ts`/`meetings.ts` read a correct view; no student is mis-counted.
 >
 > **The mistake:** I searched for the view name, read the first match, and reported it as live without
-> checking for a later redefinition — in a `create or replace` codebase, finding *a* definition is not
-> finding *the* definition. Nothing in T198's shipped code depended on the claim, so the code is
+> checking for a later redefinition — in a `create or replace` codebase, finding _a_ definition is not
+> finding _the_ definition. Nothing in T198's shipped code depended on the claim, so the code is
 > unaffected; only this narrative was wrong. PR #76's body carries the same error and cannot be edited
 > after merge, which is disclosed rather than quietly dropped.
 
@@ -9852,7 +10005,7 @@ survival.
 
 **A reader who opens `20260723000001_dashboard_views.sql` still sees both wrong `--` comments.** Item
 10 is exactly the rule that forbids rewriting them. Catalog comments (`\d+`, `obj_description`) and a
-new file in timestamp order are *additional* reach, not a replacement — so both wrong comments are
+new file in timestamp order are _additional_ reach, not a replacement — so both wrong comments are
 quoted **verbatim** in the new migration's header, and a reader who finds only that file still learns
 what was wrong and where.
 
@@ -9877,16 +10030,16 @@ swallowed:** `20260719000000_cron.sql` (needs `pg_cron`) and `20260720000001_ava
 > `run_t801_dashboard_views_comments.sh` (added below) — the assertions pass identically either way,
 > so no conclusion above changes, but "two skipped" overstated the gap.
 
-| # | Mutation | Result |
-|---|---|---|
-| 1 | Drop one view's comment | **RED** — A1 names `v_season_attendance_rate` |
-| 2 | **Reintroduce the ORIGINAL wrong text** on a view | **RED** — A1 names `v_event_student_hours` |
-| 3 | Strip the second reader from the column comment | **RED** on A2, **green on A3** — they are independent |
-| 4 | `alter view … set (security_invoker = on)` | **RED** — A4 names the view |
-| — | Re-apply the migration verbatim | All 4 green again — **proves idempotency** |
+| #   | Mutation                                          | Result                                                |
+| --- | ------------------------------------------------- | ----------------------------------------------------- |
+| 1   | Drop one view's comment                           | **RED** — A1 names `v_season_attendance_rate`         |
+| 2   | **Reintroduce the ORIGINAL wrong text** on a view | **RED** — A1 names `v_event_student_hours`            |
+| 3   | Strip the second reader from the column comment   | **RED** on A2, **green on A3** — they are independent |
+| 4   | `alter view … set (security_invoker = on)`        | **RED** — A4 names the view                           |
+| —   | Re-apply the migration verbatim                   | All 4 green again — **proves idempotency**            |
 
 Mutation 2 is the one that matters: it is the actual regression this task guards against, and a
-presence-only check would have passed it. A1 pins the *direction* of the claim, not just that a
+presence-only check would have passed it. A1 pins the _direction_ of the claim, not just that a
 comment exists.
 
 **The "no view definition changes" claim is measured.** An `md5` over
@@ -9925,7 +10078,7 @@ application code).
 ### Not implied by this task
 
 **No security work.** T185 examined the exposure itself and closed no-change on the owner's
-proportionality ruling. This corrects a *description*. Anyone reading the new migration as a
+proportionality ruling. This corrects a _description_. Anyone reading the new migration as a
 newly-discovered vulnerability is reading it wrong, which is why the header says so explicitly.
 
 ---
@@ -9934,7 +10087,7 @@ newly-discovered vulnerability is reading it wrong, which is why the header says
 
 **Premise measured before any code was written, and one claim in the row was false.**
 
-The row said *"(a) needs a currently-open-sessions loader, which T196 must build anyway."* T196 had
+The row said _"(a) needs a currently-open-sessions loader, which T196 must build anyway."_ T196 had
 already shipped. It built **no such loader**. Every loader it produced takes a `sessionId` and
 returns one session — `makeLoadEndMeetingSummary` (`endMeeting.ts:288`), `makeOnEndMeeting` (`:373`),
 `makeOnEditAttendance` (`:448`), `makeLoadLiveConsoleData` (`kiosk.ts:430`). Searching `loaders/` for
@@ -9951,23 +10104,23 @@ student's own team without a client-side filter.
 
 ### Mutation evidence — 12 mutants, every one red at exit 1
 
-| # | Mutation | Result |
-|---|---|---|
-| M1 | `.eq('status','scheduled')` → `'completed'` | 1 failed, exit 1 |
-| M2 | `OPEN_SESSION_GRACE_MS` 2h → `0` | 2 failed, exit 1 |
-| M3 | join by array position instead of `event_id` | 1 failed, exit 1 |
-| M4 | drop sessions whose event title is missing | 1 failed, exit 1 |
-| M5 | remove the empty-session early return | 1 failed, exit 1 |
-| M6 | `(await loadSessions()) ?? []` → `!` | 1 failed, exit 1 |
-| M7 | remove the `event_id` de-duplication | 1 failed, exit 1 |
-| M8 | `urlSessionId ?? pickedSessionId` → `urlSessionId` | 2 failed, exit 1 |
-| M9 | picker always sends `sessions[0].sessionId` | 1 failed, exit 1 |
-| M10 | load the list even when the URL has `?s=` | 1 failed, exit 1 |
-| M11 | drop the "no meetings are open" message | 1 failed, exit 1 |
-| M12 | drop the "couldn't load the list" message | 1 failed, exit 1 |
+| #   | Mutation                                           | Result           |
+| --- | -------------------------------------------------- | ---------------- |
+| M1  | `.eq('status','scheduled')` → `'completed'`        | 1 failed, exit 1 |
+| M2  | `OPEN_SESSION_GRACE_MS` 2h → `0`                   | 2 failed, exit 1 |
+| M3  | join by array position instead of `event_id`       | 1 failed, exit 1 |
+| M4  | drop sessions whose event title is missing         | 1 failed, exit 1 |
+| M5  | remove the empty-session early return              | 1 failed, exit 1 |
+| M6  | `(await loadSessions()) ?? []` → `!`               | 1 failed, exit 1 |
+| M7  | remove the `event_id` de-duplication               | 1 failed, exit 1 |
+| M8  | `urlSessionId ?? pickedSessionId` → `urlSessionId` | 2 failed, exit 1 |
+| M9  | picker always sends `sessions[0].sessionId`        | 1 failed, exit 1 |
+| M10 | load the list even when the URL has `?s=`          | 1 failed, exit 1 |
+| M11 | drop the "no meetings are open" message            | 1 failed, exit 1 |
+| M12 | drop the "couldn't load the list" message          | 1 failed, exit 1 |
 
 **Two mutants were the point of the exercise.** M3 is this row's version of the field-swap class: a
-positional join returns the right *number* of meetings with the *wrong names* on them, and nothing
+positional join returns the right _number_ of meetings with the _wrong names_ on them, and nothing
 crashes — a student taps "Tuesday Build Night" and checks into the outreach event. It is caught only
 because the fixture returns the two events in **reversed** order; with them in matching order the
 test would have stayed green under the mutation. M9 is the same shape one level up: the test picks
@@ -9997,7 +10150,7 @@ when `data` and `error` are both null (`:174-177`).
 
 **The fix is in `attendance.ts`, deliberately NOT in `createLoader`.** Making `createLoader` throw on
 `{data: null, error: null}` would fix this caller and break others: `querySessionUserId`
-(`loaders/checkin.ts:382-390`) returns exactly that pair to mean *"nobody is signed in"*, and
+(`loaders/checkin.ts:382-390`) returns exactly that pair to mean _"nobody is signed in"_, and
 `makeGetAccessToken` is documented to never reject. A shared helper is the wrong place to encode one
 caller's interpretation of an ambiguous response.
 
@@ -10007,11 +10160,11 @@ a short list that looks complete.
 
 ### Mutation evidence — 3 mutants, all red at exit 1
 
-| # | Mutation | Result |
-|---|---|---|
-| N1 | revert to `rows.push(...(pageRows ?? []))` | 2 failed, exit 1 |
-| N2 | guard only page 0 (`pageRows === null && page === 0`) | 1 failed, exit 1 |
-| N3 | throw on an empty page too (`|| pageRows.length === 0`) | 2 failed, exit 1 |
+| #   | Mutation                                              | Result           |
+| --- | ----------------------------------------------------- | ---------------- |
+| N1  | revert to `rows.push(...(pageRows ?? []))`            | 2 failed, exit 1 |
+| N2  | guard only page 0 (`pageRows === null && page === 0`) | 1 failed, exit 1 |
+| N3  | throw on an empty page too (`                         |                  | pageRows.length === 0`) | 2 failed, exit 1 |
 
 **N2 is the one that matters.** It leaves the fix visibly present — the guard is still there, still
 throws, and a reviewer skimming the diff would call it correct — while restoring the exact
@@ -10024,8 +10177,8 @@ N2 and let a half-fix ship.
 if the guard widened to cover empty pages, every brand-new session with no check-ins would start
 erroring. That test is what keeps the fix from over-reaching.
 
-**Corrects an earlier over-broad claim in this log.** Line 6454 states that `createLoader` *"throws
-on `result.error` so a failed query cannot resolve `[]` and masquerade as 'nobody attended'."* That is
+**Corrects an earlier over-broad claim in this log.** Line 6454 states that `createLoader` _"throws
+on `result.error` so a failed query cannot resolve `[]` and masquerade as 'nobody attended'."_ That is
 true for `result.error` and false for the `{data: null, error: null}` pair — which is precisely the
 gap T502 filed and this entry closes. The original claim was not wrong about what it examined; it was
 narrower than it sounded.
@@ -10038,7 +10191,7 @@ vitest **80 files / 2027 tests, exit 0** (2024 → 2027, +3). Mutations ran in a
 
 ## T803 — the duplicate participation tile, dropped along with the query behind it
 
-**Tier: STANDARD.** Owner ruled *"drop the duplicate tile"*. The question the ruling left open was
+**Tier: STANDARD.** Owner ruled _"drop the duplicate tile"_. The question the ruling left open was
 **which** of the two.
 
 ### Which tile survived, and why that way round
@@ -10077,8 +10230,8 @@ and nothing else.
 Found while updating the tile's neighbours, unrelated to the ruling, fixed because leaving them would
 be leaving known-bad coverage:
 
-- `expect(container.textContent).toContain('75%')`, commented *"last-meeting attendance rate KPI
-  value"*, was matching the **ProgressBar's own milestone labels** (`25%50%75%100%`). The real value
+- `expect(container.textContent).toContain('75%')`, commented _"last-meeting attendance rate KPI
+  value"_, was matching the **ProgressBar's own milestone labels** (`25%50%75%100%`). The real value
   has been **60%** since T198 widened the roster season-wide — so this assertion would have passed
   with the KPI card entirely absent.
 - `expect(container.textContent).toContain('2')` matched any digit `2` anywhere on the page.
@@ -10099,7 +10252,7 @@ check does not cover the SQL layer today.
 
 **`docs/swarm/WORKFLOWS.md` has drifted from the ledger it summarizes.** It still lists T186, T187,
 T198 as open rows and T801 as merely "filed", all of which are merged/closed in the ledger on `main`.
-Its refresh (PR #89) landed *after* those merges, so the information was available. Reported to the
+Its refresh (PR #89) landed _after_ those merges, so the information was available. Reported to the
 owner rather than fixed inside this task.
 
 ---
@@ -10114,7 +10267,7 @@ both times.** Eight failed reproductions now, across isolated / loaded / full-su
 
 **A mechanism was hypothesised and then disproven, rather than written into the row as if true.** Both
 failing tests were error-path tests, and this repo's `flushMicrotasks` helper — in **48 test files** —
-awaits a fixed **three** `Promise.resolve()` ticks. A fixed-depth drain is a *guess* at settledness,
+awaits a fixed **three** `Promise.resolve()` ticks. A fixed-depth drain is a _guess_ at settledness,
 not a wait for it, and that is a genuinely plausible load-sensitive race.
 
 Tested by mutation instead of asserted: depth 2 → 113/113 pass. Depth 1 → 113/113. Depth **0** →
@@ -10159,7 +10312,7 @@ because the reader left would re-open the documentation gap T801 was filed to cl
 **T801's assertion A2 kept PASSING while the comment it guards was false.**
 
 Verified live, not reasoned: after deleting the reader, the assertions ran **ALL PASS** against the
-now-wrong "TWO readers" text. A2 pins catalog *text*. It guards against someone rewriting the comment.
+now-wrong "TWO readers" text. A2 pins catalog _text_. It guards against someone rewriting the comment.
 It cannot see a TypeScript reader disappear.
 
 A2 now pins the current truth plus the retained history, and a mutation — withholding the new
@@ -10191,11 +10344,11 @@ its fix. Verified before touching anything rather than re-doing the work.
 
 But the same false claim was live in **three more files, as a citation chain**:
 
-| File | Said | Cited |
-|---|---|---|
-| `ParticipationTab.tsx:59` | "a plain view runs with the QUERYING USER's own permissions… not the view owner's" — backwards | — (origin) |
-| `reports.ts:133` | "so they run with the querying user's own RLS-scoped permissions" | `ParticipationTab.tsx` |
-| `dashboard.ts:79` | "so each runs under the querying session's own RLS" | `reports.ts` |
+| File                      | Said                                                                                           | Cited                  |
+| ------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------- |
+| `ParticipationTab.tsx:59` | "a plain view runs with the QUERYING USER's own permissions… not the view owner's" — backwards | — (origin)             |
+| `reports.ts:133`          | "so they run with the querying user's own RLS-scoped permissions"                              | `ParticipationTab.tsx` |
+| `dashboard.ts:79`         | "so each runs under the querying session's own RLS"                                            | `reports.ts`           |
 
 **One confident sentence became three files of wrong reasoning, each citing the previous as
 authority.** All three are corrected together — fixing one link leaves the others pointing at a wrong
@@ -10219,8 +10372,8 @@ apply time on a too-narrow `auth.users` stub. Fixing that let it reach its asser
 time in weeks — and **1 of 5 failed.**
 
 That failure is the real find. `seed.sql` seeds `students` and `teams` but **zero `student_teams`
-rows**, because `20260721000000_student_teams.sql` backfills memberships at *migration* time and this
-seed loads *after* migrations. The moment `20260722000000_membership_views.sql` moved
+rows**, because `20260721000000_student_teams.sql` backfills memberships at _migration_ time and this
+seed loads _after_ migrations. The moment `20260722000000_membership_views.sql` moved
 `v_student_participation` onto ACTIVE memberships, `a-excused-shrinks-denominator` broke — **and
 nobody knew, because the runner could not start.** A real assertion was failing for two weeks behind
 a harness error. That is the cost of the rot, made concrete rather than asserted.
@@ -10239,23 +10392,23 @@ wrong reason.
 1. **A3 tested the wrong property.** It asserted `is_updatable = NO` — but **T205 never changed the
    view's shape and never claimed to.** `v_leaderboard_students` is still
    `select id, display_name from students where is_active`: simple, therefore still auto-updatable.
-   T205 fixed the hazard by *revoking grants*. A3 now pins the absent write grant.
-2. **My runner undid the fix it was testing.** It applied blanket `grant … on all tables` *after* the
+   T205 fixed the hazard by _revoking grants_. A3 now pins the absent write grant.
+2. **My runner undid the fix it was testing.** It applied blanket `grant … on all tables` _after_ the
    migrations, silently reversing T205's own `revoke` — so the guard failed against a correctly-fixed
-   database. It now uses `alter default privileges` *before* the migrations, which is how the real
+   database. It now uses `alter default privileges` _before_ the migrations, which is how the real
    platform behaves and leaves later explicit `REVOKE`s standing.
 
 Both would have shipped as confident wrong findings if I had reasoned instead of executed.
 
 ### Mutations replayed
 
-| Suite | Mutation | Result |
-|---|---|---|
-| T700 | Comment out T205's two `revoke` lines | **RED** — A1 + A3, A3 naming `anon:DELETE, anon:INSERT, …` |
-| T700 | Add a **new** simple view | **RED** — A1 names `v_t700_probe_simple` |
-| RLS | `own_or_linked_read on students` → `using (true)` | **RED** — 2 assertions, non-zero exit |
+| Suite | Mutation                                          | Result                                                     |
+| ----- | ------------------------------------------------- | ---------------------------------------------------------- |
+| T700  | Comment out T205's two `revoke` lines             | **RED** — A1 + A3, A3 naming `anon:DELETE, anon:INSERT, …` |
+| T700  | Add a **new** simple view                         | **RED** — A1 names `v_t700_probe_simple`                   |
+| RLS   | `own_or_linked_read on students` → `using (true)` | **RED** — 2 assertions, non-zero exit                      |
 
-The second T700 mutation is the guard's actual purpose: a *future* view reintroducing the class.
+The second T700 mutation is the guard's actual purpose: a _future_ view reintroducing the class.
 
 ### The fix for the class, not the instances
 
@@ -10311,12 +10464,12 @@ before dispatch rather than widened by worker judgement — see `auto-mode-decis
 
 Not trusted from the worker's report. Applied, measured, reverted; `git diff --quiet` clean after.
 
-| # | What was mutated | Result |
-|---|---|---|
-| **C1** | deleted the `length > 0` write guard | **vitest exit 1**, 1 failed — the empty-array upsert was issued and caught at the transport |
-| **C6** | `useState(false)` → `useState(true)` | **vitest exit 1**, 3 failed |
-| **C8** | re-scoped the tally to roster members *inside* `buildEndMeetingConfirmDescription`, leaving `computeEndMeetingSummaryCounts` untouched | **`tsc` exit 0** (genuinely signature-preserving) and **vitest exit 1**, exactly 1 failed |
-| **C10** | paired replay — (a) omit the 4th arg, no default; (b) same omission, default restored | (a) **`tsc` exit 2**, `EndMeetingDialog.tsx(805,21): error TS2554: Expected 4 arguments, but got 3`; (b) **`tsc` exit 0 clean** — confirming the default would have made it vacuous |
+| #       | What was mutated                                                                                                                       | Result                                                                                                                                                                              |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **C1**  | deleted the `length > 0` write guard                                                                                                   | **vitest exit 1**, 1 failed — the empty-array upsert was issued and caught at the transport                                                                                         |
+| **C6**  | `useState(false)` → `useState(true)`                                                                                                   | **vitest exit 1**, 3 failed                                                                                                                                                         |
+| **C8**  | re-scoped the tally to roster members _inside_ `buildEndMeetingConfirmDescription`, leaving `computeEndMeetingSummaryCounts` untouched | **`tsc` exit 0** (genuinely signature-preserving) and **vitest exit 1**, exactly 1 failed                                                                                           |
+| **C10** | paired replay — (a) omit the 4th arg, no default; (b) same omission, default restored                                                  | (a) **`tsc` exit 2**, `EndMeetingDialog.tsx(805,21): error TS2554: Expected 4 arguments, but got 3`; (b) **`tsc` exit 0 clean** — confirming the default would have made it vacuous |
 
 The worker independently reported all 11 red, including confirming that the "decorative" unit-test
 shape for C8 **stays green** under the same mutation — it verified that from its own output rather
@@ -10335,8 +10488,8 @@ it being litigated at review. **+11 tests**: `endMeeting.test.ts` 16→18, `EndM
 
 ### The worker's report contained one false claim about its own work
 
-Its "Known risks" section states that *"T508 alone does not add a bulk control … a whole-team opt-in
-still costs one tap per student today."* **That is wrong, and the code contradicts it.** Ticking the
+Its "Known risks" section states that _"T508 alone does not add a bulk control … a whole-team opt-in
+still costs one tap per student today."_ **That is wrong, and the code contradicts it.** Ticking the
 one checkbox sets `markAbsentStudentIds = computeUnmarkedStudentIds(...)` — the entire unmarked set,
 in one action (`EndMeetingDialog.tsx:437-451`, `:918-923`). The bulk control the owner's MET-01
 ruling is conditional on **is present and working**; the worker built it correctly and then
@@ -10351,7 +10504,7 @@ describes (T142 was the first, in the opposite direction).
 
 Exactly the five Allowed Files changed; `LiveConsole.tsx` source was never opened; the grant was used
 for exactly its three authorised lines. §3g's three tests were each re-derived deliberately, and the
-second one is worth noting — its old assertion, that an unmarked student *is* auto-marked absent,
+second one is worth noting — its old assertion, that an unmarked student _is_ auto-marked absent,
 literally encoded the live data corruption as correct behaviour.
 
 ### Filed, not fixed (item 20)
@@ -10386,20 +10539,20 @@ filtering them. And `buildSeasonTotals(sessions)` no longer receives an `events`
 cannot see event `type` at all — the regression T703 guards against is not merely unguarded, it is
 **structurally inexpressible**.
 
-`HoursTab.tsx` module doc #6 already recorded this, naming the row: *"an earlier plan (T500/T703) …
+`HoursTab.tsx` module doc #6 already recorded this, naming the row: _"an earlier plan (T500/T703) …
 is superseded and removed along with the figures it guarded; there is nothing left for that guard to
-protect once the sum itself is gone."* The row outlived its own resolution — the same shape as T204,
+protect once the sum itself is gone."_ The row outlived its own resolution — the same shape as T204,
 which was also already fixed when its row was picked up.
 
 ### The concern, re-checked against today's code
 
 A superseded premise does not mean today's tests are sound, so both surviving claims were mutation-tested:
 
-| Mutation | Result |
-|---|---|
-| Truncate `buildSeasonTotals`'s loop (`sessions.slice(0, -1)`) | **RED** — 2 tests |
-| Count nulls into the total instead of bucketing them separately | **RED** — same 2 |
-| Remove the `countsVolunteerHours` guard (the fixture's *new* advertised proof) | **RED** — 2 tests, one named for exactly that behaviour |
+| Mutation                                                                       | Result                                                  |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------- |
+| Truncate `buildSeasonTotals`'s loop (`sessions.slice(0, -1)`)                  | **RED** — 2 tests                                       |
+| Count nulls into the total instead of bucketing them separately                | **RED** — same 2                                        |
+| Remove the `countsVolunteerHours` guard (the fixture's _new_ advertised proof) | **RED** — 2 tests, one named for exactly that behaviour |
 
 Nothing here advertises a proof it cannot deliver.
 
@@ -10460,12 +10613,12 @@ have rendered something.** Negative assertions need a positive control.
 
 ### All four mutations, run in an isolated worktree
 
-| # | Mutation | Result |
-|---|---|---|
-| **C1** | `href` → `routePaths.kioskSession(...)` (same `/…/<sessionId>` shape, wrong route) | **exit 1**, C1 only |
-| **C2** | guard → `(true \|\| status === 'scheduled')`, link on every status | **exit 1**, 4 failed |
-| **C3** | `isCoachOrAdminView` → `user !== null` | **exit 1**, 24 failed incl. C3 (**23 excl. C3 before the fix**) |
-| **C4** | drop the date, leaving a bare `Go live` | **exit 1**, C4 only |
+| #      | Mutation                                                                           | Result                                                          |
+| ------ | ---------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| **C1** | `href` → `routePaths.kioskSession(...)` (same `/…/<sessionId>` shape, wrong route) | **exit 1**, C1 only                                             |
+| **C2** | guard → `(true \|\| status === 'scheduled')`, link on every status                 | **exit 1**, 4 failed                                            |
+| **C3** | `isCoachOrAdminView` → `user !== null`                                             | **exit 1**, 24 failed incl. C3 (**23 excl. C3 before the fix**) |
+| **C4** | drop the date, leaving a bare `Go live`                                            | **exit 1**, C4 only                                             |
 
 Committed before mutating; `git diff --quiet` clean after; worktree removed.
 
@@ -10479,10 +10632,10 @@ that is usually absent" is not a fix. Reusing it would also mean W3's page impor
 re-deriving it locally is **T600**'s recorded debt shape exactly.
 
 **`Link`, not `Button`.** `astryx-api.md`'s Link Best Practices reserve Button for actions that do
-*not* navigate. `LiveConsole.tsx:886` is the in-repo precedent. It sits beside a `Button` and does
+_not_ navigate. `LiveConsole.tsx:886` is the in-repo precedent. It sits beside a `Button` and does
 not look identical — the disclosed cost of a real anchor that supports middle-click, ctrl-click and
 the correct screen-reader announcement. The date is in the **visible text** because Astryx forbids
-`label` on text links, so that text *is* the accessible name; without it a multi-session row renders
+`label` on text links, so that text _is_ the accessible name; without it a multi-session row renders
 several links all called "Go live" (C4).
 
 ### Two things deliberately not done
@@ -10512,9 +10665,9 @@ additive: all 84 pre-existing tests pass unchanged.
 
 ### Checked first, because the owner said prior reviews had got this wrong
 
-They were right to say so. T163 read *"`loaders/reports.ts` has 0 tests (729 lines)"*. **All six
+They were right to say so. T163 read _"`loaders/reports.ts` has 0 tests (729 lines)"_. **All six
 exports were already imported as VALUES and exercised against stubbed clients** by
-`pages/reports/{Participation,Hours,Events}Tab.test.tsx`. The file had no *colocated* test file, which
+`pages/reports/{Participation,Hours,Events}Tab.test.tsx`. The file had no _colocated_ test file, which
 is a different claim. (It is also 744 lines now, not 729.)
 
 Had I taken the row at face value, I would have written a from-scratch suite duplicating coverage that
@@ -10525,13 +10678,13 @@ copy is the existing fake client.
 
 Five mutations against the live loaders, run through the existing `pages/reports` suite:
 
-| Mutation | Tab suite |
-|---|---|
-| participation: return `[]` instead of built rows | **RED** — caught |
-| events: skip the sessions chain entirely | **RED** — caught |
+| Mutation                                             | Tab suite          |
+| ---------------------------------------------------- | ------------------ |
+| participation: return `[]` instead of built rows     | **RED** — caught   |
+| events: skip the sessions chain entirely             | **RED** — caught   |
 | participation: wrong `seasonId` to the metrics query | **GREEN** — missed |
-| hours: wrong `seasonId` to the season-goal query | **GREEN** — missed |
-| events: wrong `seasonId` to the events query | **GREEN** — missed |
+| hours: wrong `seasonId` to the season-goal query     | **GREEN** — missed |
+| events: wrong `seasonId` to the events query         | **GREEN** — missed |
 
 **Season scoping was unguarded in all three loaders.** Structural breakage is caught; sending a query
 to the wrong season is not — and that is the failure that would silently show a coach another season's
@@ -10542,7 +10695,7 @@ numbers.
 Their fake clients build the filter spy inline and throw the handle away:
 
 ```ts
-select: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ data, error }) }))
+select: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ data, error }) }));
 ```
 
 That `.eq` returns identical rows for every argument and is unreachable from the test body, so no
@@ -10554,18 +10707,18 @@ against in SQL: **a fixture-visibility test passes identically whether or not th
 
 `src/lib/supabase/loaders/reports.test.ts` — 9 tests that deliberately do **not** re-test mapping or
 row building, since the tab tests already cover those well (proven above). It retains the spy handles
-and pins every query's *filter argument*: season scoping across all three loaders, the shared
+and pins every query's _filter argument_: season scoping across all three loaders, the shared
 `is_active` students filter, the `events → sessions → (attendance, rsvps)` id chain, and the
 empty-`.in(...)` guards.
 
 ### Proof the gap closed, in both directions
 
-| Mutation | Tab suite | New file |
-|---|---|---|
-| participation: wrong `seasonId` | GREEN | **RED** |
-| hours: wrong `seasonId` | GREEN | **RED** |
-| events: wrong `seasonId` | GREEN | **RED** |
-| hours: drop the `is_active` filter | RED | **RED** |
+| Mutation                           | Tab suite | New file |
+| ---------------------------------- | --------- | -------- |
+| participation: wrong `seasonId`    | GREEN     | **RED**  |
+| hours: wrong `seasonId`            | GREEN     | **RED**  |
+| events: wrong `seasonId`           | GREEN     | **RED**  |
+| hours: drop the `is_active` filter | RED       | **RED**  |
 
 The last row matters: it shows the new file is **additive**, not a replacement — where the tab tests
 already guard something, both catch it.
@@ -10616,8 +10769,8 @@ a number about a student's own contribution.
 
 ### Two of the row's instructions were wrong
 
-**The denominator would double-subtract.** The row says *"present+late ÷ (present+late+absent −
-excused)"*. But `attendance.status` is `check (status in ('present','late','excused','absent'))` —
+**The denominator would double-subtract.** The row says _"present+late ÷ (present+late+absent −
+excused)"_. But `attendance.status` is `check (status in ('present','late','excused','absent'))` —
 four **mutually exclusive** values, so `present+late+absent` already excludes excused. Implemented as
 `count(*) − count(*) filter (where status='excused')`, which reads as the rule rather than an
 enumeration that would drift if a fifth status were added.
@@ -10646,7 +10799,7 @@ Two near-misses recorded so nobody "finishes the rename": `v_season_attendance_r
 
 So the column keeps its name with a catalog comment, and the correction lands where a user sees it:
 **RPT-02's header "Expected" → "Marked"** — which is precisely what D014's mitigation depends on,
-since that mitigation is *"RPT-02 shows the counts"*.
+since that mitigation is _"RPT-02 shows the counts"_.
 
 ### NULL, not a floor
 
@@ -10658,13 +10811,13 @@ previously scored a fabricated 0%.
 
 `t509_explicit_marks_assertions.sql` + runner, wired into CI's `sql` job (now 12 steps).
 
-| Assertion | With T509 | Migration withheld |
-|---|---|---|
-| A1 unmarked student has no row | PASS | **FAIL** — *"expected 0 rows, got 1 (the pre-T509 0% lie is back)"* |
-| A2 marked student scores 50.0 | PASS | PASS — correctly unchanged |
-| A3 all-excused yields NULL | PASS | **FAIL** — `pct=0.0` |
-| A4 team rollup matches | PASS | **FAIL** — `25.0` |
-| A5 fixture is non-vacuous | PASS | **FAIL** |
+| Assertion                      | With T509 | Migration withheld                                                  |
+| ------------------------------ | --------- | ------------------------------------------------------------------- |
+| A1 unmarked student has no row | PASS      | **FAIL** — _"expected 0 rows, got 1 (the pre-T509 0% lie is back)"_ |
+| A2 marked student scores 50.0  | PASS      | PASS — correctly unchanged                                          |
+| A3 all-excused yields NULL     | PASS      | **FAIL** — `pct=0.0`                                                |
+| A4 team rollup matches         | PASS      | **FAIL** — `25.0`                                                   |
+| A5 fixture is non-vacuous      | PASS      | **FAIL**                                                            |
 
 A2 staying green is the point: a fully-marked student scores the same either way, so the change is
 surgical rather than "drop rows until the numbers look nice". All 8 pre-existing SQL suites still pass.
@@ -10693,13 +10846,13 @@ PG 16.13 · 1 withhold mutation replayed.
 
 T202 named one site (`HoursTab.tsx`) and deferred everything else. Both deferrals were wrong.
 
-**T191 did not remove the clamp from `ParentHome.tsx`.** Its owner ruling was *"no bar at all"* for a
+**T191 did not remove the clamp from `ParentHome.tsx`.** Its owner ruling was _"no bar at all"_ for a
 **deactivated** child — it swaps the bar for a marker on `!isActive`. The clamp survived at
 `ParentHome.tsx:1281` and still fired for an **active** child with a genuine zero goal. That is the
 page T181 existed to stop fabricating on, so the fabrication outlived two tasks aimed near it.
 
-**The CoachHome carve-out pointed at nothing.** The row deferred four clamps to *"T173/T198's
-territory"* — but `T173`'s row does not contain the words ProgressBar, aria, valuemax or clamp, and
+**The CoachHome carve-out pointed at nothing.** The row deferred four clamps to _"T173/T198's
+territory"_ — but `T173`'s row does not contain the words ProgressBar, aria, valuemax or clamp, and
 T198 closed the day before without touching them. Orphaned.
 
 `StudentHome.tsx:1465`'s carve-out **is** real — T184's row does name progressbar — so it is
@@ -10722,10 +10875,10 @@ Probe deleted after.
 
 ### Six clamps, two kinds
 
-| Kind | Sites | Why it fabricated |
-|---|---|---|
-| A real **goal** | `HoursTab:939`, `ParentHome:1281`, `CoachHome:2040`, `CoachHome:2441` | announced a goal of 1 h existing in no data source |
-| A chart **scale** | `CoachHome:1982`, `CoachHome:2012` | with every team at 0 h, announced a scale topping out at 1 h |
+| Kind              | Sites                                                                 | Why it fabricated                                            |
+| ----------------- | --------------------------------------------------------------------- | ------------------------------------------------------------ |
+| A real **goal**   | `HoursTab:939`, `ParentHome:1281`, `CoachHome:2040`, `CoachHome:2441` | announced a goal of 1 h existing in no data source           |
+| A chart **scale** | `CoachHome:1982`, `CoachHome:2012`                                    | with every team at 0 h, announced a scale topping out at 1 h |
 
 The distinction is recorded in-code because they are different questions — one is a data value, the
 other a display device — even though both invent the same number.
@@ -10756,8 +10909,8 @@ mutation replayed.
 
 ### This row asked for scoping, and scoping is the deliverable
 
-T201 says it plainly: *"Scope genuinely unknown… establish where, if anywhere… a deactivated
-student's historical hours should be shown before designing a fix — not decided by this row."*
+T201 says it plainly: _"Scope genuinely unknown… establish where, if anywhere… a deactivated
+student's historical hours should be shown before designing a fix — not decided by this row."_
 
 So this entry contains a measurement and a question, and **no code changed**.
 
@@ -10770,12 +10923,12 @@ even possible — and `v_student_goal_projection` still ends `where s.is_active`
 
 ### Three of four consumers are safe, and the row did not know which
 
-| Consumer | Reads | Safe because |
-|---|---|---|
+| Consumer             | Reads             | Safe because                                               |
+| -------------------- | ----------------- | ---------------------------------------------------------- |
 | `leaderboard.ts:138` | `v_student_hours` | joins `v_leaderboard_students`, which is `where is_active` |
-| `reports.ts:414` | `v_student_hours` | three `.eq('is_active', true)` roster filters |
-| `coachHome.ts:350` | `v_student_hours` | filters in JS (`sumConfirmedHours` on `student.isActive`) |
-| **`v_team_hours`** | `v_student_hours` | **nothing — no `is_active` filter at any level** |
+| `reports.ts:414`     | `v_student_hours` | three `.eq('is_active', true)` roster filters              |
+| `coachHome.ts:350`   | `v_student_hours` | filters in JS (`sumConfirmedHours` on `student.isActive`)  |
+| **`v_team_hours`**   | `v_student_hours` | **nothing — no `is_active` filter at any level**           |
 
 `v_team_hours` sums `v_student_hours` joined only to `student_teams`, and feeds `dashboard.ts:308`
 → CoachHome's **"Hours by team"**.
@@ -10822,9 +10975,9 @@ No code changed — docs only. `tsc` 0 · `format:check` 0 · `vitest` **81 file
 
 ### The ruling, and what it implied
 
-Owner, 2026-08-05: *"that's actual work that was done regardless if that person is no longer with the
+Owner, 2026-08-05: _"that's actual work that was done regardless if that person is no longer with the
 team or not. That's like asking if your work done today counts for my token usage if i deactivate your
-session."* Option **(c)** — keep the total AND surface departed members per-student. The goal-column
+session."_ Option **(c)** — keep the total AND surface departed members per-student. The goal-column
 sub-decision was delegated.
 
 That inverts which side is broken. If the hours count, **`v_team_hours`'s 8.0 h was correct all along**
@@ -10840,11 +10993,11 @@ The roster query's `.eq('is_active', true)` was the only thing discarding them.
 **No migration.** `v_team_hours`, `v_student_hours` and `v_student_goal_projection` are all untouched,
 so T184's null-for-inactive signal — this row's own stated hazard — is unaffected.
 
-| Change | File |
-|---|---|
-| drop `.eq('is_active', true)`, select `is_active` | `loaders/reports.ts` |
-| keep an inactive student **only when they have hours** | `buildStudentRows` |
-| new `'past-member'` row kind: badge, `—` goal/%, excluded from goal subtotal | `HoursTab.tsx` |
+| Change                                                                       | File                 |
+| ---------------------------------------------------------------------------- | -------------------- |
+| drop `.eq('is_active', true)`, select `is_active`                            | `loaders/reports.ts` |
+| keep an inactive student **only when they have hours**                       | `buildStudentRows`   |
+| new `'past-member'` row kind: badge, `—` goal/%, excluded from goal subtotal | `HoursTab.tsx`       |
 
 ### The goal column, decided
 
@@ -10859,12 +11012,12 @@ Confirmed and planned hours count in full. That is what makes the subtotal recon
 
 ### Mutations — and one that stayed green for the right reason
 
-| Mutation | Result |
-|---|---|
-| Drop past members again (the original defect) | **RED** |
-| Give a past member a real goal | **RED** |
-| Remove the goal-subtotal filter **alone** | **GREEN** |
-| Both of the last two together | **RED** |
+| Mutation                                      | Result    |
+| --------------------------------------------- | --------- |
+| Drop past members again (the original defect) | **RED**   |
+| Give a past member a real goal                | **RED**   |
+| Remove the goal-subtotal filter **alone**     | **GREEN** |
+| Both of the last two together                 | **RED**   |
 
 The green one is not a coverage gap. `goalHours: 0` in `buildStudentRows` already enforces "no goal
 from a past member", so the subtotal filter is a **second, independent mechanism** — removing either
@@ -10912,12 +11065,12 @@ view.
 
 ### Three more the row does not name — and two hit normal usage
 
-| # | Divergence | Who it affects |
-|---|---|---|
-| 1 | RSVP vs attendance *(the filed finding)* | RSVP'd `going`, didn't attend |
-| 2 | `hours_override` invisible to `computeStudentHours` | anyone a coach adjusted |
-| 3 | check-in/out clamping invisible to it | anyone who arrived late or left early |
-| 4 | counts NON-OUTREACH events | anyone who RSVP'd `going` to a meeting |
+| #   | Divergence                                          | Who it affects                         |
+| --- | --------------------------------------------------- | -------------------------------------- |
+| 1   | RSVP vs attendance _(the filed finding)_            | RSVP'd `going`, didn't attend          |
+| 2   | `hours_override` invisible to `computeStudentHours` | anyone a coach adjusted                |
+| 3   | check-in/out clamping invisible to it               | anyone who arrived late or left early  |
+| 4   | counts NON-OUTREACH events                          | anyone who RSVP'd `going` to a meeting |
 
 **#2 and #3 are the ones that matter most**, because they need no misuse at all: a student who attends
 properly, is marked present, and checked in twenty minutes late sees the full session length on
@@ -10936,7 +11089,7 @@ It counted the meeting. The function takes only `(studentId, sessions, rsvps)` �
 event `type` or `countsVolunteerHours`, so it **cannot** filter — and `loaders/outreach.ts:739`
 queries `events` for the season with no type filter, with nothing filtering in between.
 
-**This contradicts T322's ruling** — *"volunteer hours = `type = 'outreach'` ONLY"* — which landed
+**This contradicts T322's ruling** — _"volunteer hours = `type = 'outreach'` ONLY"_ — which landed
 after T188 was filed, so the row could not have known.
 
 **Stated limit:** the probe proves the function counts a meeting and the loader applies no type
@@ -11006,16 +11159,16 @@ orchestrator hand-measured six. **There are seven** — plus a latent eighth. Ev
 the same anchored `^export type AttendanceMethod` grep, which structurally cannot see
 `loaders/outreach.ts:1258`, an inline `method` property inside `OutreachAttendanceWriteRow`.
 
-Round 1 returned **BLOCKER** because it *compiled* the prescription rather than reading it:
+Round 1 returned **BLOCKER** because it _compiled_ the prescription rather than reading it:
 
-| state | typecheck |
-|---|---|
-| five widened | **exit 2**, 2 errors |
+| state                                               | typecheck            |
+| --------------------------------------------------- | -------------------- |
+| five widened                                        | **exit 2**, 2 errors |
 | six widened — the packet's own prescribed end state | **exit 2**, 4 errors |
-| seven widened | **0** |
+| seven widened                                       | **0**                |
 
 A worker obeying v1 could not have reached green: three of those four errors were in files outside its
-Allowed Files and the fourth was explicitly Forbidden. This is an *assignability* break, not an
+Allowed Files and the fourth was explicitly Forbidden. This is an _assignability_ break, not an
 exhaustiveness break, so no amount of grepping for `Record<AttendanceMethod>` or a `switch` could ever
 have found it. Round 2 returned **DISPATCH** and, asked to assume the greps were still blind, found the
 eighth copy at `supabase/functions/checkin/attendance_upsert.ts:43`.
@@ -11050,9 +11203,9 @@ three of those were faults in the orchestrator's or the arbiter's own decisions,
 
 **Two data-loss paths, both proven in live Postgres clusters rather than argued.** The first: the
 orchestrator's design deleted RSVPs then the session in one batch, with cancel as the fallback — but
-nothing FK-references `rsvps`, so the `23503` could only ever come from the *session* delete, by which
+nothing FK-references `rsvps`, so the `23503` could only ever come from the _session_ delete, by which
 point the whole batch's RSVPs were gone. Innocent sessions lost their RSVPs as collateral. The second
-was created by D015's *own* mandated fix: chaining a server-side `starts_at > now` guard onto the
+was created by D015's _own_ mandated fix: chaining a server-side `starts_at > now` guard onto the
 delete meant a session whose start time crossed mid-save matched zero rows, **raised no error**,
 resolved, and survived as an ordinary `scheduled` row with its RSVPs already destroyed — the save
 reporting success. Neither was visible to any amount of reading; both needed a cluster.
@@ -11067,8 +11220,8 @@ worktree at `eaa9070` (366 warnings / 2055 tests) instead of accepting the worke
 verified the 366→370 rise by diffing warning sets keyed on `(file, rule)` — all four are
 `react-refresh/only-export-components` in the single file that already carried nine, mapping to the
 four named new exports. It replayed all three named mutations itself and confirmed the trap the packet
-warned of: dropping `.select('id')` leaves *"X is canceled"* green, because X really is still
-cancelled; Branch F reddens only because `session-y` is *also* wrongly cancelled. A checker expecting
+warned of: dropping `.select('id')` leaves _"X is canceled"_ green, because X really is still
+cancelled; Branch F reddens only because `session-y` is _also_ wrongly cancelled. A checker expecting
 the obvious assertion to fail would have called a working test vacuous.
 
 Grant A's six properties hold, with the en dash verified by codepoint and `onCreateMeetings` confirmed
@@ -11095,7 +11248,7 @@ verification this row received. NIT only.
 The defect was live on `main` for about an hour after PR #108: the edit dialog rendered a Notes box
 with no gate while `handleSubmit` hardcoded `notes` to `''`. A coach typed a note, saved successfully,
 and it vanished. Not saving it was deliberate and documented; leaving the input visible was not — the
-class this repo already ruled on as *"worse than an absent UI"*.
+class this repo already ruled on as _"worse than an absent UI"_.
 
 **The whole risk of this row was polarity**, and the orchestrator's own briefing got it wrong:
 "matching Description's existing pattern" is right about the mechanism and wrong about the condition,
@@ -11104,7 +11257,7 @@ caught the error in that phrasing while reviewing an unrelated packet, and the c
 foreman before it finished writing.
 
 **The checker ran two mutations beyond the one specified, and both were worth it.** Hiding Notes in
-*both* modes fails on the create-mode half — so that assertion is load-bearing and the test is not the
+_both_ modes fails on the create-mode half — so that assertion is load-bearing and the test is not the
 trivial pass an absence-assertion invites. Inverting the gate outright fails **two** tests including
 the MTG-02 tripwire — so the tripwire really does catch inversion, which is the property the whole row
 depended on and which nobody had actually tested.
@@ -11128,7 +11281,7 @@ found, filed, built and merged mid-flight. NIT only.
 **Preventive, which inverted the usual risk.** Every meeting in a series shares one wall time today, so
 the defect cannot fire — T605 makes per-meeting times reachable, and the shipped edit path would then
 erase them: one time derived from the earliest meeting, applied to all, behind a save button checking
-only the title. Editing a series *title* would have wiped every custom time. So the danger was never a
+only the title. Editing a series _title_ would have wiped every custom time. So the danger was never a
 live regression; it was **a fix that silently does nothing, undetectably**, and the whole review chain
 was spent on the tests rather than the code.
 
@@ -11137,7 +11290,7 @@ proved the first by deleting the divergence condition outright — the "differen
 rendered on every edit of every series, false for most users, and **every test still passed**. The fix
 binds the present-case and absent-case assertions to one shared `DIVERGENCE_DISCLOSURE_TEXT` constant,
 so a separately-worded absence check — the way that hole reopens — is not expressible. The second
-criterion previously verified only that a new parameter was *inert*; it is now asserted against the
+criterion previously verified only that a new parameter was _inert_; it is now asserted against the
 real `AlertDialog` DOM element.
 
 **The checker proved it rather than reading it**, and deliberately did not use `replay.py`, whose
@@ -11186,19 +11339,19 @@ match `-t` filters and the user-facing error string is character-identical.
 
 **Three findings from attempt 1 outlive this row.**
 
-*The worker corrected the packet, and was right.* §7 predicted that dropping `.select('id')` breaks
+_The worker corrected the packet, and was right._ §7 predicted that dropping `.select('id')` breaks
 assertion (c). Measured, it breaks **(a) and (b)** and (c) stays green — `runMutation` returns `.gt()`'s
 plain object, `data` coerces to `undefined`, and the wrapper throws for every call. The worker measured
 it, a foreman traced `runMutation` by hand and agreed, and the checker made it three. **All three
 independently contradicted the plan.** Recorded as a packet defect before that packet is reused.
 
-*The worker found a false pass in its own test.* A retarget date coincided with a sibling session, so
+_The worker found a false pass in its own test._ A retarget date coincided with a sibling session, so
 the duplicate-date guard disabled Save where the future-forward guard was supposed to — the test proved
 nothing about the guard it named. The checker **reproduced both states**: the pre-fix date passes with
 the guard deleted, the shipped date fails. That is the strongest single result of the row, and it only
 surfaced because the worker deliberately broke its own code to see whether the test would notice.
 
-*Astryx renders dialog children regardless of `isOpen`*, so several dialogs' fields coexist in the DOM —
+_Astryx renders dialog children regardless of `isOpen`_, so several dialogs' fields coexist in the DOM —
 measured as **2 real matches** for "Save changes". Hence scoped lookups and Session-prefixed labels, a
 disclosed design choice rather than verbosity.
 
@@ -11217,8 +11370,8 @@ in the new dialog file, verified by rule and file.
 
 ### The premise held, and the reported symptom was slightly off
 
-Reported as "the student home page is blank," then corrected by the owner: *"it doesnt crash, it a
-missing loader."* That correction is the accurate one and it changed where I looked. Nothing throws.
+Reported as "the student home page is blank," then corrected by the owner: _"it doesnt crash, it a
+missing loader."_ That correction is the accurate one and it changed where I looked. Nothing throws.
 `makeLoadStudentHomeData` resolved a **real** `displayName` (T183) and then returned
 `events: []`, `sessions: []`, `rsvps: []`, `participation: null` as hardcoded literals.
 
@@ -11227,13 +11380,13 @@ missing loader."* That correction is the accurate one and it changed where I loo
 Not "some sections are empty" — the three arrays are the sole input to every dynamic element on the
 page, so the failure fans out:
 
-| Surface | Driven by | State before T199 |
-|---|---|---|
-| "Next up" list | `buildNextUp` (`:1404`) | always the "Nothing scheduled" `EmptyState` |
-| "Sign-up opportunities" | `getUnansweredOutreachOpportunities` (`:1405`) | always "You're all caught up" |
-| Live check-in hero | `selectLiveMeetingSession` (`:1403`) | **unreachable** — a student standing in the meeting could not check in from Home |
-| Hero selection | `selectHeroState(false, 0)` (`:1413`) | pinned to `'quiet-greeting'` |
-| Participation line | `data.participation` (`:1471`) | always `—` |
+| Surface                 | Driven by                                      | State before T199                                                                |
+| ----------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------- |
+| "Next up" list          | `buildNextUp` (`:1404`)                        | always the "Nothing scheduled" `EmptyState`                                      |
+| "Sign-up opportunities" | `getUnansweredOutreachOpportunities` (`:1405`) | always "You're all caught up"                                                    |
+| Live check-in hero      | `selectLiveMeetingSession` (`:1403`)           | **unreachable** — a student standing in the meeting could not check in from Home |
+| Hero selection          | `selectHeroState(false, 0)` (`:1413`)          | pinned to `'quiet-greeting'`                                                     |
+| Participation line      | `data.participation` (`:1471`)                 | always `—`                                                                       |
 
 The third one is the one worth naming out loud. It is not a cosmetic empty state; the page's primary
 call to action could never appear for anyone.
@@ -11242,7 +11395,7 @@ call to action could never appear for anyone.
 
 `LoadStudentHomeDataFn` is `(studentId, seasonId)` — no team parameter — and it is unchanged. The
 `events` read is **season**-scoped, because `isEventInTeamScope` (`StudentHome.tsx:686`, its own
-comment: *"The ONLY team-scope predicate in this file"*) already runs inside all three consumers
+comment: _"The ONLY team-scope predicate in this file"_) already runs inside all three consumers
 against the `teamIds` the page resolves separately. Filtering server-side as well would mean a second
 implementation of "in scope", in PostgREST array syntax, free to drift from the page's. One predicate
 in one place — and no change to the shared function type, so no stub churn in
@@ -11269,7 +11422,7 @@ create policy own_or_linked_read on events
 
 `event_sessions` inherits the same test through `event_id` (`:180-188`). Both read the **legacy
 `students.team_id`**. T187 moved this page onto **ACTIVE `student_teams`** memberships. For a
-dual-team student the two disagree: an event scoped to their *second* team passes
+dual-team student the two disagree: an event scoped to their _second_ team passes
 `isEventInTeamScope` but never arrives, because RLS filtered it first.
 
 Pre-existing — T187 opened the gap and the policies predate it. **T199 is what makes it observable:**
@@ -11312,16 +11465,16 @@ Every mutation printed the file and line it landed on before the suite ran. That
 a `replace(..., 1)` in the T703 session hit the wrong one of two identical strings and produced a
 green run that looked exactly like a confirmed defect.
 
-| # | Mutation | Line | Result |
-|---|---|---|---|
-| M1 | drop `.eq('season_id')` from the events read | `students.ts:863` | 2 red |
-| M2 | drop `.eq('student_id')` from the rsvps read | `:897` | 1 red |
-| M3 | restore the pre-T509 `greatest(x,1)` floor | `:839` | 2 red |
-| M4 | `rows[0]` instead of summing (the pre-T122 `.limit(1)` bug) | `:835` | 2 red |
-| M5 | coerce `team_ids` `null` → `[]` | `:770` | 2 red |
-| M6 | drop the empty-`.in()` guard | `:979` | 1 red |
-| M7 | revert all four fields to the pre-T199 literals | `:993` | 4 red |
-| M8 | drop `.eq('season_id')` from the participation read | `:919` | 1 red |
+| #   | Mutation                                                    | Line              | Result |
+| --- | ----------------------------------------------------------- | ----------------- | ------ |
+| M1  | drop `.eq('season_id')` from the events read                | `students.ts:863` | 2 red  |
+| M2  | drop `.eq('student_id')` from the rsvps read                | `:897`            | 1 red  |
+| M3  | restore the pre-T509 `greatest(x,1)` floor                  | `:839`            | 2 red  |
+| M4  | `rows[0]` instead of summing (the pre-T122 `.limit(1)` bug) | `:835`            | 2 red  |
+| M5  | coerce `team_ids` `null` → `[]`                             | `:770`            | 2 red  |
+| M6  | drop the empty-`.in()` guard                                | `:979`            | 1 red  |
+| M7  | revert all four fields to the pre-T199 literals             | `:993`            | 4 red  |
+| M8  | drop `.eq('season_id')` from the participation read         | `:919`            | 1 red  |
 
 M5 is worth a note: `null` on `events.team_ids` is the real "all teams" sentinel, so coercing it to
 `[]` inverts `isEventInTeamScope` for precisely the events every student is meant to see.
@@ -11332,7 +11485,7 @@ Both `students.test.ts`'s harness and `StudentHome.test.tsx`'s inline stub threw
 for anything but `students`. Once the loader gained three more reads, that throw surfaced as a
 rejected `loadData` and the page rendered its "Couldn't load Home" banner — so the row-not-found test
 would have kept passing while asserting the wrong cause, and the enumeration test failed on its
-*greeting* assertion with nothing pointing at the real reason. Same masking shape T198 hit.
+_greeting_ assertion with nothing pointing at the real reason. Same masking shape T198 hit.
 
 The pre-existing criterion-11 enumeration test is a good example of the limit this row had to work
 around: **every one of its assertions is satisfied by an empty page**, so it passed identically before
@@ -11382,11 +11535,11 @@ gap in the migration, not in this task.
 
 Baseline 13 passed / exit 0 in every case.
 
-| Mutation | Result |
-|---|---|
-| drop the `feedEventIds.length > 0` guard before `.in()` | **REDDENED** — 2 failed; the loader queried `event_sessions` and `rsvps` on an empty season |
-| replace the `Unknown student` fallback with the raw `student_id` | **REDDENED** — 1 failed |
-| transpose `expected_ct`/`present_ct` in `mapAttendanceRate` | **REDDENED** — 1 failed |
+| Mutation                                                         | Result                                                                                      |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| drop the `feedEventIds.length > 0` guard before `.in()`          | **REDDENED** — 2 failed; the loader queried `event_sessions` and `rsvps` on an empty season |
+| replace the `Unknown student` fallback with the raw `student_id` | **REDDENED** — 1 failed                                                                     |
+| transpose `expected_ct`/`present_ct` in `mapAttendanceRate`      | **REDDENED** — 1 failed                                                                     |
 
 The first is the one worth having: `dashboard.ts`'s module doc #5 documents the empty-`.in()` guard
 as an invariant, and it had no test. It is not a cosmetic guard — `.in(col, [])` returns every row
@@ -11419,16 +11572,16 @@ The row's 2026-08-05 CLOSURE note is **correct**: `HoursSeasonTotals` carries no
 argument, so the originally-filed regression is structurally inexpressible. All three mutations
 that closure recorded replay exactly as claimed. Baseline `HoursTab.test.tsx` exit 0 / 34 passed.
 
-| Mutation | Result |
-|---|---|
+| Mutation                                                 | Result                                            |
+| -------------------------------------------------------- | ------------------------------------------------- |
 | truncate `buildSeasonTotals`'s loop to the first session | **REDDENED** — 2 failed (`expected +0 to be 125`) |
-| mis-bucket null headcounts into the total | **REDDENED** — 2 failed (`expected +0 to be 3`) |
-| drop the `countsVolunteerHours` guard from planned hours | **REDDENED** — 2 failed (`expected 2 to be +0`) |
+| mis-bucket null headcounts into the total                | **REDDENED** — 2 failed (`expected +0 to be 3`)   |
+| drop the `countsVolunteerHours` guard from planned hours | **REDDENED** — 2 failed (`expected 2 to be +0`)   |
 
 ### What the closure missed, and what this row now fixes
 
 Module doc #6 (lines 170-175) still said `FIXTURE_EVENTS`' `type: 'meeting'` event existed
-*"specifically to prove this file does not silently drop non-outreach events from this sum"* —
+_"specifically to prove this file does not silently drop non-outreach events from this sum"_ —
 **T703's own defect shape**, left behind when T702 deleted the code that sentence described, and
 contradicting the same doc's lines 145-149.
 
@@ -11449,7 +11602,7 @@ cancellation; `EndMeetingDialog` writes `ends_at`/`status`), and the one path th
 
 ### The original prescription was deliberately NOT followed
 
-T703 said to *"give the meeting fixture non-zero adult figures and assert the resulting total"*. Its
+T703 said to _"give the meeting fixture non-zero adult figures and assert the resulting total"_. Its
 2026-08-09 analogue would be a non-zero `peopleReached` on the meeting session — which encodes a row
 the app cannot produce, trading one dishonest fixture for another. The row's own text anticipated
 this: it sequenced itself after T702 precisely so the corrected assertion would encode the new rule.
@@ -11460,13 +11613,13 @@ The doc now records the real contract instead, and forbids that "strengthening" 
 The denominator contract is the only one the fixture can hold, so it now has its own named test
 rather than riding unattributed on an existing DOM assertion. Re-run post-fix:
 
-| Mutation | Before fix | After fix |
-|---|---|---|
-| drop non-outreach events from the season totals | REDDENED — 1 failed | **REDDENED — 2 failed** |
+| Mutation                                                   | Before fix              | After fix               |
+| ---------------------------------------------------------- | ----------------------- | ----------------------- |
+| drop non-outreach events from the season totals            | REDDENED — 1 failed     | **REDDENED — 2 failed** |
 | apply a `countsVolunteerHours` filter to the season totals | not previously measured | **REDDENED — 2 failed** |
 
 Both halves of the corrected doc claim ("no `event.type` **or** `countsVolunteerHours` filter") are
-now guarded. The second mutation is the one worth having: `computeStudentPlannedHours` *does* filter
+now guarded. The second mutation is the one worth having: `computeStudentPlannedHours` _does_ filter
 on `countsVolunteerHours` (module doc #2), so copying that filter up into the season totals is the
 plausible regression, and nothing named it before.
 
@@ -11499,7 +11652,7 @@ FAST's ~20-line production ceiling (~110 lines of `replay.py`), so FAST was not 
 corrected `w3` → `w10`: the issue's own text records that `.claude/skills/**` is not W3's surface.
 **Deviation, stated rather than buried:** STANDARD dispatches a worker and has the orchestrator replay
 the mutation. This session was instructed not to spawn subagents, so the orchestrator implemented it
-as well. STANDARD's *verification* half is unreduced — three mutations, below. All mutation work ran
+as well. STANDARD's _verification_ half is unreduced — three mutations, below. All mutation work ran
 in a dedicated detached worktree (item 23), against a commit that already existed (item 26's
 commit-before-mutating rule).
 
@@ -11527,7 +11680,7 @@ the replay that carries the evidence.
 The whole summary line is now parsed — segments split on `|` (vitest) or `,` (Jest, whose `Tests:`
 shape the docstring had always claimed and the old regex could never match), colour codes stripped,
 last summary-shaped line preferred — and cross-checked against the runner's own declared total. Any
-shape not *fully* understood raises `SummaryParseError`, and the replay refuses by name with the last
+shape not _fully_ understood raises `SummaryParseError`, and the replay refuses by name with the last
 20 lines of the run rather than emitting a count it guessed. Same rule T512 carries for ledger counts:
 a mis-read number becomes a confident wrong verdict, which is worse than no verdict.
 
@@ -11545,11 +11698,11 @@ Baseline `test_replay.py` exit 0 / 19 passed. (unittest prints no vitest-shaped 
 command was wrapped in a shim that re-prints `Ran N tests` as a `Tests  …` line — the parser's own
 scope limit, and out of scope to widen here.)
 
-| Mutation | Result |
-|---|---|
+| Mutation                                                                                                  | Result                  |
+| --------------------------------------------------------------------------------------------------------- | ----------------------- |
 | `failed = seen.get("failed", 0)` → `failed = 0` (re-blind the parser to failures — the exact T612 defect) | **REDDENED** — 7 failed |
-| unreadable output returns `(0, 0, 0)` instead of raising | **REDDENED** — 2 failed |
-| drop the declared-total cross-check (`if False:`) | **REDDENED** — 1 failed |
+| unreadable output returns `(0, 0, 0)` instead of raising                                                  | **REDDENED** — 2 failed |
+| drop the declared-total cross-check (`if False:`)                                                         | **REDDENED** — 1 failed |
 
 ### A test nobody runs is the same defect wearing a different hat
 
@@ -11567,6 +11720,7 @@ exit 0**.
 ---
 
 ## GAM-309 — `replay.py` could not read either Python test runner
+
 Result: PASS
 Checker: orchestrator (STANDARD tier, item 26 — mutation replay in place of a separate checker round)
 Branch: `claude/next-ready-task-rcda0y` · commit `dfbbec6` · base `850fbdf`
@@ -11576,13 +11730,13 @@ Branch: `claude/next-ready-task-rcda0y` · commit `dfbbec6` · base `850fbdf`
 **STANDARD.** No write path, no schema, RLS, migration or metric SQL, no auth or role logic, and no
 user-visible surface — so not HEAVY. Over FAST's ~20-line ceiling: the change is ~165 lines because
 unittest's total and its outcome arrive on two separate lines and have to be reconciled. The issue's
-own estimate of *"~30 lines"* was low, which does not move the tier — FAST was already excluded by
+own estimate of _"~30 lines"_ was low, which does not move the tier — FAST was already excluded by
 the combining step the issue itself named as non-trivial.
 
 **No worker subagent was dispatched**, on a session-level instruction not to spawn agents. The
 orchestrator took the worker's part and kept every piece of STANDARD's evidence: the premise was
 reproduced before anything changed, and all eight named mutations were replayed. Item 26's own words
-— what a lighter tier removes is *coordination, not evidence*.
+— what a lighter tier removes is _coordination, not evidence_.
 
 ### The premise was reproduced before anything was changed
 
@@ -11606,15 +11760,15 @@ The issue flagged pytest's shape as **unverified** ("pytest is not installed in 
 check it before writing the fixture"). It was installed into a throwaway venv (pytest 9.1.1) purely
 to observe real output, and every shape in the tests is a captured string:
 
-| Shape | How it was obtained |
-|---|---|
-| `Ran 1 test` / `Ran 19 tests` | CPython 3.11.15, run against fixtures exercising each bucket |
-| `FAILED (failures=1, errors=1, skipped=1, expected failures=1, unexpected successes=1)` | one run carrying all five at once |
-| the five bucket names are the complete vocabulary | read out of CPython's `unittest/runner.py`, not recalled |
-| `3 failed, 2 passed, 1 skipped, 1 xfailed in 0.03s` | pytest 9.1.1, with and without `-q` |
-| `1 failed, 1 passed, 1 deselected, 1 warning in 0.02s` | a warning-emitting test plus `-k` deselection |
-| `no tests ran in 0.00s`, `1 error in 0.12s`, `2 deselected in 0.00s` | empty file, import error, filtered-out run |
-| `1 passed in 61.01s (0:01:01)` | a real `time.sleep(61)` test, to watch the clock suffix appear |
+| Shape                                                                                   | How it was obtained                                            |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `Ran 1 test` / `Ran 19 tests`                                                           | CPython 3.11.15, run against fixtures exercising each bucket   |
+| `FAILED (failures=1, errors=1, skipped=1, expected failures=1, unexpected successes=1)` | one run carrying all five at once                              |
+| the five bucket names are the complete vocabulary                                       | read out of CPython's `unittest/runner.py`, not recalled       |
+| `3 failed, 2 passed, 1 skipped, 1 xfailed in 0.03s`                                     | pytest 9.1.1, with and without `-q`                            |
+| `1 failed, 1 passed, 1 deselected, 1 warning in 0.02s`                                  | a warning-emitting test plus `-k` deselection                  |
+| `no tests ran in 0.00s`, `1 error in 0.12s`, `2 deselected in 0.00s`                    | empty file, import error, filtered-out run                     |
+| `1 passed in 61.01s (0:01:01)`                                                          | a real `time.sleep(61)` test, to watch the clock suffix appear |
 
 **`-q` mattered.** pytest drops the `=` padding in quiet mode, so an anchor keyed to those rules would
 have failed on exactly the invocation an agent is most likely to use.
@@ -11627,14 +11781,14 @@ comma-separated `<int> <word>` parts followed by a duration, and every word must
 vocabulary — so no segment can be silently dropped, which is the specific failure T612 punished. One
 unknown word refuses the line.
 
-unittest gets the arithmetic guard instead, because it *does* declare a total: `passed` is never
+unittest gets the arithmetic guard instead, because it _does_ declare a total: `passed` is never
 printed, so it is derived by subtracting the printed buckets from `Ran N tests`, and buckets
 exceeding the run's own total leave a negative remainder and are refused.
 
 Two sub-rulings worth naming, both following the runner's own verdict rather than an opinion:
 
 - **An unexpected success counts as failing.** CPython fails the run over it (`FAILED (unexpected
-  successes=1)`, measured). Counting it as a pass would print `STILL GREEN` for a run that exited 1 —
+successes=1)`, measured). Counting it as a pass would print `STILL GREEN` for a run that exited 1 —
   a false finding, the T612 shape inverted.
 - **`warning` and `deselected` are recognised and ignored, not refused.** Refusing them would make an
   ordinary run carrying one deprecation warning unreplayable — reintroducing the very friction this
@@ -11652,16 +11806,16 @@ Harness run from the main tree against a worktree copy, so the tool was never th
 mutation. Baseline in every run: `exit=0  failed=0 passed=47 skipped=0` — **parsed straight from
 `Ran 47 tests … OK` with no shim**, which is itself the proof of the fix.
 
-| Mutation | Result |
-|---|---|
+| Mutation                                               | Result                  |
+| ------------------------------------------------------ | ----------------------- |
 | M1 `tests?` → `tests` (blind to singular `Ran 1 test`) | **REDDENED** — 2 failed |
-| M2 drop the verdict/count cross-check | **REDDENED** — 2 failed |
-| M3 drop the negative-remainder cross-check | **REDDENED** — 1 failed |
-| M4 stop counting `unexpected successes` as failing | **REDDENED** — 2 failed |
-| M5 drop pytest's closed-vocabulary refusal | **REDDENED** — 1 failed |
-| M6 count `warning` as a failure | **REDDENED** — 1 failed |
-| M7 make the duration optional in the pytest anchor | **REDDENED** — 1 failed |
-| M8 stop counting `xfailed`/`xpassed` as executed | **REDDENED** — 3 failed |
+| M2 drop the verdict/count cross-check                  | **REDDENED** — 2 failed |
+| M3 drop the negative-remainder cross-check             | **REDDENED** — 1 failed |
+| M4 stop counting `unexpected successes` as failing     | **REDDENED** — 2 failed |
+| M5 drop pytest's closed-vocabulary refusal             | **REDDENED** — 1 failed |
+| M6 count `warning` as a failure                        | **REDDENED** — 1 failed |
+| M7 make the duration optional in the pytest anchor     | **REDDENED** — 1 failed |
+| M8 stop counting `xfailed`/`xpassed` as executed       | **REDDENED** — 3 failed |
 
 No exit-0 survivor. T612's own shim is now unnecessary and its removal is what M1–M8 ran on.
 
@@ -11684,6 +11838,7 @@ unsupported: they raise a named refusal rather than a wrong count, which is the 
 until a suite here actually uses one.
 
 ## GAM-304 (T809) — `StudentHome`/`ParentHome` RSVP controls discarded every answer (HEAVY tier)
+
 Result: PASS
 Worker: `worker-implementer` (pinned default) · Checker: `checker-reviewer` (opus), independent
 Branch: `claude/gam-304-rsvp-write` · commit `4460dec` · base `49096db`
@@ -11699,15 +11854,15 @@ data?") fires literally: both write policies on `rsvps` require `responded_by = 
 
 **Item 18's opus override was NOT applied**, and that is the interesting half of the judgement. None
 of its four triggers is present: no migration, no RLS policy or `security definer` helper, no
-metric-view SQL, and no change to auth, session or role-resolution logic. The change *consumes* an
+metric-view SQL, and no change to auth, session or role-resolution logic. The change _consumes_ an
 already-resolved `useAuth().user.id`; it does not compute identity. Item 25's second obligation —
-do not bump a worker because a topic *sounds* sensitive — is the reason this was left on the
+do not bump a worker because a topic _sounds_ sensitive — is the reason this was left on the
 pinned default, and the worker/checker loop then caught the one real defect (below).
 
 ### The premise-gate history, which is not the normal shape
 
 This row reached the **item 19a two-round cap** with a REVISE on both rounds, and the human owner
-ruled on 2026-08-10, verbatim: *"1. I Authorize dispatch on the ungated revision 3"*. So revision 3
+ruled on 2026-08-10, verbatim: _"1. I Authorize dispatch on the ungated revision 3"_. So revision 3
 of the packet went to a worker **without a DISPATCH verdict** — the one thing item 19 otherwise
 forbids — as a knowingly accepted risk.
 
@@ -11732,7 +11887,7 @@ was **empty** (no source drift since round 2), and both defective handlers were 
 present — `StudentHome.tsx:1442-1445` with its `// Module doc #7: local-only. No Supabase write
 happens here.` comment, and `ParentHome.tsx:1255-1257`. **The premise held.**
 
-Round 1 had already proved the *consequence* by execution on a scratch PostgreSQL cluster carrying
+Round 1 had already proved the _consequence_ by execution on a scratch PostgreSQL cluster carrying
 this repo's migrations: the fixture student's `v_planned_rsvp_hours` moves `declined → 0 rows / 0 h`
 and `going → 1 row / 2.0 h`, and all six RLS paths pass or deny as filed. Those measurements are
 quoted in `-round1.md` and were deliberately **not** re-run.
@@ -11743,17 +11898,17 @@ The worker replayed all seven in its own worktree; the checker independently rep
 a separate worktree at `4460dec`; the orchestrator independently replayed criterion 2. **No
 criterion stayed green under its mutation.**
 
-| # | Criterion | Checker's mutation result |
-|---|---|---|
-| 1 | With no injected seam, a sign-up reaches the **real** `submitRsvpChange` and its failure surfaces | RED, exit 1 |
-| 2 | `respondedBy` is the auth/profile id and provably not `studentId` | RED — `expected 'student-fixture-harness-default' to be 'user-student'`, exit 1 |
-| 3 | A rejected write rolls the control back to its exact pre-click state | RED, exit 1 |
-| 4 | A rejected write says so on screen | RED, exit 1 |
-| 5 | The parent card writes for the child with the parent as responder | RED — `expected 'student-rsvp-write-child' to be 'user-parent'`, exit 1 |
-| 6 | Neither module doc still claims the file never writes | both retired sentences absent, grep exit 1 |
-| 7 | Sibling row's control is `isDisabled` during an in-flight write | RED — `expected null to be 'true'`, exit 1 |
+| #   | Criterion                                                                                         | Checker's mutation result                                                       |
+| --- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| 1   | With no injected seam, a sign-up reaches the **real** `submitRsvpChange` and its failure surfaces | RED, exit 1                                                                     |
+| 2   | `respondedBy` is the auth/profile id and provably not `studentId`                                 | RED — `expected 'student-fixture-harness-default' to be 'user-student'`, exit 1 |
+| 3   | A rejected write rolls the control back to its exact pre-click state                              | RED, exit 1                                                                     |
+| 4   | A rejected write says so on screen                                                                | RED, exit 1                                                                     |
+| 5   | The parent card writes for the child with the parent as responder                                 | RED — `expected 'student-rsvp-write-child' to be 'user-parent'`, exit 1         |
+| 6   | Neither module doc still claims the file never writes                                             | both retired sentences absent, grep exit 1                                      |
+| 7   | Sibling row's control is `isDisabled` during an in-flight write                                   | RED — `expected null to be 'true'`, exit 1                                      |
 
-Criterion 7's **other** half — "the *clicked* button shows `isLoading`" — was graded
+Criterion 7's **other** half — "the _clicked_ button shows `isLoading`" — was graded
 **structurally unsatisfiable as written**; see Follow-up 1.
 
 ### A real packet defect, found by execution rather than by reading
@@ -11785,7 +11940,7 @@ a direct vindication of item 26's "a gate that only reads is worth much less tha
 2. **`MoreMenu.isDisabled` vs per-entry `DropdownMenuOption.isDisabled`** — **verified by direct DOM
    measurement**, not taken from the worker's report: `aria-disabled="true"`, `nativeDisabled=false`,
    `tabIndex=0`, no focus trap, focus order preserved. One residual, Follow-up 3. The checker also
-   recorded that its *first* probe read "menu opened" for the mouse path and that this was a **false
+   recorded that its _first_ probe read "menu opened" for the mouse path and that this was a **false
    positive** (the `role="menu"` node is always in the jsdom DOM; `aria-expanded` is the real
    signal), rather than banking it as a finding.
 3. **Criterion 7's sibling assertion is writable against the fixtures** — **verified unfounded**.
@@ -11865,7 +12020,7 @@ recorded instance, so closing it by repeating the failure would have been unusua
    `StudentHome.tsx:1321-1323` describes the spinner as working. Criterion 7's clicked half is
    structurally unsatisfiable while `getUnansweredOutreachOpportunities` defines "unanswered" as
    "no `rsvps` row", so the code is right and the criterion was defective.
-2. **`GAM-319`** (medium, `tier/fast`) — a failed RSVP *save* shows `loader.ts:93`'s read-flavoured
+2. **`GAM-319`** (medium, `tier/fast`) — a failed RSVP _save_ shows `loader.ts:93`'s read-flavoured
    `DEFAULT_LOADER_ERROR_MESSAGE` under the correct "Couldn't save your RSVP" title. Graded MINOR
    rather than MAJOR because no user is told a failed save succeeded. Must be fixed at the call
    site: `loader.ts` is the root cause and changing it would re-word every read failure in the app.
@@ -11890,7 +12045,7 @@ them could not be pushed by this run at all. See "Undeliverable half" below.
 **STANDARD.** FAST was unavailable: its bar requires a named mutation that turns
 a test red, and nothing in this repository executes a workflow YAML — the issue
 said so itself. That constraint was only half true, and the half that was false
-is what made STANDARD workable: the *decision* the YAML calls can live in a pure
+is what made STANDARD workable: the _decision_ the YAML calls can live in a pure
 function, and a pure function is testable. HEAVY's triggers are enumerated —
 write path or destructive operation, RLS/auth/role logic, migration or
 metric-view SQL, an export another session builds against — and none is present.
@@ -11912,16 +12067,16 @@ for the workflow (88-280, 174-198) had drifted; corrected in the run log.
 Round 1 returned **REVISE** with a BLOCKER: the rule table treated `In Progress`
 at run end as always meaning "the agent stopped holding a claim", but this same
 workflow's prompt (`:197-199`, shipped in PR #141) instructs an agent near the
-wall clock to stop and push — which ends green with the issue *legitimately*
+wall clock to stop and push — which ends green with the issue _legitimately_
 `In Progress`. Resolved as **still FAIL**, because the chain is unfinished
 either way and nothing else reports it, with the failure message widened to name
 the benign shapes.
 
 Round 2 returned **REVISE** with no BLOCKER, and — item 26's "a gate that only
-reads is worth much less than one that runs" — it *executed* the prescription
+reads is worth much less than one that runs" — it _executed_ the prescription
 against the live API, producing exactly the five outcomes the criteria specify.
 It found two more benign `In Progress` shapes (an item-19a or Loop-Limit
-escalation, and the workspace's live *On open in coding tool → started*
+escalation, and the workspace's live _On open in coding tool → started_
 automation, measured moving GAM-304 `In Review → In Progress` with
 `botActor: GitHub/integration`), and it caught the author claiming two item-20
 deferrals were "filed" when no such rows existed.
@@ -11940,7 +12095,7 @@ unsatisfiable as written.
 The worker reported the mutated run as "exit code 0 as a process but 3 tests
 failed". Replayed independently on a committed tree: **3 failed / 13 passed,
 exit code 1.** Vitest does exit non-zero; the guard is real. The stronger
-evidence is live rather than unit: the *mutated* script, run against GAM-314
+evidence is live rather than unit: the _mutated_ script, run against GAM-314
 while that issue was genuinely `In Progress`, returned **exit 0** — precisely
 the green run on an unfinished chain this row exists to stop. Restored, tree
 clean, 16/16 green.
@@ -12024,7 +12179,7 @@ into `Backlog` because item 28a makes promotion the owner's signal:
    trade-off is the owner's to make.
 2. **`GAM-326`** (medium, `tier/standard`) — this assertion's own incentive.
    `Todo` is its only green non-completion outcome, and `filter.ts` rule 4
-   dispatches on *any* transition into `Todo`: GAM-304 moved
+   dispatches on _any_ transition into `Todo`: GAM-304 moved
    `In Progress → Todo` at `13:11:21.452Z` and run `31391626696` was created at
    `13:11:25Z`, four seconds later. So an unfinished agent can reach green by
    re-dispatching itself.
@@ -12033,6 +12188,7 @@ into `Backlog` because item 28a makes promotion the owner's signal:
    packet originally mis-attributed to GAM-312.
 
 ## GAM-283 (T607) — a failed end-meeting told the coach nothing, and the message it did render was invisible (HEAVY tier)
+
 Result: PASS
 Worker: `worker-implementer` (pinned default) · Checker: `checker-reviewer`, independent · Gate: `checker-premise` (opus), two rounds
 Branch: `claude/gam-283-end-meeting-failure-copy` · commit `51192fb` · base `28f7394`
@@ -12055,7 +12211,7 @@ sensitive — kept it on the pinned default. The gate and checker caught what th
 Round 1 returned **REVISE** with two BLOCKERs against the orchestrator's own packet.
 
 **BLOCKER-1 — the prescribed copy was false in a reachable state.** The packet required telling the
-coach *"the meeting is still open and a retry is safe"*, sourced from `endMeeting.ts:86-87` — the
+coach _"the meeting is still open and a retry is safe"_, sourced from `endMeeting.ts:86-87` — the
 file describing itself. The gate built the ambiguous-write case: step 3's `UPDATE` commits
 server-side and its response is lost, so `runMutation` rejects with `code: 'UNKNOWN'` while
 `event_sessions.status` is already `'completed'`. Asserted and passing:
@@ -12146,7 +12302,7 @@ without the suite's two constraint tests in front of you is how the forbidden cl
 **Tier:** HEAVY (packet → premise gate ×2 → worker → checker). Branch
 `claude/gam-345-e2e-w4-hours-accounting`, work at `6320933`.
 **Result:** PASS WITH FOLLOW-UP. All nine acceptance criteria pass; each was
-proven non-vacuous by a mutation the *checker* ran independently, not by the
+proven non-vacuous by a mutation the _checker_ ran independently, not by the
 worker's transcript.
 
 **Deliverable:** `tests/e2e-personas/reports-accounting.spec.ts` (632 lines), 14
@@ -12169,8 +12325,8 @@ warned about.
 **A claim about where `/meetings` gets its participation figure survived being
 asserted, corrected once, and citation-checked twice — and was still wrong.**
 Revision 1 of the packet said the strip came from `loaders/meetings.ts`. Premise
-gate round 1 corrected the *mechanism* around it; round 2 confirmed the *line
-numbers*. Both were reading. The worker mutated `meetings.ts:519` and the test
+gate round 1 corrected the _mechanism_ around it; round 2 confirmed the _line
+numbers_. Both were reading. The worker mutated `meetings.ts:519` and the test
 stayed **green**; mutating `checkin.ts:363-365` turned it red. The real path is
 `MeetingsList.tsx:2769` → `<StudentMeetingView variant="own">` with no
 `loadStripData` → `StudentMeetingView.tsx:1068`'s default → `loaders/checkin.ts`.
@@ -12202,7 +12358,7 @@ Findings, all `Backlog`, `tier/unreviewed`, `provenance/e2e-personas`:
    double-counts a dual-team student. Proven at the database level only; the
    packet forbade building a dual-team student, and the finding says so.
 4. **`GAM-359`** (NIT) — one student's hours are spelled `4.0`, `4 hrs` and
-   `4.0 / 100.0 h` on three screens. No wrong *value* was found.
+   `4.0 / 100.0 h` on three screens. No wrong _value_ was found.
 5. **`GAM-360`** (MAJOR) — the persona suite is **not green**: five tests fail on
    this branch without the new spec, confirmed by running the suite with the new
    file removed. Reported separately and deliberately not absorbed.
@@ -12236,7 +12392,7 @@ reachable through a browser.
 **Tier:** HEAVY (packet → premise gate ×2 → worker ×2 → checker ×2). Branch
 `claude/gam-355-stale-persona-failures`, work at `1861561` and `6d1e7bf`.
 **Result:** PASS. All seven acceptance criteria pass, and the two that mattered
-were proven non-vacuous by mutations the *checker* ran itself in its own
+were proven non-vacuous by mutations the _checker_ ran itself in its own
 worktree — not by the worker's transcript.
 
 **Deliverable:** `tests/e2e-personas/coach-meeting.spec.ts` (+15/-…) and
@@ -12252,7 +12408,7 @@ defensible scope because no `src/` file changed. No baseline was given for gate
 from vitest discovery outright, so this change cannot move that count by
 construction.
 
-*The eslint gate first came back with 1124 errors and it was not the tree.* All
+_The eslint gate first came back with 1124 errors and it was not the tree._ All
 1124 sat in `playwright-report/personas`, the HTML report the persona suite
 writes. It is gitignored but eslint does not read `.gitignore`, so running the
 suite before the gate turns the gate red. Already filed as **GAM-362** and
@@ -12276,8 +12432,8 @@ worse than the defect filed, and the rewrite pins the click to the seeded event
 rather than to list position.
 
 **The second reversal was mine.** The run log recorded
-`outreach-lifecycle.spec.ts:149` as *"a write path that records nothing … a
-candidate production defect."* The premise gate queried the database after a run
+`outreach-lifecycle.spec.ts:149` as _"a write path that records nothing … a
+candidate production defect."_ The premise gate queried the database after a run
 in which line 233 failed with `[]` and found the row present, exactly as lines
 234-235 assert: the spec polls only for the `events` row (`:217`) and then reads
 `rsvps` synchronously (`:232`), while `reconcileExpectedAttendeeRsvps` runs
@@ -12296,12 +12452,12 @@ rewrite had kept the shape assertion and the not-the-raw-float assertion and
 dropped the positive screen-to-database comparison the test it replaced had.
 
 I graded that MAJOR and sent it back. A student's own hours halved on screen,
-undetected, is item 26's trigger question — *can a mistake here lie to a user
-about their own data?* — answered yes, and it is the reason this row was tiered
+undetected, is item 26's trigger question — _can a mistake here lie to a user
+about their own data?_ — answered yes, and it is the reason this row was tiered
 HEAVY. `6d1e7bf` adds `expect(label.split(' ')[0]).toBe(raw.toFixed(1))` to both
 surfaces. **The checker then re-ran the mutation itself and found a hole in the
 worker's proof:** the worker had mutated only `StudentHome.tsx`, and
-`ParentHome.tsx` carries a *separate copy* of the same format string, so that
+`ParentHome.tsx` carries a _separate copy_ of the same format string, so that
 run could not have exercised the parent guard at all. Halving both turned both
 tests red at their own new lines — `:56` and `:150`, `Expected "4.0" / Received
 "2.0"`. Note what the mutated string was: `2.0 / 100.0 h (4%)`, which still
@@ -12337,7 +12493,7 @@ over-fitted a locator to a single observation two paragraphs earlier.
   coupling: when `:149` passes it logs a `2.5 h` override for Priya on a
   surviving event, which turns `reports-accounting.spec.ts:333` red instead.
   Exactly one of the two fails per run and which one is not deterministic.
-  Fixing the race alone makes the *other* failure permanent, so both legs must
+  Fixing the race alone makes the _other_ failure permanent, so both legs must
   land together — the constraint is stated on the row.
 - **`GAM-368`** (MAJOR, test-infra) — `student-checkin.spec.ts:216` pins
   `Jul 14` / `Sun, Aug 23` against a `current_date`-relative seed. Correct on
@@ -12388,12 +12544,12 @@ browser measurement instead. The worker ran on its pinned default (sonnet); item
 Every number in the issue reproduced exactly, in real Chrome against the real dev
 server, with presence paired to each figure (3 buttons / 2 inputs):
 
-| viewport | 320 | 360 | 375 | 390 | 414 | 768 / 1280 / 1920 |
-| -- | -- | -- | -- | -- | -- | -- |
-| **before** | 40px | 20px | 13px | 5px | 0px | 0px |
-| **after** | **0px** | **0px** | **0px** | **0px** | **0px** | **0px** |
-| card rect before | 400 | 400 | 400 | 400 | 400 | 400 |
-| card rect after | 320 | 360 | 375 | 390 | **400** | **400** |
+| viewport         | 320     | 360     | 375     | 390     | 414     | 768 / 1280 / 1920 |
+| ---------------- | ------- | ------- | ------- | ------- | ------- | ----------------- |
+| **before**       | 40px    | 20px    | 13px    | 5px     | 0px     | 0px               |
+| **after**        | **0px** | **0px** | **0px** | **0px** | **0px** | **0px**           |
+| card rect before | 400     | 400     | 400     | 400     | 400     | 400               |
+| card rect after  | 320     | 360     | 375     | 390     | **400** | **400**           |
 
 Mechanism confirmed from the computed ancestor chain, not inferred: the card was
 `rect=400 css-width=400px max-width=100%`, its parent `.astryx-stack vertical`
@@ -12464,7 +12620,7 @@ run against the **committed** fix (item 26's "commit before mutating"): revertin
 **only** the `VStack` props in a throwaway worktree, leaving the comment and Card
 in place, restored the defect exactly — **40 / 20 / 13 / 5 / 0**.
 
-A guard *is* possible and is filed rather than skipped:
+A guard _is_ possible and is filed rather than skipped:
 `tests/e2e/public-routes.spec.ts:62-73` already asserts no horizontal overflow on
 `/login` in a real browser and stayed green through this entire bug, because its
 narrowest project is Pixel 7 at **412px** and the card was 400. See GAM-371.
@@ -12512,7 +12668,7 @@ item 29 forbids editing a Status there for new work.
 path, no schema/RLS/auth logic, one project entry (12 lines) in
 `playwright.config.ts`, no production code. The one FAST condition this task
 treats non-trivially is "a named mutation that turns a test red" — here the
-mutation *is* the deliverable, not incidental to it, exactly as the issue
+mutation _is_ the deliverable, not incidental to it, exactly as the issue
 flagged.
 
 ### The disclosed environment constraint was stale, measured rather than assumed
@@ -12531,7 +12687,7 @@ container; it does not hold in this one.
 Added `mobile-narrow-320` (viewport 320×568, matching GAM-271's own
 narrowest-measured width) as a fifth project in `playwright.config.ts`,
 additive to the existing 2×2 color/viewport matrix. Ran it against the branch
-tip *before* GAM-271's fix had merged to `main` (see below) and it failed for
+tip _before_ GAM-271's fix had merged to `main` (see below) and it failed for
 real: `scrollWidth` 360 vs `clientWidth` 320 — the exact 40px figure GAM-271's
 issue text cites as its own pre-fix measurement at 320. That is the redness
 this task exists to prove, and it arrived without needing to revert anything,
@@ -12604,7 +12760,7 @@ Full per-criterion verdict and the binding "what this must not claim" list:
   result line. **Nothing in the design is PG-17-specific** — measured twice, by
   two agents.
 - `python3 .claude/skills/gate-run/scripts/gates.py --baseline-tests 2466
-  --scope scripts/ --baseline-scoped 260` → **PASS, all six.** tsc 0, vite build
+--scope scripts/ --baseline-scoped 260` → **PASS, all six.** tsc 0, vite build
   0, format:check 0, eslint 0 errors / 379 standing warnings, vitest full
   **98 files / 2505** (+39), vitest `scripts/` **13 files / 299** (+39).
 
@@ -12612,12 +12768,12 @@ Full per-criterion verdict and the binding "what this must not claim" list:
 
 Four packet mutations, each replayed by the checker in its own worktree:
 
-| Mutation | Result |
-|---|---|
-| Drop `version` from the CAS `where` | RED — `ac2-single-update-cas` and `crit1-stale-version` |
-| Drop `unique (issue_identifier, todo_event_id)` | RED — 13 failures. Arrives as a hard `42P10` (`on conflict` unplannable), **not** as a duplicate row; the checker separately built the stronger variant and got `rows=2`, two distinct `run_id`s, both `created=true` |
-| `alter function ops.publish_checkpoint owner to postgres` | RED — `guard-d3-ownership` |
-| `publishExternal` calls the sinks before validating | RED — **8** tests, all six zero-invocation cases plus the ordering test |
+| Mutation                                                  | Result                                                                                                                                                                                                                |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Drop `version` from the CAS `where`                       | RED — `ac2-single-update-cas` and `crit1-stale-version`                                                                                                                                                               |
+| Drop `unique (issue_identifier, todo_event_id)`           | RED — 13 failures. Arrives as a hard `42P10` (`on conflict` unplannable), **not** as a duplicate row; the checker separately built the stronger variant and got `rows=2`, two distinct `run_id`s, both `created=true` |
+| `alter function ops.publish_checkpoint owner to postgres` | RED — `guard-d3-ownership`                                                                                                                                                                                            |
+| `publishExternal` calls the sinks before validating       | RED — **8** tests, all six zero-invocation cases plus the ordering test                                                                                                                                               |
 
 ### The check that changed the outcome
 
@@ -12631,8 +12787,8 @@ non-resolving value and the harness still reported `37 assertions, 0 failed`,
 Fixed in `4c4389d` (two files) by making the assertion depend on the victim
 transaction reporting `published=ok`, which `schema.sql:252-270` sets only
 inside `if v_rows = 1`. The checker re-reviewed, re-ran its own probe (now red,
-and red for the *new* reason — the old term was still trivially green), and then
-designed a **second** probe it had not been asked for: a *valid* token with
+and red for the _new_ reason — the old term was still trivially green), and then
+designed a **second** probe it had not been asked for: a _valid_ token with
 `p_expected_version => 999` so the CAS could not match, isolating "the update
 happened" from "the token resolved". Also red. **ACCEPT WITH FOLLOW-UPS.**
 
@@ -12657,7 +12813,7 @@ that read the code instead of running it.
 
 Premise gate ran **four** rounds — REVISE, REVISE, REVISE, **DISPATCH**. Rounds 1
 and 2 ended in an item-19a escalation that the human owner closed on 2026-08-18
-(*"proceed, pin the harness to PG 17"*), which also supplied the live-project
+(_"proceed, pin the harness to PG 17"_), which also supplied the live-project
 measurement GAM-408 carries. Workers: A (opus per item 18) `6f79372` then
 `4c4389d`; B (default pin) `77e7ea9`. Item 21 existence verified for both before
 merge.
@@ -12673,3 +12829,55 @@ merge.
   they guard does not exist (the same family as MAJOR-1, caught before they
   misled anyone).
 - **GAM-417** `tier/standard` — criterion 5's git-write half.
+
+## GAM-447 — the fixed-size `SeriesCard` holds 380 px from 4 sessions to 56, measured (STANDARD tier)
+
+`SeriesCard`'s whole reason to exist is that it does not grow with session count —
+four concurrent series of 38–56 sessions are what made the old one-row-per-event
+table unusable. **jsdom performs no layout**, so the 28 unit tests on this branch
+assert the fixed-height _style_ and the chip/title caps, never a rendered height.
+The implementing run disclosed that gap rather than papering over it; this entry
+closes it.
+
+### What was measured
+
+A throwaway Playwright rig mounted `SeriesCard` directly against `npx vite` —
+the component renders from props and needs no provider stack, which is also why
+it has no route yet (GAM-452 is the assembly). Two fixtures: a 4-session series
+with one schedule rule, and a 56-session series with 7 rules, three team scopes
+and a title long enough to clamp.
+
+| Viewport | 4-session card | 56-session card | Card scrollH / clientH | Page overflow |
+| -------- | -------------- | --------------- | ---------------------- | ------------- |
+| 1440×900 | 380 px         | 380 px          | 378 / 378              | 0             |
+| 375×812  | 380 px         | 380 px          | 378 / 378              | 0             |
+
+Presence checks alongside every number, per the skill's T325 trap — a card that
+measures small because its content vanished is not a pass: both "View full
+schedule (N sessions)" buttons with the right counts, attendance `87%` / `96.5%`,
+the chip row capped at 4 plus `+3 more` plus the `3 overlap` badge, both titles,
+zero page errors.
+
+### What the counter-check corrected
+
+Removing the chip cap (`MAX_VISIBLE_SCHEDULE_CHIPS` 4 → 999) and re-measuring:
+
+| Viewport | Height             | Card scrollH / clientH        |
+| -------- | ------------------ | ----------------------------- |
+| 1440×900 | 380 px — unchanged | 378 / 378 — unchanged         |
+| 375×812  | 380 px — unchanged | **391 / 378 — 13 px clipped** |
+
+So the branch's own run log and PR body were wrong to call this "the cap that
+wins height invariance". The card never grows either way, because
+`Card height={380}` is unconditional. The cap's real job is keeping content
+_inside_ that fixed box at phone width; without it the box silently clips, and
+only at 375 px. The jsdom mutation test that reddens here counts chips — a
+structural proxy that fires for the right reason by accident and cannot see the
+clipping that is the actual failure. This is the same shape as T325: the source
+implied one culprit, measurement named another.
+
+Rig deleted (`measure-seriescard.html`, `src/__measure__/`), dev server stopped,
+baseline worktree removed, tree re-verified clean. Nothing from it is committed,
+and no unit test was written to "cover" the measurement — jsdom cannot catch a
+re-regression, and a DOM-structure proxy would be the vacuous test this log has
+rejected before.
