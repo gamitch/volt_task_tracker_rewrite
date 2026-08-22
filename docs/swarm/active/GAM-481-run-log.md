@@ -44,3 +44,21 @@ territory, which is why this is filed rather than edited from a task branch."*
 - **04:01Z — `npm ci` started** (`node_modules` was absent in this container, which is why the round-1 gate could not run vitest).
 - **04:08Z — BLOCKED on the write, and NOT routed around.** `Edit` on `.claude/skills/meetings-design/SKILL.md` is refused: *"Claude requested permissions to write to … but you haven't granted it yet."* Reading `.claude/**` through `Bash` is refused the same way; the `Read` tool is not. **Measured, not assumed:** `.claude/settings.json` has only `hooks` and no `permissions` block, `settings.local.json` / `~/.claude/settings.json` / `/etc/claude-code/managed-settings.json` carry no deny rule, and `claude-linear-dispatch.yml:426` grants `Write` and `Edit` unrestricted. The guard is the **harness's own protection of agent and skill configuration** — wall 1's class of boundary, the one that stops an autonomous run rewriting its own instructions. Which is literally this task. `Bash` would defeat it; wall 1 says *"Do not attempt another channel"*, so it was not attempted.
 - **04:12Z — the undeliverable half preserved** as `docs/swarm/active/GAM-481-skill-section.md`: the exact splice (replace `:113-126`, preserve `:128-130`), old text verbatim to match against, new text in full, an authority table tracing every addition to MTG-01g / MTG-12 / DES-17 **and** to the shipped code, and a runnable checklist for the eleven acceptance criteria. This is the PRs #159/#160 route.
+- **04:16Z — PR #239 finalized and taken out of draft** with the credential still live (`gh pr edit` + `gh pr ready` both succeeded; expiry was 04:18:56Z). Body leads with the undeliverable half.
+- **04:17Z — gates: five ran, one has no target. All green.**
+
+```
+=== tsc ===             npx tsc --noEmit                     exit=0
+=== build ===           npm run build      ✓ built in 4.89s  exit=0
+=== format:check ===    All matched files use Prettier code style!   exit=0
+=== lint ===            ✖ 382 problems (0 errors, 382 warnings)      exit=0
+=== test ===            Test Files 113 passed (113)
+                        Tests    2751 passed (2751)          exit=0
+=== scoped vitest ===   SKIPPED — no target
+```
+
+  **Gate 6 (scoped vitest) is SKIPPED, and five is the honest count** — this branch changes only Markdown under `docs/swarm/active/`, so there is no file to scope a run to. `gate-run/SKILL.md:100`: *"SKIPPED — gate 6 had no defensible scope. Five gates passed. Say five."*
+
+  **And the five that ran verify nothing about this change.** No gate reads `SKILL.md`: `eslint.config.js:24` ignores `.claude` outright, `format:check` globs `src/**/*.{ts,tsx}` plus root files, `tsc` and `vite build` see no Markdown, and no test reads it. They are **regression evidence** — proof nothing else moved — and are reported as that. The 382 lint warnings are pre-existing and the exit code is 0.
+
+  **No mutation table.** There is no mutation that turns a test red for a Markdown contract; that is one of the reasons this row is HEAVY rather than FAST (item 26's FAST tier requires one). Claiming a mutation here would be inventing evidence.
