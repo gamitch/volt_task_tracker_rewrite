@@ -43,7 +43,7 @@ in scope, so wall 1 does not bite).
 
 | Claim | Verified? | Evidence |
 | -- | -- | -- |
-| MTG-01g spans `:368-384` | **yes** | `:368` opens the bullet; `:370` is mid-sentence. **The issue's `:370-384` is wrong.** Corroborated independently of me: `AttendanceChips.tsx:2-3` already cites `:368-384` |
+| MTG-01g spans `:368-384` | **yes** | `:368` opens the bullet; `:370` is mid-sentence. **The issue's `:370-384` is wrong.** Corroborated independently of me: `AttendanceChips.tsx:3-4` already cites `:368-384` |
 | *"These four requirements are ADDITIVE and are NOT exhaustive… DES-17, NFR-07 and constitution item 15 apply in full"* | **yes** | `:375-376` **[R1: `:375-376`, not `:375-377`]** |
 | *"which a cycling control must not remove"* (the `1`–`4` keys) | **yes** | `:378` **[R1: `:378`, not `:377-379`]** |
 | *"forward-only traversal with no reverse is a keyboard-path failure, and item 15 makes that a BLOCKER"* | **yes** | `:379-380` |
@@ -58,12 +58,12 @@ MTG-01g's control is **not hypothetical and not future work. It is merged on `ma
 | Fact | Evidence |
 | -- | -- |
 | The chip exists and is merged | `src/pages/meetings/coach/AttendanceChips.tsx`, `git log --oneline main -1 --` → `4bc99293 GAM-448: month-tab SchedulePanel with in-place attendance editing` — an ancestor of the merge-base `0b06c9e7` |
-| Five-stop cycle | `AttendanceChips.tsx:59-66` — `FORWARD_CYCLE = ['present','late','excused','absent',null]` |
-| `Shift`-reverse | `AttendanceChips.tsx:230` — `const direction: 1 | -1 = event.shiftKey ? -1 : 1;` |
+| Five-stop cycle | `AttendanceChips.tsx:130-136` — `FORWARD_CYCLE = ['present','late','excused','absent',null]` |
+| `Shift`-reverse | `AttendanceChips.tsx:232` — `const direction: 1 | -1 = event.shiftKey ? -1 : 1;` |
 | MTG-12 skip, and the **reduced order** | `AttendanceChips.tsx:142-144` — `buildEffectiveCycle()` returns `FORWARD_CYCLE.filter((stop) => stop !== 'excused')` when `canSetExcused` is false. `canSetExcused = false` is the **parameter default** (`:224`), so it is the behaviour of every caller that does not opt in |
-| DES-17 keys live on the **row**, not the chip | `SessionRow.tsx:155-161` — `DIGIT_KEY_TO_STATUS`, on the row's own `onKeyDown`. `AttendanceChips.tsx:60-69` records *"this file adds no `onKeyDown` of its own anywhere"*, settled in GAM-448's round-2 gate against `LiveConsole.tsx`'s shipped roving-tabindex shape |
+| DES-17 keys live on the **row**, not the chip | `SessionRow.tsx:156-161` — `DIGIT_KEY_TO_STATUS`, on the row's own `onKeyDown`. `AttendanceChips.tsx:60-69` records *"this file adds no `onKeyDown` of its own anywhere"*, settled in GAM-448's round-2 gate against `LiveConsole.tsx`'s shipped roving-tabindex shape |
 | **Key `3` is MTG-12-gated too** | `SessionRow.tsx:249-250` — `if (status === 'excused' && !canSetExcused) return; // MTG-12 defence in depth`, on *"the single guarded write path both a chip cycle tap AND a DES-17 digit key funnel through"* |
-| Both are green-test-pinned | `SessionRow.test.tsx:578` *"key 3 (Excused) emits no write when canSetExcused is false (the default)"*; `:598` *"the cycle's forward stops skip Excused entirely: Late -> Absent directly"* |
+| Both are green-test-pinned | `SessionRow.test.tsx:578` *"key 3 (Excused) emits no write when canSetExcused is false (the default)"*; `:599` *"the cycle's forward stops skip Excused entirely: Late -> Absent directly"* |
 
 **Consequence, and it is the point of round 2:** the skill must be written to agree with
 **merged code**, not only with the PRD. Restoring MTG-01g's text while leaving the
@@ -103,7 +103,7 @@ Required content:
    stop — so the reduced order is `Present → Late → Absent → (unset)`. [R1 — M2]**
    Round 1 hedged this as possibly inventing a contract the PRD lacks. It invents
    nothing: it is shipped (`AttendanceChips.tsx:142-144`) and green-test-pinned
-   (`SessionRow.test.tsx:598`). State it concretely. A parenthetical may note that
+   (`SessionRow.test.tsx:599`). State it concretely. A parenthetical may note that
    `/meetings`' student view is read-only (MTG-01c), but that does **not** make the
    rule moot — `canSetExcused` defaults to `false`, so the reduced cycle is what an
    un-opted-in caller gets on **any** surface.

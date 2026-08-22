@@ -13,9 +13,18 @@ undeliverable half, file the handover. PRs #159/#160 proved that route end to en
 > `/home/runner/work/volt_task_tracker_rewrite/volt_task_tracker_rewrite/.claude/skills/meetings-design/SKILL.md`,
 > but you haven't granted it yet.*
 
-Reading `.claude/**` through `Bash` (`head`, `tail`, `sed`, `grep`, `cp`) is refused
-in the same way; the `Read` tool is not. **This is not one of this repository's own
-settings.** `.claude/settings.json` contains only `hooks` and no `permissions` block;
+**Correction, found by the acceptance checker and confirmed here.** An earlier draft of
+this artifact said reading `.claude/**` through `Bash` was refused too. **That was
+wrong.** `sed -n '113,116p' .claude/skills/meetings-design/SKILL.md` runs normally.
+What actually happened is that one *compound* Bash command was refused and the harness
+listed each of its parts, several of which touched `.claude` paths — and the run read
+that as a path ban rather than a whole-command refusal. The packet's own evidence
+contradicted the claim at the time (`GAM-481-packet.md` quotes `grep` output from that
+very path) and the run did not notice. What **is** measured: the `Edit` write above is
+refused. A `Bash` **write** has not been tested and will not be — that is the channel
+wall 1 forbids, and testing it is the same act as using it.
+
+**The block is not one of this repository's own settings.** `.claude/settings.json` contains only `hooks` and no `permissions` block;
 `.claude/settings.local.json`, `~/.claude/settings.json` and
 `/etc/claude-code/managed-settings.json` carry no deny rule; and the dispatch
 workflow's `--allowedTools` (`claude-linear-dispatch.yml:426`) grants `Write` and
@@ -75,8 +84,7 @@ finding, and item 15 makes keyboard-path failures on core flows a BLOCKER.
 ## Tap-to-cycle attendance chip — the a11y contract is binding
 
 Authorized by MTG-01g. It is **not** a free design choice — and MTG-01g is **wider
-than the four accessibility rules below**, which is what an earlier version of this
-section got wrong.
+than the four accessibility rules below.**
 
 **It already exists — do not build a second one.**
 `src/pages/meetings/coach/AttendanceChips.tsx` is the control, and `SessionRow.tsx`
@@ -127,9 +135,11 @@ does not finish the job — a chip can pass every one of them and still fail on 
 (visible focus, the roll-call keys), on NFR-07 (WCAG 2.1 AA in both modes), or on item
 15 (any keyboard-path failure on a core flow).
 
-**For checkers, and it cuts both ways.** Grade against MTG-01g and DES-17, not against
-the four alone: a chip that drops the reverse traversal, the roll-call keys, or the
-MTG-12 gate is a finding even with all four satisfied. In the other direction, a
+**For checkers, and it cuts both ways.** Missing any one of the four is a finding on
+its own — that has not changed. What has changed is that it is no longer the whole
+failure set: grade against MTG-01g and DES-17, not against the four alone, so a chip
+that drops the reverse traversal, the roll-call keys, or the MTG-12 gate is also a
+finding even with all four satisfied. In the other direction, a
 *compliant* chip is **not** a finding merely because a `SegmentedControl` would have
 been more conventional — that preference was considered and overruled, and that is the
 narrow thing MTG-01g settles.
@@ -172,7 +182,7 @@ grep -cF 'A chip missing any of the four'             "$F"   # A4b -> 0
 grep -cF 'DES-17' "$F"; grep -cF 'MTG-12' "$F"               # A3  -> >=1 each
 grep -cF 'SegmentedControl' "$F"                             # A6  -> 1
 grep -cF 'AttendanceChips' "$F"                              # A11 -> 1
-git diff -- "$F" | grep -c 'MTG-13 already permits'           # A7  -> 0 (context, not a hunk)
+git diff -U0 -- "$F" | grep -c 'MTG-13 already permits'      # A7  -> 0 (context, not a hunk)
 ```
 
 3. **A9 — no line numbers.** `git diff -- "$F"` must add no `:<digits>` citation. The

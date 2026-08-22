@@ -134,7 +134,7 @@ surface this contract *describes* — the tap-to-cycle chip — is already merge
 real data through `SessionRow.tsx`'s guarded write path; this PR changes no code.
 
 **This closes GAM-481 as the work being done, not as the file being changed.** The
-`SKILL.md` edit itself lands when GAM-484 applies the artifact.
+`SKILL.md` edit itself lands when GAM-485 applies the artifact.
 
 ## Follow-ups filed
 
