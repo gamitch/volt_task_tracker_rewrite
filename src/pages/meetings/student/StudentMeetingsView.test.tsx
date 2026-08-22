@@ -197,6 +197,20 @@ describe('StudentMeetingsView', () => {
     expect(container.textContent).toContain('First meeting');
   });
 
+  it('renders exactly one determinate participation bar for an inactive populated account', async () => {
+    await renderStudent(populatedData, false);
+    expect(progressBars()).toHaveLength(1);
+    expect(container.textContent).toContain('Participation: 75%');
+  });
+
+  it('renders one honest unavailable participation bar for an inactive populated account without a metric', async () => {
+    await renderStudent({ ...populatedData, participation: null }, false);
+    expect(progressBars()).toHaveLength(1);
+    expect(progressBars()[0]?.getAttribute('aria-valuetext')).toBeNull();
+    expect(container.textContent).toContain('Participation: —');
+    expect(container.textContent).not.toContain('Participation: 0%');
+  });
+
   it('shows inactive copy even when the inactive account has no data', async () => {
     await renderStudent({ history: [], participation: null }, false);
     expect(container.textContent).toContain('Your student account is inactive');

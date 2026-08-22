@@ -86,6 +86,7 @@ function StudentMeetingContent({
       <VStack gap={6} data-selected-student={studentId}>
         <HeroCard nextSession={upcoming[0] ?? null} />
         <UpcomingList rows={upcoming.slice(1)} />
+        <AttendanceCard participation={participation} history={history} />
         <PastList rows={past} />
         <EmptyState
           headingLevel={2}

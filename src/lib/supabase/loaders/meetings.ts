@@ -147,10 +147,11 @@
  *      accurate) -- drops `.limit(1)` (T116 consumer finding #2's arbitrary-
  *      team-for-dual-members bug) and instead fetches EVERY
  *      `v_student_participation` row for this student (one per team
- *      membership, T116's own migration doc). `aggregateParticipationRows`
- *      (below) sums those rows' own already-computed counters and reapplies
- *      the view's own `participation_pct` expression verbatim -- see that
- *      function's own doc for the full decision record and citation.
+ *      membership, T116's own migration doc). `selectSingleParticipationRow`
+ *      accepts the metric-view row only when exactly one is returned and
+ *      otherwise returns no metric, preserving the database-owned
+ *      `participation_pct` unchanged rather than aggregating counters or
+ *      recomputing a percentage in TypeScript.
  *
  * -----------------------------------------------------------------------
  * GAM-301 (T407) round 3, BLOCKER 2 fix: `makeResolveCurrentStudentId`/
