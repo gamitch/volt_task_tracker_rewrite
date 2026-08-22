@@ -37,3 +37,7 @@ wall 2, and it is written this way so the next reader does not have to guess.
       `checker-premise` **DISPATCH**. Scoped light per item 19b.
   - The issue's own body proposes FAST. I am overriding it upward and saying
     so here and in the PR, per item 26's "state and defend".
+- **03:00Z — draft PR #236 opened** at ~minute 5 of the 60-minute credential.
+  Body artifact written to `docs/swarm/active/GAM-450-pr-body.md` *before* the
+  API call (`pr-body` skill: the run that is killed after writing loses
+  nothing). `node .claude/skills/pr-body/scripts/check.mjs` exit 0.
