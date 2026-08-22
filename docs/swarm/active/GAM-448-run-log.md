@@ -159,3 +159,14 @@ the run died holding that subagent — that is the failure signature AGENTS.md
   teeth is **D**: `makeRemoveAttendance` deletes the whole row, discarding
   `check_in_at` / `hours_override` — the exact values `makeSetAttendanceStatus`
   preserves. Real asymmetry, undocumented; §2 now warns and §6 files it.
+- 01:50Z — Fold-ins A–G applied to the packet (criteria 13 → 21; `onEditSession`
+  added to the prop block and given criterion 20; the row-vs-chip key-handler
+  answer written into §2; the no-confirm ruling and the delete-asymmetry
+  warning written into §2; §6's skill-bug description corrected to what
+  `SKILL.md:113-126` actually says; the `formatDisplayName` privacy-branch trap
+  flagged). Packet is now DISPATCH-clean.
+- 01:51Z — **DISPATCHED `worker-implementer`, `run_in_background: false`.** No
+  `model: "opus"` override — item 18's four triggers do not fire (verified by
+  both gate rounds) and item 25 forbids bumping on a topic that merely sounds
+  sensitive. *If this line is the last one in this file, the run died holding
+  this subagent.*

@@ -142,6 +142,7 @@ isRosterLoading?: boolean;                         // DES-12 loading channel
 rosterError?: string;                              // DES-12 error channel
 overlapIndex?: OverlapIndex;                       // types.ts:356, frozen
 focusRequest?: MeetingsFocusRequest;               // types.ts:286, frozen
+onEditSession?: (sessionId: string) => void;       // MTG-01b per-row Edit chip
 recordedBy?: string;                               // acting coach profiles.id
 canSetExcused?: boolean;                           // default FALSE — see MTG-12 below
 ```
@@ -150,9 +151,11 @@ canSetExcused?: boolean;                           // default FALSE — see MTG-
 (`{ studentId: string; displayName: string; status: AttendanceStatus | null }`)
 — it is this ticket's own shape, not a frozen one, so it does not belong in
 `types.ts`. `displayName` is **first name + last initial** (item 6); the shipped
-shortener to follow is `formatDisplayName` (`src/pages/outreach/Leaderboard.tsx:365`)
-— read it and match its behaviour, but do **not** import across pages: restate
-the two-line derivation locally or take the already-shortened string.
+shortener to look at is `formatDisplayName` (`src/pages/outreach/Leaderboard.tsx:365`)
+— but do **not** import it and do **not** copy it wholesale: its
+`isPrivacyOn === false` branch returns `ANONYMIZED_STUDENT_LABEL`, which is
+kiosk-privacy behaviour and wrong here. Restate only the first-name +
+last-initial derivation locally, or take an already-shortened string.
 
 `isRosterLoading` / `rosterError` follow the precedent GAM-447 already shipped
 on the sibling stub (`docs/swarm/active/GAM-447-packet.md:158-167`) — copy that
@@ -207,12 +210,41 @@ shape rather than inventing one.
     → Present`** (MTG-01g, `VOLT_Portal_PRD.md:382`). `(unset)` **removes the
     attendance row** via the injected `onRemoveAttendance`
     (`loaders/attendance.ts:544`) — it is a real stop, not an edge case.
+    **No confirm dialog on this stop.** DES-11's confirm set
+    (`VOLT_Portal_PRD.md:219`) does not include an attendance un-mark, T119 /
+    PRD-v2 D-7 already ruled the un-mark an unconditional DELETE
+    (`loaders/attendance.ts:272-276`), and a confirm inside the loop would make
+    criterion 3's full-loop walk untestable. Keep the pre-delete status in
+    local state so the next tap restores it, announce the un-mark through the
+    same `aria-live` region, and roll back on rejection like any other write.
+    ⚠ **Disclose this in your report:** `makeRemoveAttendance`
+    (`attendance.ts:546-562`) deletes the **entire row**, which carries
+    `check_in_at`, `check_out_at`, `hours_override`, `method` and `recorded_by`
+    (`:247,255-267`). So the fifth tap discards a QR check-in timestamp and a
+    coach-set hours override — the very values `makeSetAttendanceStatus`
+    (`:506-528`) goes out of its way to preserve. That asymmetry is real and
+    undocumented. It is **not** grounds to invent a confirm (nothing is wired
+    yet, §0a), but say so plainly; §6 files it.
   - **`Shift`-activation reverses the cycle** (same line). Forward-only is a
     keyboard-path failure and item 15 makes that a **BLOCKER**.
   - **DES-17 direct-set roll-call keys `1`–`4`** set Present / Late / Excused /
     Absent on the focused row (`VOLT_Portal_PRD.md:234`). MTG-01g:375-380 says
     the four a11y rules are *"ADDITIVE and are NOT exhaustive"* and that a
     cycling control **must not remove** these keys.
+    **The roving tabindex and the key handler live on the ROW, not the chip** —
+    round 2 of the premise gate settled this against the shipped
+    implementation. `LiveConsole.tsx:937,940-941` binds
+    `tabIndex={isFocused ? 0 : -1}` and `onKeyDown` on the `<li>` itself, and
+    `handleRowKeyDown` (`:1144-1164`) does ArrowUp/ArrowDown over `rowRefs`
+    plus `DIGIT_KEY_TO_STATUS[event.key]`. Its module doc (`:161-186`) records
+    *why* the handler sits on the `<li>`: so it fires "regardless of whether
+    DOM focus is on the row or has drifted onto a descendant, per normal event
+    bubbling" — which means a `1` pressed while focus is on the chip still
+    works. So: `SessionRow` (or the roster list inside it) owns
+    `focusedRowIndex` + `rowRefs` + the key handler; **`AttendanceChips` stays
+    purely presentational** — it renders the `<button>`, calls injected
+    handlers, and adds no key handling of its own. Key `3`/Excused routes
+    through the same `canSetExcused` guard as the cycle (`:1073`).
   - The four named rules still hold in full: a real `<button>`; accessible name
     = student name + current status ("Ada L., present"); every change announced
     via `aria-live`; target **≥44px**.
@@ -250,6 +282,13 @@ shape rather than inventing one.
   no `GAM-nnn`, no `SessionRosterEntry` in a label (UXC-10, BLOCKER).
 
 ## §3. Acceptance criteria — each measurable today with fixtures that exist
+
+**Read this before writing the tests:** criteria 3, 4 and 5 walk a cycle that
+includes the Excused stop, so they are asserted with **`canSetExcused` set**
+(the coach case). Criterion 16 asserts the **default** (`false`), where that
+stop is skipped. A checker reading 3 or 5 against the default would otherwise
+see them fail — and criterion 3 is a `mutation-replay` target, so the
+distinction has to be explicit in the test names.
 
 1. Month tab default is the current **Chicago** month; a test that pins a fake
    clock to a UTC instant which is the *previous* day in Chicago still selects
@@ -299,7 +338,10 @@ shape rather than inventing one.
 19. Row line renders exactly what `formatWeekdayDate` /
     `formatTimeRangeWithDuration` return — `"Thu, Oct 1 · 4:00–6:00 PM · 2h"` —
     with no local re-formatting.
-20. **Item 27 source criterion** (`constitution.md:405-408`): a test asserts
+20. **The per-row `Edit` chip calls the injected `onEditSession` exactly once**
+    with that `sessionId` (MTG-01b — the packet orders it built, so a criterion
+    has to measure it).
+21. **Item 27 source criterion** (`constitution.md:405-408`): a test asserts
     the panel renders roster rows **from the injected `roster` prop**, and the
     packet records that no loader on `main` fills it (§0c). This task's
     user-visible surface is deliberately fixture-fed and closes **Partial**.
@@ -396,12 +438,23 @@ the `linear-task-writing` skill, before the PR leaves draft:
   meetings. Relate to GAM-471.
 - **The overlap badge (§0d)** — blocked on GAM-450; reference it, do not
   duplicate `buildOverlapIndex`.
-- **The `meetings-design` skill is narrower than the PRD (§0f)** — its
-  tap-to-cycle section teaches a four-stop cycle and calls the four a11y rules
-  exhaustive; MTG-01g says five stops, `Shift`-reverse, DES-17 keys, and
-  explicitly *"NOT exhaustive"*. Item 1 makes the skill the bug. Five sibling
-  tickets are still coding against it, so this is worth filing promptly.
-  `.claude/skills/**` is owner/orchestrator territory — file, do not edit here.
+- **The `meetings-design` skill is narrower than the PRD (§0f)** — stated
+  precisely, because round 2 corrected the first draft of this: the skill's
+  tap-to-cycle section (`.claude/skills/meetings-design/SKILL.md:113-126`)
+  **omits the cycle order entirely**, omits `Shift`-reverse, omits DES-17's
+  `1`–`4` keys, and presents the four a11y rules as the complete binding
+  contract ("these four are not suggestions"; "A chip missing any of the four
+  **is** a finding") **without MTG-01g's "ADDITIVE and are NOT exhaustive"
+  clause**. It does not teach a four-stop cycle; it teaches no cycle at all.
+  Item 1 makes the skill the bug. Five sibling tickets are still coding against
+  it, so file this promptly. `.claude/skills/**` is owner/orchestrator
+  territory — file, do not edit from a worker.
+- **`makeRemoveAttendance` destroys more than a status (§2's ⚠).** The
+  `(unset)` stop deletes the whole `attendance` row, discarding `check_in_at`,
+  `check_out_at` and `hours_override` — exactly what `makeSetAttendanceStatus`
+  is written to preserve. Undocumented asymmetry between two seams a coach
+  reaches from the same control. Worth a decision before GAM-452 makes the
+  chip reachable.
 - **The wrong-seam correction (§0e)** is **not** filed: it is resolved inside
   this task. It is recorded in the run log and the PR body so the next reader
   does not inherit the issue's version.
