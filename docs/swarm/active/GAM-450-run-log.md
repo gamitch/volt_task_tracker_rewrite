@@ -41,7 +41,7 @@ wall 2, and it is written this way so the next reader does not have to guess.
   Body artifact written to `docs/swarm/active/GAM-450-pr-body.md` *before* the
   API call (`pr-body` skill: the run that is killed after writing loses
   nothing). `node .claude/skills/pr-body/scripts/check.mjs` exit 0.
-- **03:04Z — contract verified frozen; STANDARD holds.** `src/lib/meetings/types.ts:350-356`
+- **03:02Z — contract verified frozen; STANDARD holds.** `src/lib/meetings/types.ts:350-356`
   defines `OverlapRef {sessionId, eventId}` and
   `OverlapIndex = ReadonlyMap<string, readonly OverlapRef[]>`, added by GAM-444
   and explicitly marked "TYPE ONLY -- `buildOverlapIndex` and its home
@@ -50,24 +50,24 @@ wall 2, and it is written this way so the next reader does not have to guess.
   authoring one, so item 26's "export another session builds against" trigger
   stays defused and the tier remains STANDARD. `MeetingsRail.tsx:205-218,665`
   already consumes the type, so a live consumer exists to check against.
-- **03:05Z — measured correction to the issue's premise.** The issue frames the
+- **03:03Z — measured correction to the issue's premise.** The issue frames the
   UTC day-shift as an edge case ("a 11 PM Chicago session"). Measured in
   `src/lib/meetings/coachModel.ts:169-174`, it is the ORDINARY case: a 6-8 PM
   Chicago session is stored `startsAt 2026-07-22T23:00:00Z` /
   `endsAt 2026-07-23T01:00:00Z` -- every evening meeting in this app already
   ends on the next UTC date. Bucketing from an instant breaks the common path,
   not a rare one. Packet says so in those terms.
-- **03:06Z — packet written**, `docs/swarm/active/GAM-450-worker-packet.md`,
+- **03:04Z — packet written**, `docs/swarm/active/GAM-450-worker-packet.md`,
   with a five-entry Least-confident-decisions list (item 19d; not required at
   STANDARD, included because the gate attacks it first and it is free).
-- **03:07Z — DISPATCHED `checker-premise`** on the packet (item 19; scoped
+- **03:05Z — DISPATCHED `checker-premise`** on the packet (item 19; scoped
   light per 19b — no migration/RLS/metric SQL in scope). Dispatched with
   `run_in_background: false`; this run is blocking on it now.
   **If this line is the last one in this file, the run died holding this
   subagent** — `AGENTS.md` wall 2, the failure that killed runs 31354278407,
   31385764526, 31514339272, 31523233268 and 31527801235. The verdict line
   below is the proof it did not happen here.
-- **03:14Z — VERDICT from `checker-premise`: REVISE** (round 1 of the item-19a
+- **03:07Z — VERDICT from `checker-premise`: REVISE** (round 1 of the item-19a
   two-round cap). Returned live, in-process — the run did not die holding it.
   1 MAJOR, 2 MINOR, 3 NIT. Agent worked in its own worktree `/tmp/gam450-check`
   (item 23); shared tree left clean.
@@ -93,3 +93,9 @@ wall 2, and it is written this way so the next reader does not have to guess.
     with the instants derived FROM it by `chicagoWallTimeToUtcIso`; no consumer
     needs ref ordering; `completed` sessions are overlappable (SKILL.md:67's
     "never on a past session" is scoped to relative-date chips, not overlap).
+  - *Correction, made immediately:* the four lines above this verdict and the
+    verdict line itself first carried estimated clock times rather than measured
+    ones (the verdict was written `03:14Z`; `date -u` said `03:07:29Z`). Rewritten
+    to measured values. The `pr-body` skill names this exact failure — "three
+    runs in one session wrote timestamps that disagreed with their own commit
+    times" — so the commit SHAs on this branch, not these times, are the record.
