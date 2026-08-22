@@ -417,3 +417,61 @@ Filed to `Backlog` with `tier/unreviewed`, before this PR leaves draft:
 | Gate's §0c.2 correction (three views + rollup) | §0c.2 rewritten with all four citations |
 | Gate's `getFieldControl` trap | §3 measurement mechanism |
 | Gate's `existing` may be `undefined` | §1 P4 final bullet |
+
+---
+
+## §9 — Round 2 verdict, and why this packet stops here
+
+**`checker-premise` round 2 returned `VERDICT: REVISE`** — 0 BLOCKER, 4 MAJOR,
+8 MINOR, 3 NIT. Round 1's BLOCKER-1 and MAJOR-2/3/4 were confirmed fixed, §8's
+map was checked row by row and found honest, and `tsc --noEmit` exited 0 with
+P1 applied. The new findings are not wording: all four MAJORs were produced by
+*running* code, and two of them would have shipped a broken undo.
+
+**This packet is therefore NOT dispatchable and no worker was dispatched.**
+Constitution item 19a caps the gate at two rounds; Definition of Ready item 1
+permits dispatch only on a `DISPATCH` verdict. Two rounds are spent and neither
+returned one, so the correct move is the human owner, not a third round. The
+findings below look mechanical — which is the exact feeling item 19a exists to
+overrule.
+
+### 9a. What a round-3 packet must change (all measured by the gate)
+
+| # | Change |
+| -- | -- |
+| MAJOR-1 | §1 P1 must normalize with a **truthiness** check — `return deleted ? map(deleted) : null` — because `runMutation` coerces `data: null` to `undefined` (`src/lib/supabase/loader.ts:225`, contract note `:220-224`). The literal `=== null` form throws `TypeError: Cannot read properties of undefined (reading 'id')` at `attendance.ts:256`, which is criterion 2's own "must not throw" path. §1 P4's "skip if it returns `null`" guard must be truthy-based for the same reason. |
+| MAJOR-2 | `Banner` "manages its own dismissed state internally" (installed `Banner.d.ts`). Measured on P4's exact shape: dismiss once and it never returns, so a later un-mark's undo is unreachable. Requires (i) render the `Banner` only while `pendingUndoByKey` is non-empty so React unmounts it and the internal state resets, (ii) `onDismiss` clears **every** pending entry, (iii) a new criterion covering un-mark → dismiss → un-mark → control still present. Also: `defaultIsExpanded` is **required**, not decorative — `Banner` puts no children in the DOM when collapsed, measured. |
+| MAJOR-3 | §7.5's declared doubt is already adjudicated in the file being edited. `src/pages/outreach/AttendancePanel.tsx:115-116` is a passed-task decision against "a Banner the coach has to visually hunt for across a multi-day, multi-student panel." Either adopt the per-row `endContent` shape — which also matches `astryx-api.md:6050`, dissolves MAJOR-2, and reuses the `Banner`+`endContent` idiom already shipped at `AttendancePanel.tsx:845-850` — or rebut `:115-116` explicitly. **This is decision Q1 below.** |
+| MAJOR-4 | §7.4 trades the undo's reliability for a visible failure, and the failure is not visible. `toLoaderError` discards the DB message (`loader.ts:120`) and `AttendancePanel.tsx:754` gates on `instanceof Error`, which a `SupabaseLoaderError` (a plain-object interface, `loader.ts:78-82`) is not — so a 23505 collision with a real new QR check-in shows the coach *"Couldn't save this student's attendance."* The `code` survives as `'23505'`, so branch on it and write DES-16 copy naming the cause and the next action. **The exact string is decision Q2 below.** |
+| MINOR-5 | Six `Banner` prop citations in §1 P4 are each off by four lines. Correct: `status` `:2759`, `title` `:2760`, `isDismissable` `:2763`, `onDismiss` `:2764`, `children` `:2767`, `defaultIsExpanded` `:2768`; `endContent` is `:2765`. Also §0c.2: `expected_ct`'s column comment is `20260806000000_met01_explicit_marks.sql:132-133` (not `:131`) and `graded_marks_ct` is defined at `20260821000000_meetings_event_attendance_view.sql:173` (not `:180`). The props themselves are all genuinely documented, so item 2a is satisfied and no item-2b annotation is needed. |
+| MINOR-6 | Add an in-flight guard on the undo control using the existing `setPending`/`isLoading` pattern (`AttendancePanel.tsx:709`, `:757`), and strengthen criterion 8 to activate twice and assert the seam fired once. |
+| MINOR-7 | `AttendancePanel.tsx:204-206`'s own Astryx prop inventory records `Banner`'s used subset as `status`/`title`/`description`/`endContent`; P4 adds more and must extend it. |
+| MINOR-8 | §1 P1's test-edit authorization is passive. Name the approving authority and date it (Non-Negotiable 10 says *the boss* approves a test update), and state that **adding** new `it()` blocks is not an "edit". |
+| MINOR-9 | State whether this PR closes GAM-479 or leaves it open behind §6.1. |
+| NIT-10 | §1 P3.1's premise is wrong: `attendance.ts:134-137` says "any **upsert** payload", and P2 writes an `.insert()`. The sentence becomes misleading, not false. Keep the amendment, fix the reason. |
+| NIT-11 | Criterion 11's "urgency copy" is unmeasurable (Definition of Ready item 4). Replace with a concrete rendered-text assertion plus the `setTimeout` grep. |
+| NIT-12 | Cite constitution item 2b, which PR #237 landed on `main` at `0b06c9e7` and which §6.2 now depends on. |
+
+Two of the gate's "cheaper paths" are worth carrying into round 3 regardless of
+Q1: reuse `findButtonByText` (`AttendancePanel.test.tsx:117-121`) instead of
+introducing this file's first `data-testid` — it asserts the accessible name
+directly — and reuse the existing `setPending`/`pendingByKey` machinery rather
+than adding a parallel in-flight map.
+
+### 9b. Two decisions only the owner can make
+
+**Q1 — where does the undo live: one combined `Banner`, or a per-row control?**
+The packet chose a combined `Banner` on DES-13's persistent/short-lived split.
+The gate found that this same file already ruled against "a Banner the coach has
+to visually hunt for" (`AttendancePanel.tsx:115-116`) and that `astryx-api.md:6050`
+prescribes `endContent` for undo. A per-row control also removes the dismissed-state
+defect (MAJOR-2) for free. This is a product judgement about a coach's attention,
+not a code question, and nobody has watched a coach use either shape.
+
+**Q2 — when an undo collides with a real new QR check-in, what should the coach
+see, and should the undo even fail?** `.insert()` makes the collision an error
+rather than silently clobbering a genuine check-in — but it means the coach taps
+Undo and gets an error for a case where nothing is wrong. The alternative
+(`.upsert()`) always succeeds and can destroy a real scan. The packet chose the
+visible failure; the copy that failure shows is Q2's other half, and item 14
+(DES-16) says the message must name what happened and what to do.
