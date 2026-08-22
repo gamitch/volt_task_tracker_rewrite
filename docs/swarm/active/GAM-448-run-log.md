@@ -140,3 +140,22 @@ the run died holding that subagent — that is the failure signature AGENTS.md
   Round 2 of 2 — item 19a caps the gate here; a third REVISE escalates to the
   owner rather than looping. *If this line is the last one in this file, the
   run died holding this subagent.*
+- 01:44Z — **`checker-premise` round 2 VERDICT: DISPATCH** (~79K tokens, 41 tool
+  calls). All 12 required edits verified APPLIED CORRECTLY against the real
+  files — not merely mentioned. No BLOCKER, no MAJOR. Gate independently
+  re-ran both baselines and confirmed 2666 / 52 exactly, so gates 5 and 6 are
+  armed rather than silently disarmed. It also re-searched **214 refs** for a
+  `SchedulePanelProps` consumer and found none, and verified the Astryx props
+  against the **installed package source** (`Tab.d.ts`) rather than only the
+  API doc.
+  Definite answers given to the three open decisions, now folded into the
+  packet: (3) `(unset)` is an unconditional delete, **no confirm** — DES-11's
+  confirm set does not include an un-mark and T119/D-7 already ruled it; (4)
+  the disabled-chip failure mode stands, with `isRosterLoading` covering the
+  pre-auth case; (5) **the roving tabindex and the `1`–`4` handler go on the
+  ROW, not the chip** — `LiveConsole.tsx:937,940-941,1144-1164` is the shipped
+  shape and its handler sits on the `<li>` so a keypress on the chip bubbles.
+  Seven MINOR/NIT fold-ins (A–G), explicitly not a third round. The one with
+  teeth is **D**: `makeRemoveAttendance` deletes the whole row, discarding
+  `check_in_at` / `hours_override` — the exact values `makeSetAttendanceStatus`
+  preserves. Real asymmetry, undocumented; §2 now warns and §6 files it.
