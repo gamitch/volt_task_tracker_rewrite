@@ -120,3 +120,11 @@ wall 2, and it is written this way so the next reader does not have to guess.
   written `excusedCt?:155` where the real declaration is `types.ts:154` — I had
   transcribed only field names, so nothing on disk carries the error. Two
   non-findings were stated explicitly as no-action rather than left ambiguous.
+- **03:11Z — DISPATCHED `worker-implementer`** on the DISPATCH-cleared packet.
+  Model: pinned default (sonnet). Item 18's four opus triggers — migration file,
+  RLS/security-definer, metric-view SQL, auth/session/permission logic — are all
+  absent from a pure interval-arithmetic module, and item 25 forbids bumping the
+  tier because a topic merely sounds important. Dispatched with
+  `run_in_background: false`; blocking on it now.
+  **If this line is the last one in this file, the run died holding this
+  subagent.**
