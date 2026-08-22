@@ -67,3 +67,29 @@ wall 2, and it is written this way so the next reader does not have to guess.
   subagent** — `AGENTS.md` wall 2, the failure that killed runs 31354278407,
   31385764526, 31514339272, 31523233268 and 31527801235. The verdict line
   below is the proof it did not happen here.
+- **03:14Z — VERDICT from `checker-premise`: REVISE** (round 1 of the item-19a
+  two-round cap). Returned live, in-process — the run did not die holding it.
+  1 MAJOR, 2 MINOR, 3 NIT. Agent worked in its own worktree `/tmp/gam450-check`
+  (item 23); shared tree left clean.
+  - **MAJOR, and it is a real defect in my packet, not a style note.** The
+    mutation I named — relax `a.start < b.end` to `<=` — **survives** under the
+    most natural implementation. For the touching pair 4-6 PM / 6-8 PM the
+    comparison that fails is the *second* one (`b.start < a.end` is `18 < 18`).
+    The checker replayed 2 loop shapes x 2 input orders and found the surviving
+    combination is the `i<j` pairwise loop with the test listing 4-6 before 6-8
+    — i.e. exactly what a competent worker would write. A worker with a fully
+    correct module could not have produced my mandatory evidence. Fix: relax
+    **both** comparisons, red in all four combinations.
+  - MINOR x2: two of my own citations were wrong — `CoachMeetingSessionDetail`
+    is `types.ts:78-103` not `82-108`, and `CoachMeetingRow` has seven optional
+    fields (five metric), not "nine". Item 19c, exactly as advertised.
+  - NIT x3: "computing it three ways" implies three extant implementations
+    (there are zero); the "every evening meeting" claim holds only at/after
+    7 PM Chicago; the `.size` justification is unsupported (no consumer reads it).
+  - All five Least-confident entries came back SOUND, each with a measurement:
+    no existing `buildOverlapIndex` caller; exactly one `OverlapIndex` read site
+    (`MeetingsRail.tsx:665`, `?? []`, no `.has`/`.size`); `sessionDate` traced to
+    `event_sessions.session_date date not null` and confirmed Chicago-sourced,
+    with the instants derived FROM it by `chicagoWallTimeToUtcIso`; no consumer
+    needs ref ordering; `completed` sessions are overlappable (SKILL.md:67's
+    "never on a past session" is scoped to relative-date chips, not overlap).
