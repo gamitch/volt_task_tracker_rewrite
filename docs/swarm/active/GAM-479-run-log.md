@@ -25,14 +25,14 @@ uses the long-lived PAT and survives.
   constraint), which is a second independent HEAVY trigger and an item 18
   `model: "opus"` trigger for the worker. Two tiers are not arguable here; even
   if they were, item 26 says take the heavier.
-- **03:08Z — draft PR #238 opened** (<https://github.com/gamitch/volt_task_tracker_rewrite/pull/238>),
-  ~minute 6, with `docs/swarm/active/GAM-479-pr-body.md` written before the API
-  call. Wall 3 satisfied with ~54 minutes of credential left.
-- **03:09Z — claim comment posted to Linear** (`**Run log · Claude · claim ·
+- **03:04Z — draft PR #238 opened** (<https://github.com/gamitch/volt_task_tracker_rewrite/pull/238>),
+  ~minute 2, with `docs/swarm/active/GAM-479-pr-body.md` written before the API
+  call. Wall 3 satisfied with ~58 minutes of credential left.
+- **03:04Z — claim comment posted to Linear** (`**Run log · Claude · claim ·
   2026-08-22**`), carrying the branch, the tier defence and the one thing known
   to be unresolved: the issue asks for a *decision* (undo affordance vs. null-status
   preservation) and does not pick one.
-- **03:10Z — measuring the premise before anything else.** If it does not hold,
+- **03:05Z — measuring the premise before anything else.** If it does not hold,
   this run stops and the issue goes back to `Todo` with the measurement recorded.
 
 ## Premise measurement (orchestrator, against `main` @ `00a22ac7`)
@@ -72,12 +72,44 @@ Any real undo needs a new restore write path.
 
 ## Round 1
 
-- **03:40Z — packet written**, `docs/swarm/active/GAM-479-packet.md`. Proposes
+- **03:10Z — packet written** (commit `a1658c2c`), `docs/swarm/active/GAM-479-packet.md`. Proposes
   a new `makeRestoreAttendance` seam (the only write path that writes
   `check_in_at`) plus an `Undo un-mark` affordance on the live outreach
   `AttendancePanel`. No migration, no metric SQL, no reversal of D-7. Five
   least-confident decisions declared (item 19d), the fifth of which is that
   "no change" is still a legitimate close.
-- **03:41Z — dispatching `checker-premise` (round 1), `run_in_background: false`,
+- **03:10Z — dispatching `checker-premise` (round 1), `run_in_background: false`,
   `model: "opus"`.** *If this line is the last one in this file, the run died
   holding this subagent.*
+
+- **Timestamp correction.** Every clock time above from `03:08Z` onward was
+  originally written from an estimate rather than read, and three of them were
+  inflated by up to thirty minutes. They are now re-anchored to the real commit
+  times (`git log --format='%h %cd'`): `95c7899a` 03:03Z, `c5d385dc`/`33b5803f`
+  03:04Z, `833f17bb` 03:08Z, `a1658c2c` 03:10Z. Recorded rather than quietly
+  fixed — the `pr-body` skill names "runs that wrote timestamps disagreeing with
+  their own commit times" as a repeat failure, and this run was one of them.
+
+- **03:19Z — `checker-premise` round 1 returned `VERDICT: REVISE`**
+  (1 BLOCKER, 3 MAJOR, 7 MINOR, 3 NIT; ~112K tokens, 49 tool calls, 9m15s).
+  The subagent was dispatched with `run_in_background: false` and this
+  orchestrator blocked on it.
+
+  **BLOCKER-1, and it is real — I re-measured it myself rather than taking the
+  gate's word.** PR #234 **merged at 03:12:28Z**, *during* the gate run. My
+  own check at 03:07Z read `OPEN` and was correct then; the packet's §0a was
+  true when written and false by the time the gate read it. `origin/main` is
+  now `0b06c9e7` (two merges ahead of the packet's base `00a22ac7`: #234, then
+  #237), `git ls-tree origin/main src/pages/meetings/coach/` lists
+  `AttendanceChips.tsx`/`SessionRow.tsx`/the real `SchedulePanel.tsx`, and
+  `git grep -n SchedulePanel origin/main -- src/` still returns **no external
+  caller** — so the chip is on `main` and still user-unreachable. The scoping
+  argument survives; the stated reason for it does not.
+
+  Other findings accepted in full: MAJOR-2 (the upsert restore can clobber a
+  newer QR check-in — the fix reintroducing the defect), MAJOR-3 (§7.2's
+  condition obtains: `SessionRow` holds only a bare status, so P1's payload has
+  no caller that can populate it), MAJOR-4 (M1 cannot redden criterion 6),
+  MINOR-5..11 and NIT-12..14. The gate also found DES-13 (`Toast` +
+  `endContent`) — a PRD requirement the packet never named — and corrected
+  §0c.2 upward from "at least two views" to three views and a rollup.
