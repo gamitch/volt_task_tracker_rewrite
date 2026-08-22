@@ -179,7 +179,7 @@ test.describe('GAM-451 meetings read-only student and parent views', () => {
       selected.getByRole('heading', { name: 'Weeknight Build Session', exact: true }),
     ).toBeVisible();
     await expect(selected.getByText(/Today|Tomorrow|in \d+ days/)).toBeVisible();
-    await expect(selected.getByText('Shop Bay 2')).toBeVisible();
+    await expect(selected.getByText('Shop Bay 2').first()).toBeVisible();
     await expect(selected).toContainText(/\b\d+(?:\.\d+)?h(?: \d+m)?\b/);
     await expect(selected.getByText('Attendance summary')).toBeVisible();
     await expect(
