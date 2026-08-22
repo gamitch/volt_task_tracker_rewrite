@@ -93,9 +93,12 @@ VERDICT: PASS — all six gates exit 0
 ```
 
 The 382 eslint warnings are the repo's standing
-`react-refresh/only-export-components` class, unchanged. Gates 5 and 6 were run
-without a baseline, so no regression comparison was made — stated rather than
-implied.
+`react-refresh/only-export-components` class, unchanged. **Gates 5 and 6 were run
+without a numeric baseline, so no count comparison was made** — said plainly
+rather than implied. What is verified instead, and is the stronger claim: the
+diff adds exactly one test file and touches no existing one (three changed files,
+all `MeetingsRail.*`), so no pre-existing test can have been removed or
+disabled — which is the regression a green tick hides best.
 
 **Mutations, replayed by the orchestrator in its own worktree** (item 23), each
 reverted with a green re-verification. The worker's own three are not quoted
