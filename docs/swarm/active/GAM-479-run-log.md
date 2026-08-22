@@ -113,3 +113,24 @@ Any real undo needs a new restore write path.
   MINOR-5..11 and NIT-12..14. The gate also found DES-13 (`Toast` +
   `endContent`) — a PRD requirement the packet never named — and corrected
   §0c.2 upward from "at least two views" to three views and a rollup.
+
+## Round 2
+
+- **03:22Z — merged `origin/main` @ `0b06c9e7`** into the branch (`8f6d17c4`) and
+  pushed, so the packet's base is the tree the gate measured. Baseline for the
+  two allowed test files re-measured on that merge: **2 files, 56 tests, all
+  green** (41 + 15).
+- **03:38Z — packet round 2 written**, applying all 14 round-1 findings (§8 maps
+  each). Three design changes the gate forced: `makeRemoveAttendance` now
+  returns the row it deleted (answers MAJOR-3 — the chip holds only a bare
+  status, so the seam has to hand it back); the restore uses `.insert()` not
+  `.upsert()` (answers MAJOR-2 — an upsert would clobber a QR scan that
+  re-created the row, reintroducing this ticket's own defect); and the
+  affordance is an Astryx `Banner`, chosen over `Toast` because DES-13 assigns
+  persistent conditions to `Banner` and because `astryx-api.md`'s `Toast` Props
+  table is stale against installed 0.1.6 — every `Banner` prop used is
+  documented, so no item-2b annotation enters this PR.
+- **03:38Z — dispatching `checker-premise` (round 2 of 2), `run_in_background:
+  false`, `model: "opus"`.** Item 19a: a third REVISE escalates to the owner
+  rather than looping. *If this line is the last one in this file, the run died
+  holding this subagent.*
