@@ -179,3 +179,24 @@ the wait; each verdict is written the moment it returns.
   literal for a series hue, no jargon in rendered copy, and every Astryx prop
   used checked against `docs/swarm/astryx-api.md` (including `Banner`'s
   `status`/`title`/`description`).
+
+- 2026-08-22T02:05Z — **PR #235 marked ready for review, but its description is
+  still the minute-5 draft stub — a human must paste the finished body over it.**
+  The `ghs_` App token expired at 01:53:48Z exactly as its own `exp` claim said
+  at minute 1. The long-lived `github_pat_` from the push extraheader **can**
+  `gh pr ready` (it worked) but is refused `updatePullRequest` *and* `addComment`
+  (403 / "Resource not accessible by personal access token"), so neither the
+  body nor a PR comment could be written after the hour. This is exactly the
+  failure the `pr-body` skill's write-the-artifact-first rule exists for: the
+  finished body is committed on this branch at
+  `docs/swarm/active/GAM-449-pr-body.md` and loses nothing.
+  **Known defect I cannot fix from here:** the live PR description still says
+  "the body below is finalized before the draft flag is cleared", which is now
+  false — the flag was cleared and the body could not be. Flagged on the issue.
+  New datum for wall 3, worth adding to `AGENTS.md` by someone who can edit it:
+  the PAT fallback covers `gh pr ready` but **not** body edits or comments, so
+  "open the PR early" must mean "write its final body early too", not just open
+  a shell for it.
+
+- 2026-08-22T02:06Z — Mutation worktree `/tmp/gam449-mut` removed after its
+  results were recorded (item 21 — verify before removing).
