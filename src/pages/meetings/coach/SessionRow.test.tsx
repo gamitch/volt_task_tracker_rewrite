@@ -519,9 +519,7 @@ describe('DES-17 roving tabindex + digit keys (criterion 5)', () => {
     const rowA = container.querySelector('[data-testid="roster-row-student-a"]') as HTMLElement;
 
     act(() => {
-      rowA.dispatchEvent(
-        new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
-      );
+      rowA.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
     });
     expect(onSetAttendanceStatus).toHaveBeenCalledTimes(1);
     expect(onSetAttendanceStatus.mock.calls[0][0]).toMatchObject({
