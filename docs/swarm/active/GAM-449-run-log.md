@@ -150,3 +150,13 @@ the wait; each verdict is written the moment it returns.
 - 2026-08-22T01:34Z — **Dispatched `worker-implementer`** on the round-2 packet,
   pinned default model (no item-18 trigger), `run_in_background: false`.
   *If this line is the last one in this file, the run died holding this subagent.*
+
+- 2026-08-22T01:55Z — **`worker-implementer` returned.** Commit
+  `0be0c13e5a475449453cecdeeafd9b98013fd4bf`, three files only
+  (`MeetingsRail.tsx` +654, `MeetingsRail.css` +58, `MeetingsRail.test.tsx`
+  +851). Verified independently that HEAD moved and the change is in the
+  committed blob, not just the tree (item 21). Reported gates all exit 0 and 25
+  scoped tests; reported all three named mutations run, red output captured,
+  reverted and re-verified. Reported none of the packet's §3 findings false.
+  Orchestrator now replays a mutation and runs the gates itself — a worker
+  cannot self-certify.
