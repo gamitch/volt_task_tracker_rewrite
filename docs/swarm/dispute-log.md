@@ -504,9 +504,15 @@ C. Drawer does NOT auto-close on nav-item selection: classified MINOR
 
    **It is still not authorized.** Nobody has run that route on it: no
    citation, no cross-check, no annotation, no re-verification. Ruling C
-   stands until someone does, and the auto-close follow-up stays open. This
-   addendum changes what it would take to close it, not whether it is
-   closed. Recorded here because D004 is where a reader meets the old
+   stands until someone does. This addendum changes what it would take to
+   close it, not whether it is closed.
+
+   **The auto-close follow-up is now a row: GAM-483.** Ruling C called it a
+   "follow-up candidate" and no row was ever created, so for a month the
+   deferral lived only in this entry and in `MobileNav.tsx`'s module doc —
+   item 20's failure shape exactly, committed by a ruling that predates item
+   20. Filed 2026-08-22 while amending item 2, because an addendum saying a
+   follow-up "stays open" against nothing in the queue would have repeated it. Recorded here because D004 is where a reader meets the old
    reasoning, and an amendment nobody finds is an amendment nobody has.
 
 D. Ledger: T008 stays In Progress, attempt 1. Orchestrating session /
