@@ -28,3 +28,8 @@ the wait; each verdict is written the moment it returns.
   only. Known-unresolved going in: whether the frozen prop/type names the
   issue refers to actually exist on `main` yet (sibling Wave-2 tickets froze
   them); to be measured before any packet is written.
+
+- 2026-08-22T00:58Z — **Draft PR opened early** (wall 3): PR #235, at roughly
+  minute 5 of a 60-minute PR credential. Body artifact written to
+  `docs/swarm/active/GAM-449-pr-body.md` *before* the API call and validated by
+  `.claude/skills/pr-body/scripts/check.mjs` (exit 0, `closes GAM-449`).
