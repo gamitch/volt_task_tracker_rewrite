@@ -174,3 +174,40 @@ Any real undo needs a new restore write path.
   and I am not dispatching against a REVISE. The findings look mechanical, which
   is exactly the feeling item 19a exists to overrule — item 1 puts the
   constitution above agent judgment.
+
+## Close-out
+
+- **03:39Z — filed GAM-484** to `Backlog` with `tier/unreviewed` (items 20 + 30,
+  via the `linear-task-writing` skill): `astryx-api.md`'s `Toast` Props table
+  documents `uniqueID`/`collisionBehavior`/`onHide`, none of which exist in the
+  installed `ToastProps`, and omits the required `onDismiss` — so item 2a
+  forbids the only correct call. Four shipped files (`HoursTab.tsx:300-309`,
+  `CoachHome.tsx:355-360`, `OutreachList.tsx:149-160`,
+  `InviteParentDialog.tsx:158-162`) had each recorded this in a module-doc
+  comment and none had filed a row. Item 20's failure shape, four times over.
+- **03:40Z — PR #238 body finalized and published**, leading with a
+  do-not-merge notice: line 1 is `Closes GAM-479` because
+  `linear-declaration-check.mjs` rule 3 accepts no non-closing form, not because
+  the work is done. The PR stays a **draft**. Declaration check: `OK
+  declaration closes GAM-479`, exit 0.
+- **03:41Z — GAM-479 moved `In Progress → Needs Attention`** with an
+  `**Escalating` comment carrying the premise measurements, the twelve
+  round-3 revisions, and the two decisions only the owner can make (Q1: combined
+  `Banner` vs per-row control; Q2: should an undo colliding with a real new QR
+  check-in fail, and what should it say). Read back:
+  `state=Needs Attention`, labels `meetings-redesign`, `heavy`.
+  Not `In Review` — nothing was implemented, and item 28e's finished state would
+  be a false signal. Not `Todo` either: the premise holds, so this is not the
+  refusal case; it is an owner decision.
+
+**Gates:** none run, and deliberately. There is no source change on this branch,
+so the six gates would report on `origin/main` and nothing else. What the next
+run needs instead is the baseline the packet's §5 records, measured here at
+`8f6d17c4`: `npx vitest run src/pages/outreach/AttendancePanel.test.tsx
+src/lib/supabase/loaders/attendance.test.ts` → 2 files, 56 tests, all green
+(41 + 15).
+
+**Subagents dispatched: 2. Verdicts recorded: 2.** Both `checker-premise`, both
+`model: "opus"`, both `run_in_background: false`, both waited on to completion
+before this orchestrator continued. No line in this file is a dispatch without a
+matching verdict.
