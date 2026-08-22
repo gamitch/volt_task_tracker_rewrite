@@ -176,6 +176,20 @@ function buildInitialStatusMap(
   return map;
 }
 
+/** `statusById`'s own values are `AttendanceStatus | null` -- `null` is the
+ * deliberate "(unset)" sentinel (module doc item 5), so a plain `??` lookup
+ * is wrong here: `??` treats `null` as "absent" and falls back past it to
+ * `fallback`, silently un-doing every local unset. `key in map` is the only
+ * correct way to distinguish "no local override recorded yet" from "the
+ * local override IS null". */
+function readLocalStatus<T>(
+  map: Record<string, T | null>,
+  studentId: string,
+  fallback: T | null,
+): T | null {
+  return studentId in map ? map[studentId] : fallback;
+}
+
 /** Props for {@link SessionRow}. */
 export interface SessionRowProps {
   eventId: string;
@@ -236,7 +250,7 @@ export function SessionRow({
     if (status === 'excused' && !canSetExcused) return; // MTG-12 defence in depth (criterion 16)
     if (recordedBy === undefined) return; // criterion 10 defence in depth
     if (!onSetAttendanceStatus) return;
-    const previous = statusById[studentId] ?? null;
+    const previous = readLocalStatus(statusById, studentId, null);
     setStatusById((prev) => ({ ...prev, [studentId]: status }));
     onSetAttendanceStatus({
       sessionId: session.sessionId,
@@ -253,7 +267,7 @@ export function SessionRow({
   function handleUnset(studentId: string): void {
     if (recordedBy === undefined) return; // criterion 10 defence in depth
     if (!onRemoveAttendance) return;
-    const previous = statusById[studentId] ?? null;
+    const previous = readLocalStatus(statusById, studentId, null);
     setStatusById((prev) => ({ ...prev, [studentId]: null }));
     onRemoveAttendance({ sessionId: session.sessionId, studentId }).catch(() => {
       setStatusById((prev) => ({ ...prev, [studentId]: previous }));
@@ -375,7 +389,7 @@ export function SessionRow({
                 <Text type="body">{entry.displayName}</Text>
                 <AttendanceChips
                   studentName={entry.displayName}
-                  status={statusById[entry.studentId] ?? entry.status}
+                  status={readLocalStatus(statusById, entry.studentId, entry.status)}
                   canSetExcused={canSetExcused}
                   isDisabled={recordedBy === undefined}
                   disabledTitle="Sign in again to record attendance."

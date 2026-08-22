@@ -391,6 +391,56 @@ describe('optimistic rollback (criterion 9)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Rework defect 1 -- `statusById[id] ?? entry.status` silently discarded a
+// local `null` (unset) override and fell back to the stale server value.
+// This walks the FULL five-stop loop starting from a NON-NULL roster status
+// on the real assembled `SessionRow` (not `AttendanceChips` in isolation --
+// criterion 3's own test hand-feeds a status prop, which is exactly why it
+// could not catch this), asserting the DOM accessible name after the unset
+// tap and after the following tap.
+// ---------------------------------------------------------------------------
+
+describe('local unset is not overwritten by the stale server status (rework defect 1)', () => {
+  it('reads "…, not recorded" after the unset tap, then "…, present" after the next tap', () => {
+    const onSetAttendanceStatus = vi.fn().mockResolvedValue({});
+    const onRemoveAttendance = vi.fn().mockResolvedValue(undefined);
+    renderRow(
+      baseProps({
+        session: baseSession({ status: 'completed', sessionId: 'session-9' }),
+        isExpanded: true,
+        roster: [rosterEntry({ studentId: 'student-9', displayName: 'Ada L.', status: 'absent' })],
+        onSetAttendanceStatus,
+        onRemoveAttendance,
+        recordedBy: 'coach-1',
+      }),
+    );
+    const chipButton = () =>
+      container.querySelector('[data-testid="roster-row-student-9"] button') as HTMLButtonElement;
+
+    // BEFORE -- server-supplied 'absent'.
+    expect(chipButton().getAttribute('aria-label')).toBe('Ada L., absent');
+
+    // tap 1: absent -> (unset). Calls onRemoveAttendance, and the local
+    // `null` override must stick, not fall back to the server's 'absent'.
+    act(() => {
+      chipButton().dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onRemoveAttendance).toHaveBeenCalledTimes(1);
+    expect(chipButton().getAttribute('aria-label')).toBe('Ada L., not recorded');
+
+    // tap 2: (unset) -> present. The cycle must have actually closed and
+    // advanced, not silently repeated the same "absent" server value.
+    act(() => {
+      chipButton().dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onSetAttendanceStatus).toHaveBeenCalledTimes(1);
+    expect(onSetAttendanceStatus.mock.calls[0][0]).toMatchObject({ status: 'present' });
+    expect(chipButton().getAttribute('aria-label')).toBe('Ada L., present');
+    expect(onRemoveAttendance).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Criterion 10 -- recordedBy absent -> disabled, no write.
 // ---------------------------------------------------------------------------
 
@@ -459,20 +509,47 @@ describe('DES-17 roving tabindex + digit keys (criterion 5)', () => {
     expect(rowB.tabIndex).toBe(0);
   });
 
-  it('keys 1-4 set Present/Late/Excused/Absent directly on the focused row, without cycling', () => {
+  it.each([
+    ['1', 'present'],
+    ['2', 'late'],
+    ['3', 'excused'],
+    ['4', 'absent'],
+  ] as const)('key %s sets %s directly on the focused row, without cycling', (key, status) => {
     const { onSetAttendanceStatus } = renderTwoStudentRoster();
     const rowA = container.querySelector('[data-testid="roster-row-student-a"]') as HTMLElement;
 
     act(() => {
       rowA.dispatchEvent(
-        new KeyboardEvent('keydown', { key: '3', bubbles: true, cancelable: true }),
+        new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
       );
     });
     expect(onSetAttendanceStatus).toHaveBeenCalledTimes(1);
     expect(onSetAttendanceStatus.mock.calls[0][0]).toMatchObject({
       studentId: 'student-a',
-      status: 'excused',
+      status,
     });
+  });
+
+  it('ArrowUp moves the roving tab stop backward', () => {
+    renderTwoStudentRoster();
+    const rowA = container.querySelector('[data-testid="roster-row-student-a"]') as HTMLElement;
+    const rowB = container.querySelector('[data-testid="roster-row-student-b"]') as HTMLElement;
+
+    // Move forward to row B first, then back up to row A.
+    act(() => {
+      rowA.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }),
+      );
+    });
+    expect(rowB.tabIndex).toBe(0);
+
+    act(() => {
+      rowB.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }),
+      );
+    });
+    expect(rowA.tabIndex).toBe(0);
+    expect(rowB.tabIndex).toBe(-1);
   });
 
   it('a digit key fired while focus is on the descendant chip still lands (bubbling)', () => {
