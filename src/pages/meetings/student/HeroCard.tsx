@@ -33,7 +33,7 @@ export function HeroCard({ nextSession }: HeroCardProps): ReactNode {
           <Text type="supporting" weight="bold">
             {dateSquare.month}
           </Text>
-          <Heading level={3}>{dateSquare.day}</Heading>
+          <Text weight="bold">{dateSquare.day}</Text>
         </VStack>
         <VStack gap={1} width="100%">
           <HStack hAlign="between" gap={2} vAlign="center">

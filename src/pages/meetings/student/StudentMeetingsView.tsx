@@ -223,7 +223,7 @@ function ResolvedStudentMeetingsView({
   if (state.data === null)
     return (
       <EmptyState
-        headingLevel={1}
+        headingLevel={2}
         title="No student account linked yet"
         description="We couldn't find a student record linked to your account yet. Once one is linked, your meetings will show up here."
       />

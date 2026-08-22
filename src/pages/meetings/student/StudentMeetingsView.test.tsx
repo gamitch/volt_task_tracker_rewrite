@@ -389,7 +389,8 @@ describe('StudentMeetingsViewContainer identity and parent composition', () => {
 
   it('renders the no-linked-student empty state', async () => {
     await renderContainer({ resolveStudentId: () => Promise.resolve(null) });
-    expect(container.textContent).toContain('No student account linked yet');
+    expect(headingOutline()).toEqual(['H1:Meetings', 'H2:No student account linked yet']);
+    expect(container.querySelectorAll('h1')).toHaveLength(1);
   });
 
   it('passes the resolved student identity into the meeting loader', async () => {
@@ -400,9 +401,13 @@ describe('StudentMeetingsViewContainer identity and parent composition', () => {
 
   it('uses one h1 Meetings followed by h2 sections on the real user composition', async () => {
     await renderContainer({ viewer: { id: 'student', role: 'student' } });
-    expect(headingOutline().filter((heading) => heading === 'H1:Meetings')).toHaveLength(1);
-    expect(headingOutline()).toContain('H2:First meeting');
-    expect(headingOutline()).toContain('H2:Attendance summary');
+    expect(headingOutline()).toEqual([
+      'H1:Meetings',
+      'H2:First meeting',
+      'H2:Coming up after that',
+      'H2:Attendance summary',
+    ]);
+    expect(container.querySelectorAll('h1')).toHaveLength(1);
   });
 
   it('shows a child switcher only when a parent has more than one child', async () => {
