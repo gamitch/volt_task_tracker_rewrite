@@ -1,0 +1,58 @@
+/**
+ * MeetingsRail.css (GAM-449)
+ *
+ * DES-21 escalation: component prop -> theme token -> xstyle -> custom CSS.
+ * This file is the last rung and is kept small, in `@layer app` (the same
+ * highest-priority layer `src/theme/theme.css` declares -- NFR-08's
+ * `reset < astryx-base < app` order), justified for exactly three things
+ * (packet §5):
+ *
+ *   1. the palette-index seam (`[data-series-palette-index]` swatches/dots,
+ *      packet §3f) -- neutral until GAM-466 lands the eight series hues in
+ *      `src/theme/volt.ts`. No hex literal for a series hue is introduced
+ *      here; `var(--color-border-emphasized)` is an existing neutral token.
+ *   2. rail layout (§6) -- no fixed pixel width on the rail root, long
+ *      titles wrap, no `min-width` floors on flex children.
+ *   3. the day-cell theming the issue explicitly asks for -- styling
+ *      `astryx-calendar-day`'s own documented `data-today`/`data-selected`
+ *      hooks (astryx-api.md:2357), the one part of "marking" that IS
+ *      achievable through `Calendar`'s public surface (packet §3c/§5).
+ */
+@layer app {
+  .meetings-rail {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .meetings-rail__swatch,
+  .meetings-rail__dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    min-width: 10px;
+    border-radius: 50%;
+    background-color: var(--color-border-emphasized);
+    flex: none;
+  }
+
+  .meetings-rail__agenda-item {
+    width: 100%;
+    min-width: 0;
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+
+  .meetings-rail__agenda-item * {
+    min-width: 0;
+  }
+
+  .meetings-rail .astryx-calendar-day[data-today] {
+    outline: 1px solid var(--color-accent);
+    outline-offset: -1px;
+  }
+
+  .meetings-rail .astryx-calendar-day[data-selected] {
+    background-color: var(--color-accent);
+    color: var(--color-on-accent);
+  }
+}
