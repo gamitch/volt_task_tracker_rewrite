@@ -57,3 +57,33 @@ the wait; each verdict is written the moment it returns.
 - 2026-08-22T01:03Z — **Dispatched `checker-premise`** (opus, high effort) on
   the packet, `run_in_background: false`. *If this line is the last one in this
   file, the run died holding this subagent.*
+
+- 2026-08-22T01:14Z — **`checker-premise` verdict: REVISE** (round 1 of the
+  two-round cap, item 19a). 2 BLOCKER, 6 MAJOR, 6 MINOR, 4 NIT. It ran real
+  experiments in its own worktree rather than only reading, which is what item
+  26 says makes a gate worth its cost — and it falsified my central design
+  decision with a number:
+  * **BLOCKER-1 — my `dateConstraints`-to-disable mechanism is wrong.** Probe:
+    for one Mon/Thu series in Aug 2026, **33 of 42 rendered day cells** go
+    `data-disabled` (I had guessed "18 of 31"), each a real `disabled` button
+    with `tabIndex="-1"`, leaving one tabbable cell in the whole grid. It also
+    makes clicking an empty day impossible, which the live issue does not ask
+    for. Withdrawn; falling back to T045's shipped resolution — no grid
+    marking, `Calendar` for navigation and day selection only.
+  * **BLOCKER-2 — an off-by-one I would have shipped.** A `dateConstraints`
+    predicate receives local midnight, and the Chicago `Intl` formatter I
+    mandated returns the previous day for it under CI's `TZ=UTC`
+    (`2026-08-22T00:00:00Z → 2026-08-21`). Moot now that BLOCKER-1 removes the
+    predicate, but the same trap applies to `Calendar`'s own `data-today`,
+    which is browser-zone and can disagree with Chicago-today by a day.
+  * **MAJOR-3 — criterion 9 silently reversed merged work.** GAM-447 added
+    `isLoading?`/`errorMessage?` as additive optional props to the equally
+    frozen `SeriesCardProps` and passed. My "do not widen the props" reading
+    would have reversed a passed sibling (Definition of Ready #5).
+  * **MAJOR-4 — "the only option" was false.** `useActiveSeason()` carries the
+    real season window, and is what the very precedent the issue cites uses.
+  * **MAJOR-5 — this ticket closes Partial, not Passed**, linked to GAM-452:
+    `MeetingsRail` has zero importers repo-wide today.
+  * MAJOR-6/7/8 — no criterion exercised the frozen `focus` prop; the "Today"
+    control the issue requires was dropped; tests need a pinned clock.
+  Revising the packet now (round 2 of 2).
