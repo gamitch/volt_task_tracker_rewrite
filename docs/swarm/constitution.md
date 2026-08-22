@@ -38,7 +38,96 @@ If a worker believes the standard is wrong, impossible, contradictory, or harmfu
 
 ### Authority & sources of truth
 1. Precedence: PRD requirement IDs > this constitution > task-ledger text > agent judgment. Conflicts are disputes for boss-arbiter — never improvised around.
-2. Astryx component props come **only** from `docs/swarm/astryx-api.md` (PRD DES-19). A prop absent from that file is presumed hallucinated → MAJOR. The CLI (`npm run astryx -- component <Name>`) is a cross-check, not a source.
+2. **Astryx is the preferred source, and `astryx-api.md` is the only legal source
+   for an Astryx prop** (PRD DES-19). Two different questions have been living
+   inside this item and getting the same answer: *what props does an Astryx
+   component have*, and *may we use a component Astryx does not ship*. This item
+   answers the first. It has **no authority over the second** — items 8, 9 and 11
+   do. A checker that cites item 2 to block a non-Astryx component has cited the
+   wrong rule.
+
+   a. **Astryx props — unchanged.** They come **only** from
+      `docs/swarm/astryx-api.md`. A prop absent from that file is presumed
+      hallucinated → MAJOR. The CLI (`npm run astryx -- component <Name>`) is a
+      cross-check, not a source. DES-19 is not deviated from here and its
+      presumption is not weakened: the remedy for a doc gap is to *correct the
+      file* (2b), never to use an undocumented prop and argue it is real.
+
+   b. **Correcting `astryx-api.md` is a legal move, and any agent may make it —
+      the gate is evidence, not rank.** D004 already amended this file once, by
+      boss-arbiter, and kept the mechanism to itself; the cost of that showed up
+      in the same ruling (D004 Ruling C left `useAppShellMobile` — a real,
+      shipped API — unusable purely because it was undocumented). An addition is
+      legal when **all** of these hold:
+      - it cites the **installed** package source by path and line under
+        `node_modules/@astryxdesign/`, not the vendor's website or memory;
+      - the CLI cross-check (DES-20) was run and its output agrees;
+      - the entry is **marked as an annotation** in D004's style, source-cited
+        and dated, and the vendor's original text is left in place rather than
+        silently rewritten — doc-refresh tasks must still diff cleanly;
+      - it lands **in the same PR as the code that uses it**, so the claim and
+        its use are reviewed together;
+      - the checker **independently re-verifies against the installed package**
+        and does not take the annotation's own citation on trust.
+
+      A checker that accepts an annotation without re-running the citation has
+      not checked it. An annotation failing any bullet above is graded exactly as
+      the undocumented prop would have been — MAJOR. `astryx-api.md` is
+      deliberately **not** on the forbidden-files list under Authority
+      Boundaries: that is what makes this route available to a worker, and the
+      five bullets are what stop it from becoming a way to launder a
+      hallucination into the record by typing it into the source of truth.
+
+   c. **Reaching outside Astryx is legal when the gap is measured first.**
+      Astryx-first is a requirement, not a taste. Before any non-Astryx
+      component — third-party or hand-built — the gap is **measured and written
+      down**: name what Astryx actually ships for the need, cite it from
+      `astryx-api.md`, and state what it cannot do. "Astryx doesn't have one" is
+      an assertion; D021 is the standard — it quoted `Icon`'s complete 26-name
+      semantic set and showed that only one of seven nav destinations had a
+      match. A component introduced without that measurement is MAJOR on the
+      **choice**, independent of whether its code is any good.
+
+      The record carries three things, and D021 is the model for all three: the
+      **measured gap**, the **alternatives considered and why they lost**, and
+      the **disclosed divergence** — what the substitute makes worse, stated up
+      front so a checker meeting it later has found this ruling rather than a
+      defect. It is a dispute-log entry plus a Linear issue per item 30; the
+      ledger is frozen (item 29) and is not where this goes.
+
+      If the component is a **new dependency**, item 9 still governs it and
+      boss-architect approval is still required — 2c is the design half of that
+      case, not a replacement for it. If it is **hand-built in `src/`**, no
+      dependency approval is needed and the gap record still is.
+
+   d. **Its props are verified against its own source, to the same standard.**
+      Item 2a's presumption is Astryx-scoped and does not transfer, but the
+      discipline behind it does: a non-Astryx component's props are cited from
+      its own installed types or source under `node_modules/`, or from the
+      component's own definition if we wrote it. Unverified props are MAJOR
+      wherever they come from. Item 11's styling escalation (DES-21) and item 12's
+      four states apply to it unchanged — a substitute component is not a
+      quieter corner of the app.
+
+   e. **What this does not open.** **Item 8 is untouched and still BLOCKER:** no
+      Tailwind, no shadcn, no alternate UI or CSS library. One component or one
+      icon set is not a design system, and 2c is not a route to a second one — if
+      the honest answer to "what Astryx ships for this" is *most of a UI kit*,
+      that is item 8's question and the answer is no. Nor does 2c license
+      preference: "the Astryx one is awkward" is a styling escalation under item
+      11, not a gap. A gap means Astryx ships **nothing** that can do the job.
+
+   **Authorized by the human owner 2026-08-22**, verbatim: *"the Constitution
+   item 2 makes astryx-api.md the only legal source for an Astryx prop and says a
+   prop absent from it is presumed hallucinated. i need astryx as the preferred
+   source, but we have instances where we need to bring in other components."*
+   Scope and the 2b authority were his rulings, taken the same day. Rationale:
+   item 2 was being read as the wall around the whole design system when its text
+   only ever governed props, and that misreading has already cost real work
+   twice — D004 Ruling C forbade a shipped Astryx hook for being undocumented,
+   and D021 had to be argued as a dependency question because there was no rule
+   describing how to leave Astryx on purpose. Both were handled correctly and
+   neither left anything reusable behind. This item is that residue.
 3. RLS policies and metric SQL come **only** from PRD Section 8.4, copied verbatim. Re-deriving either, or duplicating a metric formula in TypeScript (PRD DATA-01) → BLOCKER.
 
 ### Security & privacy (students are minors)
@@ -49,11 +138,11 @@ If a worker believes the standard is wrong, impossible, contradictory, or harmfu
 
 ### Stack locks
 8. Vite + React 19 + TypeScript strict + Supabase. **No Tailwind, no shadcn, no alternate UI/CSS libraries** (PRD D2/D3) → BLOCKER. *React 19 is an approved, human-authorized deviation from PRD D2's "React 18" — see dispute-log D002 for the ruling and evidence (`@astryxdesign/core` requires React 19 at runtime, not just in peer metadata). The PRD text itself is intentionally unedited; D002 is the record of the deviation.*
-9. Dependency allowlist: `@astryxdesign/*`, `@supabase/supabase-js`, `@tanstack/react-query`, `react-router-dom`, `qrcode.react`, `lucide-react`, `ical-generator` (Edge Function), plus dev tooling (vitest, playwright, eslint, prettier). Anything else requires boss-architect approval recorded in the ledger. *`lucide-react` is a human-authorized addition (owner, 2026-08-21) — Astryx's semantic icon set is a closed 26-name list that cannot name four of the seven side-nav destinations, and `Icon`'s own props table directs callers to lucide or heroicons for anything outside it. See dispute-log D021 for the measured gap, the choice between the two, and the disclosed divergence (lucide is outline-only, so `SideNavItem.selectedIcon` goes unused). Recorded there rather than in the ledger, which item 29 froze.*
+9. Dependency allowlist: `@astryxdesign/*`, `@supabase/supabase-js`, `@tanstack/react-query`, `react-router-dom`, `qrcode.react`, `lucide-react`, `ical-generator` (Edge Function), plus dev tooling (vitest, playwright, eslint, prettier). Anything else requires boss-architect approval recorded in the ledger. **A UI dependency also needs item 2c's measured gap record** — this item asks whether we may take the dependency, 2c asks whether Astryx already had an answer. *`lucide-react` is a human-authorized addition (owner, 2026-08-21) — Astryx's semantic icon set is a closed 26-name list that cannot name four of the seven side-nav destinations, and `Icon`'s own props table directs callers to lucide or heroicons for anything outside it. See dispute-log D021 for the measured gap, the choice between the two, and the disclosed divergence (lucide is outline-only, so `SideNavItem.selectedIcon` goes unused). Recorded there rather than in the ledger, which item 29 froze.*
 10. Database changes are additive migrations via the Supabase CLI; editing an applied migration file → BLOCKER.
 
 ### UI & quality
-11. UI is built from Astryx components; styling escalation order per PRD DES-21 (component → theme token → xstyle → custom CSS); ejecting component source needs boss approval.
+11. UI is built from Astryx components; styling escalation order per PRD DES-21 (component → theme token → xstyle → custom CSS); ejecting component source needs boss approval. **Where Astryx ships nothing for the need, item 2c is the route out** — the gap is measured and recorded before the substitute is written, and item 8's ban on an alternate UI library is unaffected by it. Reaching for a non-Astryx component because the Astryx one is awkward to style is a DES-21 escalation, not a gap.
 12. Every async screen ships all four states — loading, empty, error, populated (PRD DES-12). Happy-path-only → MAJOR.
 13. Wireframes are structural intent: rendering box-drawing/bracket characters in the DOM → MAJOR. Routes marked "template as-is" (PRD 7.1) get the named Astryx template; inventing custom layout there → MAJOR.
 14. Copy follows PRD DES-14…16 (sentence case, named actions, prescribed empty/error text). Timestamps stored UTC, displayed America/Chicago (NFR-09).

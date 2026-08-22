@@ -491,6 +491,24 @@ C. Drawer does NOT auto-close on nav-item selection: classified MINOR
    The checker records the observed behavior in evidence; it does not fail
    the task on it.
 
+   **Addendum 2026-08-22 — Ruling C's reasoning is superseded; its outcome
+   is not.** Constitution item 2 was amended that day (owner's ruling,
+   `auto-mode-decisions.md`, "George reopens constitution item 2"). Item 2b
+   now makes correcting `astryx-api.md` a legal move for **any** agent when
+   the addition cites installed source by path and line, agrees with the
+   DES-20 CLI cross-check, is marked as a dated annotation leaving vendor
+   text intact, lands in the same PR as its use, and is independently
+   re-verified by the checker. So "item 2 forbids using it today" is no
+   longer the state of the rules — `useAppShellMobile` is *undocumented*,
+   which 2b makes fixable, rather than *forbidden*.
+
+   **It is still not authorized.** Nobody has run that route on it: no
+   citation, no cross-check, no annotation, no re-verification. Ruling C
+   stands until someone does, and the auto-close follow-up stays open. This
+   addendum changes what it would take to close it, not whether it is
+   closed. Recorded here because D004 is where a reader meets the old
+   reasoning, and an amendment nobody finds is an amendment nobody has.
+
 D. Ledger: T008 stays In Progress, attempt 1. Orchestrating session /
    foreman dispatches the amended packet verbatim from Rulings A–C; no
    further judgment calls are delegated. Checker remains
