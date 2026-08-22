@@ -83,6 +83,9 @@ values
    true, false, 2, 16, 'a0000000-0000-4000-8000-000000000001'),
   ('e0e00000-0000-4000-8000-000000000004', '50000000-0000-4000-8000-000000000001', 'meeting',
    'Nina Team Meeting', 'A distinct FTC meeting for Nina.', 'FTC Lab', '22 Circuit Way',
+   array['7ea11000-0000-4000-8000-000000000002']::uuid[], true, false, 0, 0, 'a0000000-0000-4000-8000-000000000002'),
+  ('e0e00000-0000-4000-8000-000000000005', '50000000-0000-4000-8000-000000000001', 'meeting',
+   'Nina Retrospective', 'A completed FTC meeting that distinguishes Nina history.', 'FTC Review Room', '22 Circuit Way',
    array['7ea11000-0000-4000-8000-000000000002']::uuid[], true, false, 0, 0, 'a0000000-0000-4000-8000-000000000002');
 
 /* -------------------------------------------------------------- sessions */
@@ -100,7 +103,7 @@ insert into event_sessions (id, event_id, session_date, starts_at, ends_at, stat
   -- real "Sign-up opportunities" entry to exercise.
   ('5e550000-0000-4000-8000-000000000008', 'e0e00000-0000-4000-8000-000000000002', (current_date + 10), now() + interval '10 days', now() + interval '10 days' + interval '4 hours', 'scheduled', ''),
   ('5e550000-0000-4000-8000-000000000009', 'e0e00000-0000-4000-8000-000000000004', (current_date + 2), now() + interval '2 days', now() + interval '2 days' + interval '2 hours', 'scheduled', ''),
-  ('5e550000-0000-4000-8000-000000000010', 'e0e00000-0000-4000-8000-000000000004', (current_date - 5), now() - interval '5 days', now() - interval '5 days' + interval '2 hours', 'completed', 'Nina completed this FTC meeting.');
+  ('5e550000-0000-4000-8000-000000000010', 'e0e00000-0000-4000-8000-000000000005', (current_date - 5), now() - interval '5 days', now() - interval '5 days' + interval '2 hours', 'completed', 'Nina completed this FTC meeting.');
 
 update event_sessions set people_reached = 140 where id = '5e550000-0000-4000-8000-000000000006';
 

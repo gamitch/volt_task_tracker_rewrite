@@ -212,8 +212,10 @@ test.describe('GAM-451 meetings read-only student and parent views', () => {
       page.locator('[data-selected-student]').filter({ hasText: 'Weeknight Build Session' }),
     ).toBeVisible();
     await expect(page.getByText('Nina Team Meeting')).toHaveCount(0);
+    await expect(page.getByText('Nina Retrospective')).toHaveCount(0);
+    const priya = switcher.getByRole('radio', { name: 'Priya R.' });
     const nina = switcher.getByRole('radio', { name: 'Nina K.' });
-    await nina.focus();
+    await priya.focus();
     await page.keyboard.press('ArrowRight');
     await expect(nina).toBeChecked();
     const selected = page
@@ -224,7 +226,8 @@ test.describe('GAM-451 meetings read-only student and parent views', () => {
     const pastDisclosure = selected.getByRole('button', { name: /Show past meetings \(1\)/ });
     await pastDisclosure.focus();
     await page.keyboard.press('Enter');
-    await expect(selected.getByText('Late')).toBeVisible();
+    await expect(selected.getByText('Nina Retrospective')).toBeVisible();
+    await expect(selected.getByText('FTC Review Room')).toBeVisible();
     for (const label of [/schedule meetings/i, /^edit$/i, /cancel session/i, /mark attendance/i])
       await expect(page.getByRole('button', { name: label })).toHaveCount(0);
     await capture(page, '85-parent-meetings-nina-history');

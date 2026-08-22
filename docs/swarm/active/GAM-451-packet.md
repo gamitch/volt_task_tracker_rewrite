@@ -208,7 +208,8 @@ Forbidden:
    as hero; change Chicago current-date bucketing to UTC; coerce null
    participation to zero; remove the selected-student team filter; show two
    children simultaneously; insert an `Edit meeting` button into the student
-   composition.
+   composition; render a second participation bar; remove the latest-five
+   attendance cap; make the failed real loader's Retry button a no-op.
 10. All six repository gates pass with no test-count regression. Measured base
     at `41c81a5`: student scope 25/25. Full collection is 2,666 tests; three
     pre-existing child-process failures in
