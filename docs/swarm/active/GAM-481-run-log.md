@@ -22,3 +22,4 @@ here in its **orchestrator-implements** form: `checker-premise` (read-only) gate
 the **orchestrator** makes the edit because no worker may, and `checker-reviewer` (read-only)
 grades it. The issue itself anticipates this: *"`.claude/skills/**` is owner/orchestrator
 territory, which is why this is filed rather than edited from a task branch."*
+- **03:23Z — draft PR #239 opened** at run-minute ~5, with only the run log and the PR-body artifact on the branch. <https://github.com/gamitch/volt_task_tracker_rewrite/pull/239>. `node .claude/skills/pr-body/scripts/check.mjs docs/swarm/active/GAM-481-pr-body.md` → `OK declaration closes GAM-481`, exit 0.
