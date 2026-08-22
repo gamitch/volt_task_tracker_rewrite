@@ -104,6 +104,7 @@ export function buildStudentMeetingsData(
       return {
         sessionId: session.id,
         title: event?.title ?? 'Untitled meeting',
+        locationName: event?.locationName ?? '',
         sessionDate: session.sessionDate,
         startsAt: session.startsAt,
         endsAt: session.endsAt,

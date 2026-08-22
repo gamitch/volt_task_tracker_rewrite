@@ -318,6 +318,10 @@ interface AttendanceDbRow {
   status: AttendanceStatus;
 }
 
+interface StudentTeamDbRow {
+  team_id: string;
+}
+
 /** T122 (module doc above, item b). Cited column-for-column against
  * `supabase/migrations/20260717000000_scheduling_attendance.sql`'s own
  * `rsvps` table (`session_id`, `student_id`, `status` -- the check
@@ -542,6 +546,19 @@ async function queryAttendanceForStudent(
     .select('session_id, student_id, status')
     .eq('student_id', studentId);
   return { data: (result.data as AttendanceDbRow[] | null) ?? null, error: result.error };
+}
+
+/** Active memberships are the selected student's presentation boundary. */
+async function queryActiveStudentTeams(
+  client: SupabaseClient,
+  studentId: string,
+): Promise<LoaderQueryResult<StudentTeamDbRow[]>> {
+  const result = await client
+    .from('student_teams')
+    .select('team_id')
+    .eq('student_id', studentId)
+    .is('left_on', null);
+  return { data: (result.data as StudentTeamDbRow[] | null) ?? null, error: result.error };
 }
 
 /**
@@ -1075,18 +1092,32 @@ export function makeLoadStudentMeetingsData(
     queryParticipationRowsForStudent,
     getClient,
   );
+  const loadActiveTeamRows = createLoader<string, StudentTeamDbRow[]>(
+    queryActiveStudentTeams,
+    getClient,
+  );
   return async (studentId: string): Promise<StudentMeetingsData> => {
-    const [eventRows, sessionRows, attendanceRows, participationRows] = await Promise.all([
-      loadEventRows(),
-      loadSessionRows(),
-      loadAttendanceRows(studentId),
-      loadParticipationRows(studentId),
-    ]);
+    const [eventRows, sessionRows, attendanceRows, participationRows, activeTeamRows] =
+      await Promise.all([
+        loadEventRows(),
+        loadSessionRows(),
+        loadAttendanceRows(studentId),
+        loadParticipationRows(studentId),
+        loadActiveTeamRows(studentId),
+      ]);
+    const activeTeamIds = new Set((activeTeamRows ?? []).map((row) => row.team_id));
+    const visibleEvents = (eventRows ?? []).filter(
+      (event) =>
+        event.team_ids === null || event.team_ids.some((teamId) => activeTeamIds.has(teamId)),
+    );
+    const visibleEventIds = new Set(visibleEvents.map((event) => event.id));
     const aggregatedParticipation = aggregateParticipationRows(participationRows ?? []);
     return buildStudentMeetingsData(
       studentId,
-      (eventRows ?? []).map(mapEventDbRow),
-      (sessionRows ?? []).map(mapSessionDbRow),
+      visibleEvents.map(mapEventDbRow),
+      (sessionRows ?? [])
+        .filter((session) => visibleEventIds.has(session.event_id))
+        .map(mapSessionDbRow),
       (attendanceRows ?? []).map(mapAttendanceDbRow),
       aggregatedParticipation === null ? [] : [mapParticipationDbRow(aggregatedParticipation)],
     );

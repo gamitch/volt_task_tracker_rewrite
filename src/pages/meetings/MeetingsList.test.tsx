@@ -240,6 +240,7 @@ describe('loadStudentMeetingsData (T096 real load; T122 .limit(1) fix)', () => {
     const sessionsOrderSpy = vi.fn().mockResolvedValue({ data: [], error: null });
     const attendanceEqSpy = vi.fn().mockResolvedValue({ data: [], error: null });
     const participationEqSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    const activeTeamsIsSpy = vi.fn().mockResolvedValue({ data: [], error: null });
 
     const fromSpy = vi.fn((table: string) => {
       if (table === 'events') return { select: eventsSelectSpy };
@@ -249,6 +250,8 @@ describe('loadStudentMeetingsData (T096 real load; T122 .limit(1) fix)', () => {
         // T122: `.limit(1)` REMOVED -- `.eq(...)` is awaited directly now.
         return { select: vi.fn(() => ({ eq: participationEqSpy })) };
       }
+      if (table === 'student_teams')
+        return { select: vi.fn(() => ({ eq: vi.fn(() => ({ is: activeTeamsIsSpy })) })) };
       throw new Error(`unexpected table: ${table}`);
     });
     const client = { from: fromSpy } as unknown as SupabaseClient;
@@ -258,6 +261,7 @@ describe('loadStudentMeetingsData (T096 real load; T122 .limit(1) fix)', () => {
 
     expect(attendanceEqSpy).toHaveBeenCalledWith('student_id', 'student-42');
     expect(participationEqSpy).toHaveBeenCalledWith('student_id', 'student-42');
+    expect(activeTeamsIsSpy).toHaveBeenCalledWith('left_on', null);
   });
 
   // T122's own ".limit(1)" fix decision, end-to-end: a dual-member student's
@@ -297,6 +301,7 @@ describe('loadStudentMeetingsData (T096 real load; T122 .limit(1) fix)', () => {
       ],
       error: null,
     });
+    const activeTeamsIsSpy = vi.fn().mockResolvedValue({ data: [], error: null });
 
     const fromSpy = vi.fn((table: string) => {
       if (table === 'events') return { select: eventsSelectSpy };
@@ -305,6 +310,8 @@ describe('loadStudentMeetingsData (T096 real load; T122 .limit(1) fix)', () => {
       if (table === 'v_student_participation') {
         return { select: vi.fn(() => ({ eq: participationEqSpy })) };
       }
+      if (table === 'student_teams')
+        return { select: vi.fn(() => ({ eq: vi.fn(() => ({ is: activeTeamsIsSpy })) })) };
       throw new Error(`unexpected table: ${table}`);
     });
     const client = { from: fromSpy } as unknown as SupabaseClient;

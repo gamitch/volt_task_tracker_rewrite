@@ -24,7 +24,9 @@ test.describe('student home', () => {
 
   test('greets the student by name and shows their own progress', async ({ page }) => {
     await signIn(page, 'student');
-    await expect(page.getByRole('heading', { name: `Hi ${PERSONAS.student.displayName}` })).toBeVisible({
+    await expect(
+      page.getByRole('heading', { name: `Hi ${PERSONAS.student.displayName}` }),
+    ).toBeVisible({
       timeout: 20_000,
     });
     await expect(page.getByRole('heading', { name: 'Your outreach hours' })).toBeVisible();
@@ -83,7 +85,9 @@ test.describe('student home', () => {
     expect(before).toHaveLength(0);
 
     await signIn(page, 'student');
-    await expect(page.getByRole('heading', { name: 'Sign-up opportunities' })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('heading', { name: 'Sign-up opportunities' })).toBeVisible({
+      timeout: 20_000,
+    });
 
     // Pin the click to the seeded session (`5e55…0008`, event `Library STEM
     // Night` — `seed.sql:96-97`) rather than an unqualified `.first()`, so a
@@ -114,9 +118,12 @@ test.describe('student home', () => {
 });
 
 test.describe('parent home', () => {
-  test('shows the linked child and nothing about anyone else', async ({ page }) => {
+  test('shows exactly two linked children and nothing about anyone else', async ({ page }) => {
     await signIn(page, 'parent');
-    await expect(page.getByText(PERSONAS.student.displayName).first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(PERSONAS.student.displayName).first()).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByText('Nina Kowalski').first()).toBeVisible({ timeout: 20_000 });
 
     const body = await page.locator('body').innerText();
     // Jordan Okafor is on the same team and in the same sessions, but is not
@@ -134,7 +141,9 @@ test.describe('parent home', () => {
     expect(attendance).toEqual([{ student_id: SEED.studentPriya }]);
 
     const links = readRowsAs('parent', 'select student_id from guardian_links');
-    expect(links).toEqual([{ student_id: SEED.studentPriya }]);
+    expect(links.map((link) => link.student_id).sort()).toEqual(
+      [SEED.studentNina, SEED.studentPriya].sort(),
+    );
   });
 
   test('GAM-303: the rounded hours figure also renders in the parent view', async ({ page }) => {
@@ -149,5 +158,42 @@ test.describe('parent home', () => {
     // figure must equal the database value, not just look plausible.
     expect(label.split(' ')[0]).toBe(raw.toFixed(1));
     await capture(page, '25-parent-hours-float');
+  });
+});
+
+test.describe('GAM-451 meetings read-only student and parent views', () => {
+  test('student sees only their own meeting and no meeting write controls', async ({ page }) => {
+    await signIn(page, 'student');
+    await page.goto('/meetings');
+    await expect(page.getByText('Weeknight Build Session')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText('Nina Team Meeting')).toHaveCount(0);
+    await expect(page.getByText('Viewing meetings for')).toHaveCount(0);
+    for (const label of [/schedule meetings/i, /^edit$/i, /cancel session/i, /mark attendance/i])
+      await expect(page.getByRole('button', { name: label })).toHaveCount(0);
+  });
+
+  test('parent selects one named child at a time without leaking the other team meeting', async ({
+    page,
+  }) => {
+    await signIn(page, 'parent');
+    await page.goto('/meetings');
+    const switcher = page.getByRole('radiogroup', { name: 'Viewing meetings for' });
+    await expect(switcher.getByRole('radio')).toHaveCount(2);
+    await expect(switcher.getByRole('radio', { name: 'Priya R.' })).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(switcher.getByRole('radio', { name: 'Nina K.' })).toBeVisible();
+    await expect(
+      page.locator('[data-selected-student]').filter({ hasText: 'Weeknight Build Session' }),
+    ).toBeVisible();
+    await expect(page.getByText('Nina Team Meeting')).toHaveCount(0);
+    await switcher.getByRole('radio', { name: 'Nina K.' }).check();
+    const selected = page
+      .locator('[data-selected-student]')
+      .filter({ hasText: 'Nina Team Meeting' });
+    await expect(selected).toBeVisible();
+    await expect(selected.getByText('Weeknight Build Session')).toHaveCount(0);
+    for (const label of [/schedule meetings/i, /^edit$/i, /cancel session/i, /mark attendance/i])
+      await expect(page.getByRole('button', { name: label })).toHaveCount(0);
   });
 });

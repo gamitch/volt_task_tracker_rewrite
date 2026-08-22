@@ -9,7 +9,14 @@
  * resolution in `src/app/guards.tsx`.
  */
 import { expect, test } from 'playwright/test';
-import { PERSONAS, capture, readRowsAs, signIn, visibleNavLinks, type PersonaKey } from './personaHarness';
+import {
+  PERSONAS,
+  capture,
+  readRowsAs,
+  signIn,
+  visibleNavLinks,
+  type PersonaKey,
+} from './personaHarness';
 
 test.describe('AUTH-02 sign-in and NAV-06 role dispatch', () => {
   test('rejects a wrong password without creating a session', async ({ page }) => {
@@ -29,7 +36,9 @@ test.describe('AUTH-02 sign-in and NAV-06 role dispatch', () => {
       expect(new URL(page.url()).pathname).toBe('/');
 
       // The account menu is the app's own echo of who it thinks is signed in.
-      await expect(page.getByRole('button', { name: `Account menu for ${PERSONAS[key].email}` })).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: `Account menu for ${PERSONAS[key].email}` }),
+      ).toBeVisible();
       await capture(page, `01-${key}-dashboard`);
     });
   }
@@ -54,14 +63,26 @@ test.describe('NFR-02 RLS is what limits each persona, not the UI', () => {
   test('a coach reads the whole roster; a student reads only themselves', async () => {
     // Read through the REAL policies, as the personas — a superuser read here
     // would bypass RLS and prove nothing.
-    const coachSees = readRowsAs('coach', 'select display_name from students order by display_name');
-    const studentSees = readRowsAs('student', 'select display_name from students order by display_name');
-    const parentSees = readRowsAs('parent', 'select display_name from students order by display_name');
+    const coachSees = readRowsAs(
+      'coach',
+      'select display_name from students order by display_name',
+    );
+    const studentSees = readRowsAs(
+      'student',
+      'select display_name from students order by display_name',
+    );
+    const parentSees = readRowsAs(
+      'parent',
+      'select display_name from students order by display_name',
+    );
 
     expect(coachSees.length).toBeGreaterThan(1);
     expect(studentSees).toEqual([{ display_name: PERSONAS.student.displayName }]);
-    // The parent sees exactly the child they are linked to via `guardian_links`.
-    expect(parentSees).toEqual([{ display_name: PERSONAS.student.displayName }]);
+    // The parent sees exactly their two linked children via `guardian_links`.
+    expect(parentSees).toEqual([
+      { display_name: 'Nina Kowalski' },
+      { display_name: PERSONAS.student.displayName },
+    ]);
   });
 
   test('a student is denied the staff-only surfaces in the browser', async ({ page }) => {
@@ -71,7 +92,9 @@ test.describe('NFR-02 RLS is what limits each persona, not the UI', () => {
       await page.goto(route);
       // `RequireRole` renders `AccessDeniedPage` in place rather than
       // redirecting, so the URL stays put and the copy is the assertion.
-      await expect(page.getByText("This page isn't part of your role")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("This page isn't part of your role")).toBeVisible({
+        timeout: 15_000,
+      });
       expect(new URL(page.url()).pathname).toBe(route);
     }
     await capture(page, '02-student-denied-reports');
