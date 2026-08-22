@@ -206,3 +206,35 @@ the run died holding that subagent — that is the failure signature AGENTS.md
     evidence with a reason, not as a measurement that did not happen.
 - 02:48Z — **DISPATCHED `checker-reviewer`, `run_in_background: false`.** *If
   this line is the last one in this file, the run died holding this subagent.*
+- 03:05Z — **`checker-reviewer` VERDICT: FAIL — two MAJORs** (~143K tokens, 48
+  tool calls). It reproduced both gate numbers exactly (2721/2666, 107/52) and
+  ran **26 independent mutations, all 26 red** — the tests are not tautologies.
+  Then it ran 7 more probing for gaps and **3 survived**. The headline finding
+  is one no test caught and no reader would have:
+  - **F1 (MAJOR) — `SessionRow.tsx:378`, `statusById[entry.studentId] ??
+    entry.status`.** `null` is this ticket's `(unset)` sentinel, and `??`
+    treats it as "no local value" and falls back to the SERVER value. The
+    checker measured it with a probe against the real assembled component:
+    after tapping to unset a student whose roster status is `absent`, the chip
+    still reads **"Ada L., absent"** while the attendance row has been deleted,
+    and a second tap fires `onRemoveAttendance` **again**. So: the UI states a
+    status the database no longer holds; the five-stop cycle never closes for
+    any student with a pre-existing mark; and the `aria-live` announcement
+    never fires for that stop. **This is exactly the failure class §0e was
+    written to prevent, arriving through a different door** — and it was
+    invisible to criterion 3, which asserts against `AttendanceChips` in
+    isolation with a harness feeding the status back.
+  - **F2 (MAJOR) — native `<button>` instead of Astryx `Button`** (item 11 /
+    DES-21). The checker verified both halves of the worker's stated reason are
+    TRUE (`BaseProps` omits `title`; `Button.js:341` swaps native `disabled`
+    for `aria-disabled` when a tooltip is present) but ruled the conclusion
+    does not follow: criterion 10 needs "disabled and no write", which
+    `isDisabled` alone satisfies. The real cost is that there is no bare-button
+    reset in `theme.css` or `astryx.css`, so every chip renders **UA-default
+    button chrome**, and this is the first raw `<button>` in the repo's JSX.
+  - F3 (MINOR) digit-key test covers only `1` and `3` — a mutation mis-mapping
+    `2` and `4` stayed green. F4-F6 NITs. F7 confirms **Partial** under item 27.
+- 03:06Z — **DISPATCHED `worker-implementer` (rework round, F1 + F3 only),
+  `run_in_background: false`.** F2 is NOT being reworked — see the decision
+  line below. *If this line is the last one in this file, the run died holding
+  this subagent.*
