@@ -140,3 +140,28 @@ wall 2, and it is written this way so the next reader does not have to guess.
   **Not yet accepted.** Item 26 STANDARD requires the orchestrator to replay the
   mutation and inspect the diff independently; a worker cannot self-certify
   (Non-Negotiables). Verification follows below.
+- **03:20Z — orchestrator replayed the mutation independently** (item 26
+  STANDARD; item 23 — in a dedicated worktree `/tmp/gam450-mut` at `f3fedd60`,
+  never the shared tree; worktree removed and shared tree confirmed clean after).
+  - **Replay A, the packet's prescribed both-sides mutation** (`aStart <= bEnd
+    && bStart <= aEnd`): **RED**, `overlap.test.ts:67:57`,
+    `AssertionError: expected true to be false`. Matches the worker's reported
+    line and text exactly.
+  - **Replay B, the mutation my ORIGINAL packet named** (`aStart <= bEnd`
+    alone): fails at `overlap.test.ts:71:58` and **passes lines 67-68**. Line 71
+    is the reversed-input-order assertion the premise gate told me to add; 67-68
+    are the forward-order ones. So against the real shipped implementation —
+    which does use the `i<j` half loop — the gate's round-1 MAJOR is confirmed
+    empirically: my original mutation survives forward-order testing, and only
+    the assertion the gate required catches it. Had that finding not been made,
+    a correct module would have reported a surviving mutation.
+- **03:24Z — gates run by the orchestrator**, `--require-clean`, on `10d1139f`:
+  all six exit 0. Figures match the worker's independently: 111 files / 2699
+  tests full, 4 files / 35 tests scoped, 0 eslint errors / 382 warnings. Two
+  independent runs agreeing, not one quoted twice.
+  - **No baseline was measured, so gates 5 and 6 print "regression not
+    checked" — and that is stated rather than papered over.** The no-regression
+    claim is made structurally instead, which is stronger than a count:
+    `git diff --name-status origin/main...HEAD -- src/` returns only `A` rows,
+    so no pre-existing test file was modified or deleted. Nothing could have
+    regressed; 2699 is 2691 + this file's 8 new tests.
