@@ -4366,3 +4366,61 @@ ever disagree, the PRD wins and this entry is the bug.
   amended.** House style is additive amendment (item 1's precedence chain depends
   on the trail), so MTG-01's original text is intact and will stay intact unless
   the owner rules otherwise.
+
+## 2026-08-22 — George reopens constitution item 2: Astryx is the *preferred* source, not the only door
+
+He raised it himself, unprompted by any task:
+
+> "the Constitution item 2 makes astryx-api.md the only legal source for an Astryx prop and says a
+> prop absent from it is presumed hallucinated. i need astryx as the preferred source, but we have
+> instances where we need to bring in other components"
+
+### The two questions item 2 was answering with one answer
+
+Item 2's text only ever governed **props** — DES-19's subject is "the authoritative component API,"
+and its presumption is about a prop name appearing in a file. But agents were reading it as the wall
+around the entire design system, and grading a non-Astryx *component* against a rule that never
+mentioned components. That misreading is on the record twice:
+
+- **D004 Ruling C** forbade `useAppShellMobile` — a real, shipped API in the installed
+  `@astryxdesign/core@0.1.6` — on the sole ground that `astryx-api.md` does not document it. The
+  same ruling had just amended `astryx-api.md` to unblock `MobileNavConfig.content`, so the arbiter
+  demonstrated the remedy and then declined to apply it, because no rule said a doc gap was fixable
+  by anyone.
+- **D021** had to argue an entire icon set as a *dependency* question under item 9, because item 9
+  is the only rule in the file that describes leaving Astryx on purpose — and it describes it as a
+  procurement decision, not a design one.
+
+Both were handled correctly. Neither left anything behind that the next agent could invoke.
+
+### What he ruled, put to him as two questions
+
+**Scope — what "other components" means:** he chose **non-Astryx components** — the case where
+Astryx ships nothing for the need. He did *not* select relaxing the hallucination presumption for
+undocumented Astryx props, and 2a keeps it verbatim. **No PRD deviation is required by any of
+this**: DES-19 is prop-scoped, and nothing here contradicts it.
+
+**Authority over `astryx-api.md` additions:** he chose **any agent, evidence-gated and
+checker-verified**, over restricting it to the orchestrator or to boss-arbiter as D004 did. The gate
+moves from rank to evidence — installed source path and line, CLI cross-check, marked annotation,
+same PR as the use, and an independent re-verification by the checker.
+
+### The hole this closed on the way past
+
+`docs/swarm/astryx-api.md` is **not** on the Authority Boundaries forbidden-files list and never
+was, so a worker could already edit it today — meaning a hallucinated prop could be legalised by
+typing it into the source of truth, with item 2 then vouching for it. Leaving the file writable is
+now deliberate (it is what makes 2b available to a worker), and 2b's five bullets are what make the
+edit checkable. The previous state had the permission without the gate.
+
+### What is NOT settled by this ruling
+
+- **`useAppShellMobile` is not thereby authorized.** D004 Ruling C's *reasoning* is superseded by
+  2b, but its outcome stands until someone actually runs the 2b route on it — installed-source
+  citation, CLI cross-check, marked annotation, checker re-verification. The drawer still does not
+  auto-close on nav-item selection, and that follow-up is still open.
+- **No non-Astryx component is pre-approved by this.** 2c is a procedure, not a grant. Every
+  instance still needs its own measured gap, and a new dependency still needs item 9's
+  boss-architect approval on top.
+- **Item 8 was not on the table.** Tailwind, shadcn and any alternate UI/CSS library remain BLOCKER.
+  2e says so explicitly because 2c is the clause most likely to be stretched toward them.
