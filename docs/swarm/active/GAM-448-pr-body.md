@@ -1,41 +1,165 @@
 Closes GAM-448
 
-**DRAFT — opened at minute ~4 of the run, per `AGENTS.md` wall 3.** The PR
-credential expires at `2026-08-22T01:53:38Z`; this body is finalized in place
-before the draft flag clears. If this text is still what you are reading when
-the run ends, the run was killed and
-`docs/swarm/active/GAM-448-run-log.md` is the record of how far it got.
+Builds the coach series-card drill-out: a month-tabbed `SchedulePanel` where a
+session expands in place — cancel a scheduled one, correct a completed one's
+attendance with tap-to-cycle chips — so fixing a past session no longer means
+hand-typing the live-console URL.
+
+**This closes `Partial`, not `Passed`.** See *Scope* and *Known gaps*.
 
 ## What changed
 
-Builds the coach series-card drill-out: a month-tabbed `SchedulePanel` on
-`/meetings` where a session expands in place — expected roster and "Cancel this
-session" for a scheduled one, tap-to-cycle attendance chips for a completed one
-— so correcting a past session no longer requires hand-typing the live-console
-URL.
+Three new components under `src/pages/meetings/coach/` (`SchedulePanel.tsx`,
+`SessionRow.tsx`, `AttendanceChips.tsx`) plus their tests. **Zero new mutation
+code** — every write goes through an existing loader seam injected as an
+optional prop. 6 files, +2269/−18 at `4bc99293`, plus the rework at `371be9ca`.
+
+## What the issue got wrong
+
+The premise gate falsified five things. Recording them so the next reader does
+not inherit them:
+
+1. **The issue names the wrong write seam.** It says to wire
+   `makeOnEditAttendance`. That factory is a bare
+   `UPDATE attendance … WHERE session_id AND student_id`
+   (`loaders/endMeeting.ts:496-499`) **with no insert path**, and since T508 an
+   unmarked student normally has **no attendance row at all**
+   (`types.ts:143`). Correcting an unmarked student through it updates zero
+   rows *and resolves successfully* — the optimistic chip would show the new
+   status and the database would keep nothing. Every write here goes through
+   `makeSetAttendanceStatus` (`loaders/attendance.ts:506-528`), a real upsert.
+2. **The cycle has five stops, not four.** MTG-01g (`VOLT_Portal_PRD.md:382`)
+   specifies `Present → Late → Excused → Absent → (unset)` with `Shift`
+   reversing. The `meetings-design` skill the issue points at states no cycle
+   order at all — filed as **GAM-481**, because sibling tickets are still
+   reading it.
+3. **The four a11y rules are not exhaustive.** MTG-01g:375-380 says so
+   explicitly and requires DES-17's `1`–`4` roll-call keys, which a cycling
+   control "must not remove". Forward-only traversal is an item-15 BLOCKER.
+4. **`expectedCt` must not render.** It counts RSVPs with `status === 'going'`
+   (`coachModel.ts:324-326`), and **MTG-03 says meetings do not use RSVP**
+   (`:403`) — so it is structurally `0` on every meeting session. Rendering
+   "0 expected" to a coach is item 26's *lie to a user about their own data*.
+5. **The issue's `"4–6 PM"` row-line example is not producible** from the
+   formatters this repo requires importing; `formatTimeRangeWithDuration`
+   returns `"4:00–6:00 PM · 2h"`. Built as the formatter actually behaves.
+
+The issue also asks for an Overlap badge and an expected roster. Neither is
+buildable today: `buildOverlapIndex` does not exist (GAM-450 owns it), and no
+loader can supply a roster (**GAM-478**). Both are accepted as optional props
+and degrade to their empty state.
 
 ## Tier, stated and defended
 
-**HEAVY.** Item 26's first trigger, hit twice: the panel drives a **write path**
-(attendance status corrections) and a **destructive operation** (cancel a
-scheduled session). A mistake here lies to a coach about a student's recorded
-attendance, or cancels the wrong session. The losing argument was STANDARD on
-the grounds that this ticket writes **zero new mutation code** — it injects
-`makeSetAttendanceStatus` / `makeOnEditAttendance` / `onCancelSession` as props
-and calls existing, already-verified seams. That is a real mitigation and it is
-why the risk is *call-site* risk rather than *SQL* risk, but item 26 asks
-whether a mistake can lie to a user about their own data, and a wrong student
-bound to a chip does exactly that without touching a loader. The row arrived
-`tier/unreviewed`; the judgement above is this run's, not the issue's.
+**HEAVY.** Item 26's first trigger, hit twice: a write path (attendance
+corrections) and a destructive operation (cancel a session; and the `(unset)`
+stop deletes a row). The losing argument was STANDARD, on the grounds that this
+ticket adds **zero new mutation code** — a real mitigation, and the reason the
+risk is call-site risk rather than SQL risk. It loses because a wrong student
+bound to a chip lies to a coach without touching a loader. The row arrived
+`tier/unreviewed`; this judgement is the run's, not the issue's.
+
+Full chain run: packet → premise gate (2 rounds) → worker → checker → rework.
+**No `model: "opus"` worker override** — item 18's four triggers are
+migrations, RLS, metric SQL and auth/role logic, and this packet touches none;
+item 25 forbids bumping because a topic sounds sensitive. Both gate rounds
+confirmed that call.
 
 ## Verification
 
-_Pending — the `gate-run` evidence block and the mutations table are pasted here
-verbatim before the draft flag clears._
+Six gates, run by the checker independently of the worker and reproducing its
+numbers exactly:
 
-## Scope
+```
+GATE RUN — 371be9ca on claude/gam-448-schedule-panel — tree clean
 
-_Pending item 27 assessment: whether the shipped panel reads real data on the
-real path a coach takes, or renders from fixtures._
+  1 tsc                              exit 0  PASS
+  2 vite build                       exit 0  PASS
+  3 format:check                     exit 0  PASS
+  4 eslint                           exit 0  PASS       0 errors, 380 warnings
+  5 vitest (full)                    exit 0  PASS       112 files / 2726 tests  baseline 2666 (+60)
+  6 vitest src/pages/meetings/coach  exit 0  PASS       5 files / 112 tests  baseline 52 (+60)
+
+VERDICT: PASS — all six gates exit 0
+```
+
+Baselines (2666 / 52) were measured by the orchestrator on the branch point
+after `npm ci`, and re-measured independently by the checker.
+
+**Mutations — 26 run by the checker, 26 red.** The tests are not tautologies.
+The checker then ran 7 more probing for gaps; 3 survived, and two of those
+became the rework below.
+
+| Mutation | Result |
+| -- | -- |
+| Swap `excused`/`absent` in the cycle | RED |
+| Drop the `(unset)` stop | RED (4 failed) |
+| Ignore `shiftKey` (forward-only) | RED (3 failed) |
+| `method: 'coach'` → `'qr'` in the write payload | RED |
+| Fabricate `recordedBy` | RED |
+| Remove optimistic rollback | RED |
+| Route `(unset)` through the status write | RED |
+| Remove MTG-12 defence-in-depth | RED |
+| Bucket months from the UTC instant | RED (7 failed) |
+| Ignore the injected roster | RED |
+| *…16 more, all red* | RED |
+
+**One MAJOR was found by the checker and fixed.** `SessionRow.tsx` read
+`statusById[id] ?? entry.status`, and `null` is this ticket's `(unset)`
+sentinel — so `??` fell back to the *server* value. Probed against the real
+assembled component, tapping to unset a student marked `absent` left the chip
+reading **"Ada L., absent"** while the row was deleted, and a second tap fired
+the destructive call *again*. The same failure class item 26 exists to catch,
+arriving through a different door, and invisible to every test because the
+cycle was asserted against `AttendanceChips` in isolation with a hand-fed prop.
+Fixed at `371be9ca` with a `readLocalStatus()` helper keyed on `in`; the probe
+now reads `not recorded` then `present`, and the new full-loop test was
+mutation-replayed red before being trusted.
+
+**`layout-measurement`: not run — 5 of 6, with the reason.** Playwright has no
+Chromium binary in this container and the skill forbids `playwright install`.
+The ≥44px target is asserted on computed `minHeight`/`minWidth` instead. Real
+browser measurement moves to GAM-452, when the component has a route to be
+measured on. `e2e-personas` likewise: with no caller there is no path a coach
+can walk to this panel.
+
+## Scope — item 27, Partial
+
+`SchedulePanel` is imported by nothing. That is by design: **GAM-452** is the
+wiring ticket. Every roster row a coach would see comes from an injected
+fixture, because **GAM-478** records that no loader on `main` can build one.
+Those two rows are what hold this at `Partial`; it becomes `Passed` when they
+land.
+
+## Follow-ups filed
+
+| Row | What |
+| -- | -- |
+| **GAM-478** | Nothing on `main` can fill `SchedulePanel.roster` — the wiring gap that makes this Partial |
+| **GAM-479** | The `(unset)` stop deletes the whole attendance row, discarding `check_in_at` and `hours_override` — decide before GAM-452 makes it reachable |
+| **GAM-480** | The deferred MAJOR below |
+| **GAM-481** | The `meetings-design` skill is narrower than MTG-01g, and sibling tickets are still reading it |
+
+## Known gaps, disclosed
+
+**One MAJOR ships unfixed, deliberately and unapproved: GAM-480.**
+`AttendanceChips.tsx` uses a native `<button>` rather than Astryx `Button`. The
+checker verified the worker's technical reason is true (`BaseProps` omits
+`title`; `Button.js:341` swaps native `disabled` for `aria-disabled` when a
+tooltip is present) but ruled the conclusion does not follow — the criterion
+only needed "disabled and no write", and the price is UA-default chrome on the
+first raw `<button>` in this repo's JSX. **The orchestrator did not
+self-approve it**: item 11 routes a DES-21 escalation through boss approval,
+which is a human gate this run does not hold, and reworking a control's
+disabled semantics under a wall clock with no time to re-verify the a11y
+contract is how a MINOR becomes a BLOCKER. Under the constitution's decision
+rules an unapproved MAJOR fails the task — hence `Partial`, with the finding
+named rather than buried.
+
+Also open: the Overlap badge (blocked on **GAM-450**) and the expected-attendee
+count (**MTG-03**, folded into GAM-478) both degrade to their empty state.
+
+Full run record, including both premise-gate verdicts:
+`docs/swarm/active/GAM-448-run-log.md`.
 
 Linear-Issue: GAM-448
