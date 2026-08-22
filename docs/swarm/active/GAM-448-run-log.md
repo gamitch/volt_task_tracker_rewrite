@@ -82,3 +82,42 @@ the run died holding that subagent — that is the failure signature AGENTS.md
 - 01:20Z — **DISPATCHED `checker-premise` (round 1), `run_in_background: false`.**
   *If this line is the last one in this file, the run died holding this
   subagent.*
+- 01:29Z — **`checker-premise` round 1 VERDICT: REVISE** (~107K tokens, 53 tool
+  calls). Four BLOCKERs, seven MAJORs. The gate ran code rather than only
+  reading it, and it found the packet's own bad ground:
+  - **B1** PRD MTG-01g (`VOLT_Portal_PRD.md:382`) makes the cycle **five**
+    stops — `Present → Late → Excused → Absent → (unset)` — with Shift
+    reversing. The packet (and the `meetings-design` skill it followed) say
+    four. **`makeRemoveAttendance` (`attendance.ts:544`) is the existing unset
+    seam.**
+  - **B2** MTG-01g:375-380 states the four a11y requirements are "ADDITIVE and
+    NOT exhaustive" and names DES-17's `1`–`4` direct-set roll-call keys, which
+    a cycling control must not remove — forward-only with no reverse is a
+    keyboard-path failure, BLOCKER under item 15.
+  - **B3** `expectedCt` is RSVP `status==='going'`
+    (`coachModel.ts:324-326`) and **MTG-03 says meetings do not use RSVP**
+    (`:403`) — it renders structurally `0` on every meeting session. Rendering
+    it is item 26's "lie to a user about their own data".
+  - **B4** `SetAttendanceStatusParams` needs **five** fields; the packet named
+    three and typed `recordedBy` optional against a required `string`.
+    `method` is `'coach'` by owner ruling (`LiveConsole.tsx:1080-1093`) and
+    `resolveAttendanceWriteMethod` must deliberately NOT be called.
+  - MAJORs: four-states unbuildable from a single optional map (M1); criterion
+    12 unverifiable AND backwards — MTG-01g:383-384 says a student surface
+    *does* get the cycle minus excused (M2); the packet's UXC-07 ≤72px claim is
+    **false**, UXC-07 explicitly does not rule on these rows and says ≥44px
+    wins (M3); DES-11 requires `AlertDialog`, not an inline confirm (M4); the
+    row-line example is not producible from the prescribed formatter (M5);
+    MTG-01b's per-row `Edit` chip was silently dropped (M6);
+    `layout-measurement` cannot run against a component with no route (M7).
+  - **§0e — the wrong-seam finding — was CONFIRMED CORRECT** and told to stand
+    as written. The premise measurement held; the prescriptions built on top of
+    it did not.
+  - Gate also confirmed: tier HEAVY correct; no item-18 opus override needed;
+    Badge `info` is real, not hallucinated; criterion 9's grep is provable.
+  - **Note for the owner: the `meetings-design` skill is narrower than the PRD
+    it points at.** Its tap-to-cycle section teaches the four-stop cycle and
+    calls the four a11y rules exhaustive; MTG-01g says five stops and
+    explicitly non-exhaustive. Item 1 puts the PRD above the skill, and the
+    skill's own preamble says to report this rather than follow it. Filed as a
+    follow-up in §6 rather than edited here.
