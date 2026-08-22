@@ -112,3 +112,11 @@ wall 2, and it is written this way so the next reader does not have to guess.
   Blocking on it now.
   **If this line is the last one in this file, the run died holding this
   subagent.**
+- **03:11Z — VERDICT round 2: DISPATCH.** Returned live; the run did not die
+  holding it. Item 19's Definition-of-Ready gate is satisfied and the packet may
+  now reach a worker. All six findings confirmed landed at the cited packet
+  lines. The checker also re-verified its OWN round-1 corrections when asked
+  (item 19c cuts both ways) and self-reported one that did not propagate: it had
+  written `excusedCt?:155` where the real declaration is `types.ts:154` — I had
+  transcribed only field names, so nothing on disk carries the error. Two
+  non-findings were stated explicitly as no-action rather than left ambiguous.
