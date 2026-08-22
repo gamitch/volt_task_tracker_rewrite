@@ -62,7 +62,7 @@ Six gates, run by the orchestrator with `--require-clean` on the final branch
 state, independently of the worker's own run:
 
 ```
-GATE RUN — 10d1139f on claude/gam-450-overlap-index — tree clean
+GATE RUN — 61132fba on claude/gam-450-overlap-index — tree clean
 
   1 tsc                       exit 0  PASS
   2 vite build                exit 0  PASS
@@ -79,6 +79,11 @@ The worker's independent run produced the same figures (2699 / 35 / 0 errors /
 quoted twice. Its first run had gate 3 red on formatting only; it fixed that
 with `prettier --write` and re-ran, and reported the failure rather than only
 the green result.
+
+`61132fba` is the last commit carrying source or PR-body changes; anything
+after it on this branch is the run log only. The gates were run twice — once at
+`10d1139f` and again at `61132fba` after the doc commits, because appended
+Markdown can move gate 3 — and produced identical figures both times.
 
 **No baseline was measured**, so gates 5 and 6 correctly print "regression not
 checked" — that stays visible. The no-regression claim is made structurally
