@@ -1,0 +1,339 @@
+# GAM-448 run log
+
+Issue: [GAM-448](https://linear.app/gamitch/issue/GAM-448/reviewing-or-fixing-a-season-of-sessions-requires-the-live-console)
+Branch: `claude/gam-448-schedule-panel`
+Runtime: Claude (orchestrator)
+
+Conventions: one line per milestone, appended and pushed immediately. If the
+last line of this file is a subagent **dispatch** with no matching **verdict**,
+the run died holding that subagent — that is the failure signature AGENTS.md
+"three walls" §2 describes, not an unfinished thought.
+
+## Deadline
+
+- 00:54Z — PR credential decoded: `iat 2026-08-22T00:53:38Z`, `exp
+2026-08-22T01:53:38Z`. 58.8 minutes of `gh pr create` budget at minute 1.
+  Draft PR must be open well before 01:53Z.
+
+## Milestones
+
+- 00:53Z — **Claimed.** `tier/unreviewed` → `tier/heavy` applied FIRST (item
+  28d), then `Todo` → `In Progress`, then read back: `GAM-448 In Progress
+meetings-redesign,Improvement,heavy`. No `gate/human`, no `executor/*` label
+  → missing route is legacy Claude-only (item 28b), so this runtime may claim.
+- 00:54Z — **Tier judged HEAVY** (item 26). Defence: the panel ships
+  tap-to-cycle attendance chips that call `makeSetAttendanceStatus` /
+  `makeOnEditAttendance`, and a "Cancel this session" action calling
+  `onCancelSession`. That is a **write path plus a destructive operation** —
+  item 26's first HEAVY trigger, hit twice. A mistake here lies to a coach
+  about a student's recorded attendance, or cancels the wrong session. The
+  issue's own self-assessment agrees, but the label was `tier/unreviewed` and
+  the judgement is mine to make and defend, not to inherit.
+- 00:55Z — Branch `claude/gam-448-schedule-panel` created; run log is the first
+  file write.
+- 00:58Z — **Draft PR opened: #234** (`git log` SHA `8b4cbcd5`..). Body artifact
+  `docs/swarm/active/GAM-448-pr-body.md` written BEFORE the API call and
+  validated by `.claude/skills/pr-body/scripts/check.mjs` (exit 0, "declaration
+  closes GAM-448"). ~55 minutes of PR credential still unspent — wall 3 closed.
+- 01:10Z — **Premise measured against `main` before writing the packet.** Five
+  findings, all from live reads, four of which the issue does not know about:
+  - **G1 (resolved, not a blocker).** `SchedulePanel` is imported by nothing
+    (`grep -rn SchedulePanel src/` returns only its own file). That is by
+    design: **GAM-452** ("Assemble the redesigned meetings page — wire cards,
+    panel and rail together") is the wiring ticket and is still `Backlog`. So
+    this ticket closes **Partial** under item 27 with GAM-452 named, not
+    Passed.
+  - **G2 (hard gap).** Tap-to-cycle chips need `{studentId, name, status}` per
+    student. The frozen `CoachMeetingSessionDetail` carries only
+    `attendeeNames: readonly string[]` — display names of present/late
+    students, no ids, no statuses, no absent/excused students
+    (`src/lib/meetings/types.ts:78-103`). `makeSetAttendanceStatus` requires a
+    `studentId`. Widening the frozen type is forbidden by the meetings-design
+    skill and `types.ts` is outside Allowed Files. **GAM-471** independently
+    records that `student_teams` has no writer on `main` to build a roster
+    from. Chips must therefore take the roster as an injected prop and the
+    data wiring becomes a filed follow-up.
+  - **G3 (unmet dependency).** `src/lib/meetings/overlap.ts` /
+    `buildOverlapIndex` **do not exist** — GAM-450 owns them and is `Backlog`.
+    The Overlap badge the issue requires on session rows cannot be built here
+    without duplicating a frozen name. Deferred behind an optional prop.
+  - **G4 (surmountable).** Frozen `SchedulePanelProps` has none of the
+    injection props the issue names. This ticket owns the file; the props are
+    added as OPTIONAL so the unwritten GAM-452 caller inherits no obligation.
+  - **G5 (correctness — the finding this gate exists for).** The issue names
+    `makeOnEditAttendance` as a write seam. It emits a bare
+    `UPDATE attendance ... WHERE session_id AND student_id`
+    (`loaders/endMeeting.ts:496-505`) with **no insert path**, and
+    `types.ts:138-148` records that since T508 an unmarked student normally has
+    **no attendance row at all**. Correcting an unmarked student through that
+    seam updates zero rows and resolves successfully — the optimistic chip
+    would show the new status and the database would keep nothing. The panel
+    must use `makeSetAttendanceStatus` (a real upsert on
+    `session_id,student_id`, `loaders/attendance.ts:506-528`) for every chip
+    write. `makeOnEditAttendance` is additionally documented as deliberately
+    unreachable by owner ruling T601.
+- 01:20Z — **Packet written**: `docs/swarm/active/GAM-448-packet.md`. Carries §0
+  (the five measured corrections), §1 Allowed Files, §3 thirteen acceptance
+  criteria, §4 evidence, §5 five Least confident decisions (item 19d), §6 the
+  two follow-ups to file. Worker model override deliberately NOT applied — item
+  18's four triggers are migrations / RLS / metric SQL / auth, and this packet
+  touches none of them; item 25 forbids bumping on a topic that merely sounds
+  sensitive.
+- 01:20Z — **DISPATCHED `checker-premise` (round 1), `run_in_background: false`.**
+  _If this line is the last one in this file, the run died holding this
+  subagent._
+- 01:29Z — **`checker-premise` round 1 VERDICT: REVISE** (~107K tokens, 53 tool
+  calls). Four BLOCKERs, seven MAJORs. The gate ran code rather than only
+  reading it, and it found the packet's own bad ground:
+  - **B1** PRD MTG-01g (`VOLT_Portal_PRD.md:382`) makes the cycle **five**
+    stops — `Present → Late → Excused → Absent → (unset)` — with Shift
+    reversing. The packet (and the `meetings-design` skill it followed) say
+    four. **`makeRemoveAttendance` (`attendance.ts:544`) is the existing unset
+    seam.**
+  - **B2** MTG-01g:375-380 states the four a11y requirements are "ADDITIVE and
+    NOT exhaustive" and names DES-17's `1`–`4` direct-set roll-call keys, which
+    a cycling control must not remove — forward-only with no reverse is a
+    keyboard-path failure, BLOCKER under item 15.
+  - **B3** `expectedCt` is RSVP `status==='going'`
+    (`coachModel.ts:324-326`) and **MTG-03 says meetings do not use RSVP**
+    (`:403`) — it renders structurally `0` on every meeting session. Rendering
+    it is item 26's "lie to a user about their own data".
+  - **B4** `SetAttendanceStatusParams` needs **five** fields; the packet named
+    three and typed `recordedBy` optional against a required `string`.
+    `method` is `'coach'` by owner ruling (`LiveConsole.tsx:1080-1093`) and
+    `resolveAttendanceWriteMethod` must deliberately NOT be called.
+  - MAJORs: four-states unbuildable from a single optional map (M1); criterion
+    12 unverifiable AND backwards — MTG-01g:383-384 says a student surface
+    _does_ get the cycle minus excused (M2); the packet's UXC-07 ≤72px claim is
+    **false**, UXC-07 explicitly does not rule on these rows and says ≥44px
+    wins (M3); DES-11 requires `AlertDialog`, not an inline confirm (M4); the
+    row-line example is not producible from the prescribed formatter (M5);
+    MTG-01b's per-row `Edit` chip was silently dropped (M6);
+    `layout-measurement` cannot run against a component with no route (M7).
+  - **§0e — the wrong-seam finding — was CONFIRMED CORRECT** and told to stand
+    as written. The premise measurement held; the prescriptions built on top of
+    it did not.
+  - Gate also confirmed: tier HEAVY correct; no item-18 opus override needed;
+    Badge `info` is real, not hallucinated; criterion 9's grep is provable.
+  - **Note for the owner: the `meetings-design` skill is narrower than the PRD
+    it points at.** Its tap-to-cycle section teaches the four-stop cycle and
+    calls the four a11y rules exhaustive; MTG-01g says five stops and
+    explicitly non-exhaustive. Item 1 puts the PRD above the skill, and the
+    skill's own preamble says to report this rather than follow it. Filed as a
+    follow-up in §6 rather than edited here.
+- 01:36Z — **Packet revised (round 2 submission).** All 12 required edits
+  applied. Spot-checked the gate's own load-bearing citations myself before
+  accepting them (item 19c cuts both ways): `VOLT_Portal_PRD.md:370-384` does
+  contain the five-stop cycle, the "ADDITIVE and NOT exhaustive" sentence, the
+  DES-17 key requirement and the student-skips-excused ruling;
+  `VOLT_UX_Craft_PRD_v3.md:82` does say UXC-07 is not ruled on for these rows
+  and that ≥44px wins; `VOLT_Portal_PRD.md:403` does say meetings do not use
+  RSVP. The gate was right on every one.
+  Criteria went 13 → 20. New §0f (PRD outranks the skill) and §0g
+  (`expectedCt` must not render). §5 rewritten — the two doubts round 1 settled
+  are marked settled, three new ones replace them.
+- 01:36Z — **Baseline measured by the orchestrator on branch point `8b4cbcd5`
+  after `npm ci`:** full suite **2666 tests / 109 files, all green**; scoped
+  `src/pages/meetings/coach` **52 tests / 2 files**. Written into §4 so gates 5
+  and 6 have something real to compare against.
+- 01:37Z — **DISPATCHED `checker-premise` (round 2), `run_in_background: false`.**
+  Round 2 of 2 — item 19a caps the gate here; a third REVISE escalates to the
+  owner rather than looping. _If this line is the last one in this file, the
+  run died holding this subagent._
+- 01:44Z — **`checker-premise` round 2 VERDICT: DISPATCH** (~79K tokens, 41 tool
+  calls). All 12 required edits verified APPLIED CORRECTLY against the real
+  files — not merely mentioned. No BLOCKER, no MAJOR. Gate independently
+  re-ran both baselines and confirmed 2666 / 52 exactly, so gates 5 and 6 are
+  armed rather than silently disarmed. It also re-searched **214 refs** for a
+  `SchedulePanelProps` consumer and found none, and verified the Astryx props
+  against the **installed package source** (`Tab.d.ts`) rather than only the
+  API doc.
+  Definite answers given to the three open decisions, now folded into the
+  packet: (3) `(unset)` is an unconditional delete, **no confirm** — DES-11's
+  confirm set does not include an un-mark and T119/D-7 already ruled it; (4)
+  the disabled-chip failure mode stands, with `isRosterLoading` covering the
+  pre-auth case; (5) **the roving tabindex and the `1`–`4` handler go on the
+  ROW, not the chip** — `LiveConsole.tsx:937,940-941,1144-1164` is the shipped
+  shape and its handler sits on the `<li>` so a keypress on the chip bubbles.
+  Seven MINOR/NIT fold-ins (A–G), explicitly not a third round. The one with
+  teeth is **D**: `makeRemoveAttendance` deletes the whole row, discarding
+  `check_in_at` / `hours_override` — the exact values `makeSetAttendanceStatus`
+  preserves. Real asymmetry, undocumented; §2 now warns and §6 files it.
+- 01:50Z — Fold-ins A–G applied to the packet (criteria 13 → 21; `onEditSession`
+  added to the prop block and given criterion 20; the row-vs-chip key-handler
+  answer written into §2; the no-confirm ruling and the delete-asymmetry
+  warning written into §2; §6's skill-bug description corrected to what
+  `SKILL.md:113-126` actually says; the `formatDisplayName` privacy-branch trap
+  flagged). Packet is now DISPATCH-clean.
+- 01:51Z — **DISPATCHED `worker-implementer`, `run_in_background: false`.** No
+  `model: "opus"` override — item 18's four triggers do not fire (verified by
+  both gate rounds) and item 25 forbids bumping on a topic that merely sounds
+  sensitive. _If this line is the last one in this file, the run died holding
+  this subagent._
+- 02:46Z — **`worker-implementer` VERDICT: work delivered** (~398K tokens, 204
+  tool calls, 53 min). Commit **`4bc99293`**, pushed; `git rev-parse HEAD` ==
+  `git rev-parse origin/claude/gam-448-schedule-panel`. 6 files, +2269/-18.
+  All 21 criteria reported MET; six gates reported exit 0 with the suite at
+  **2721 / baseline 2666 (+55)** and the scoped run at **107 / baseline 52
+  (+55)**.
+- 02:47Z — **Orchestrator's own independent verification of the worker's
+  claims** (item 21 — a worker cannot self-certify, and a completion report is
+  not evidence):
+  - HEAD really moved (`31aebe59` → `4bc99293`) and the work is in the
+    committed blob, not just the tree.
+  - **Allowed-Files boundary holds:** every one of the 6 changed paths is
+    inside §1. No loader, no `types.ts`, no `CoachMeetingsView.tsx`, no
+    `docs/swarm/**`, no `.github/workflows/**`.
+  - **Criteria 13/14 re-grepped by me, not taken on trust:** zero `.from(`,
+    `.upsert(`, `.update(`, `.insert(`, `.delete(`, zero `getSupabaseClient`,
+    zero `makeOnEditAttendance` across the three components. Zero new mutation
+    code confirmed independently.
+  - **No `useAuth`** in any of the three (the packet forbade it so item 18's
+    fourth trigger could not fire mid-task).
+  - **Criterion 17 confirmed:** `expectedCt` appears only in explanatory module
+    comments, never in a code path.
+  - Two disclosures the worker made unprompted and correctly: the
+    `makeRemoveAttendance` row-deletion asymmetry, and its deviation from the
+    packet's implicit "use Astryx `Button`" reading — it used a native
+    `<button>` because Astryx `Button` omits `title` and swaps `disabled` for
+    `aria-disabled`, which would have broken criterion 10's assertion. Both are
+    documented in the component's own module doc. That is the behaviour the
+    packet asked for.
+  - **`layout-measurement` fell back**, honestly reported: Playwright has no
+    Chromium binary in this container and the skill forbids `playwright
+install`. The ≥44px target is asserted on computed `minHeight`/`minWidth`
+    instead; real browser measurement moves to GAM-452. Recorded as 5-of-6
+    evidence with a reason, not as a measurement that did not happen.
+- 02:48Z — **DISPATCHED `checker-reviewer`, `run_in_background: false`.** _If
+  this line is the last one in this file, the run died holding this subagent._
+- 03:05Z — **`checker-reviewer` VERDICT: FAIL — two MAJORs** (~143K tokens, 48
+  tool calls). It reproduced both gate numbers exactly (2721/2666, 107/52) and
+  ran **26 independent mutations, all 26 red** — the tests are not tautologies.
+  Then it ran 7 more probing for gaps and **3 survived**. The headline finding
+  is one no test caught and no reader would have:
+  - **F1 (MAJOR) — `SessionRow.tsx:378`, `statusById[entry.studentId] ??
+entry.status`.** `null` is this ticket's `(unset)` sentinel, and `??`
+    treats it as "no local value" and falls back to the SERVER value. The
+    checker measured it with a probe against the real assembled component:
+    after tapping to unset a student whose roster status is `absent`, the chip
+    still reads **"Ada L., absent"** while the attendance row has been deleted,
+    and a second tap fires `onRemoveAttendance` **again**. So: the UI states a
+    status the database no longer holds; the five-stop cycle never closes for
+    any student with a pre-existing mark; and the `aria-live` announcement
+    never fires for that stop. **This is exactly the failure class §0e was
+    written to prevent, arriving through a different door** — and it was
+    invisible to criterion 3, which asserts against `AttendanceChips` in
+    isolation with a harness feeding the status back.
+  - **F2 (MAJOR) — native `<button>` instead of Astryx `Button`** (item 11 /
+    DES-21). The checker verified both halves of the worker's stated reason are
+    TRUE (`BaseProps` omits `title`; `Button.js:341` swaps native `disabled`
+    for `aria-disabled` when a tooltip is present) but ruled the conclusion
+    does not follow: criterion 10 needs "disabled and no write", which
+    `isDisabled` alone satisfies. The real cost is that there is no bare-button
+    reset in `theme.css` or `astryx.css`, so every chip renders **UA-default
+    button chrome**, and this is the first raw `<button>` in the repo's JSX.
+  - F3 (MINOR) digit-key test covers only `1` and `3` — a mutation mis-mapping
+    `2` and `4` stayed green. F4-F6 NITs. F7 confirms **Partial** under item 27.
+- 03:06Z — **DISPATCHED `worker-implementer` (rework round, F1 + F3 only),
+  `run_in_background: false`.** F2 is NOT being reworked — see the decision
+  line below. _If this line is the last one in this file, the run died holding
+  this subagent._
+- 03:16Z — **Rework VERDICT: F1 fixed and proven, F3 fixed.** Commit
+  **`371be9ca`**, pushed, HEAD == origin. Verified by me in the committed blob:
+  `readLocalStatus()` replaces the `??` at the render site (`:392`) and at both
+  rollback reads (`:253`, `:270`); **zero `?? entry.status` remain**. Only
+  `SessionRow.tsx` + its test changed; `AttendanceChips.tsx` untouched, so the
+  deferred F2 is exactly as the checker graded it.
+  The worker re-ran the checker's own probe on the fixed code:
+  `tap 1 → "Ada L., not recorded"` (1 remove, 0 status writes),
+  `tap 2 → "Ada L., present"` (1 remove, 1 status write). The cycle closes and
+  the destructive call no longer repeats. Mutation replay in its own worktree
+  reverted the render-site fix and the new loop test went RED with real output
+  (`expected 'Ada L., absent' to be 'Ada L., not recorded'`, exit 1), restored
+  green. Six gates exit 0; suite **2726 / baseline 2666**, scoped **112 /
+  baseline 52**.
+- 03:17Z — **ORCHESTRATOR DECISION on F2 (the native `<button>`), stated so a
+  wrong call is visible rather than silent.** I am **not** reworking it and I am
+  **not** self-approving it. Grounds: the checker verified both halves of the
+  worker's technical reason are TRUE, so this is a judgement call between two
+  defensible designs, not an error — and constitution item 11 routes a DES-21
+  escalation through boss approval, which is a human gate this run does not
+  hold. Reworking it under wall-clock pressure would mean changing a control's
+  disabled semantics and its test convention with no time to re-verify the
+  a11y contract, which is how a MINOR becomes a BLOCKER. It ships **disclosed**
+  in the PR body and filed as its own row for the owner's decision. Under the
+  constitution's decision rules an unapproved MAJOR fails the task, so **this
+  task does not close Passed** — it closes **Partial** (which item 27 already
+  independently required, F7), with the MAJOR named rather than buried.
+- 03:22Z — **Item-20 follow-ups filed to `Backlog` with `tier/unreviewed`:**
+  **GAM-478** roster gap (holds this row at Partial with GAM-452) ·
+  **GAM-479** `(unset)` deletes the whole row, decide before GAM-452 wires it ·
+  **GAM-480** the deferred F2 native-`<button>` MAJOR, for owner decision ·
+  **GAM-481** the `meetings-design` skill is narrower than MTG-01g, and sibling
+  tickets are still reading it.
+  The overlap-badge gap (§0d) is NOT filed separately — GAM-450 already owns
+  `buildOverlapIndex` and filing a second row for it would duplicate an open
+  issue. The expected-attendee gap (§0g) is folded into GAM-478 rather than
+  filed alone, since both are the same missing roster source.
+- 03:30Z — **PR body finalized** (`docs/swarm/active/GAM-448-pr-body.md`,
+  declaration check exit 0) and pushed. **`gh pr edit` / `gh pr ready` both
+  returned HTTP 401** — the App token expired at 01:53Z exactly as
+  `AGENTS.md` wall 3 documents, while `git push` kept working off the
+  long-lived extraheader. PR #234 therefore remains a draft carrying its
+  minute-8 body; the finished body is preserved on the branch for a one-paste
+  publish. This is the failure the pr-body skill exists to make harmless, and
+  it was harmless.
+- 03:31Z — **Issue moved `In Progress` → `In Review`** (never `Done` — item
+  28e) with the close-out comment posted, and **read back**: `GAM-448 | state:
+In Review`. Close-out names the six-gate block, the skipped gate and why,
+  the four follow-ups, and the two decisions left to the owner.
+- 03:31Z — **Process miss, recorded rather than hidden:** AGENTS.md asks for a
+  run-log comment at three transitions and I posted only the close-out — the
+  **claim** comment was never posted to the issue. Everything it would have
+  carried (branch, tier + defence, intent) went into this file and was pushed
+  from minute 5, so nothing was lost, but a reader watching Linear alone saw
+  silence for the whole run. Backdating one now would misrepresent when it was
+  written, so I have not.
+- 03:32Z — **RUN COMPLETE.** No subagent in flight; all four dispatches
+  (premise ×2, worker ×2) were run with `run_in_background: false` and each
+  verdict is recorded above its own dispatch line.
+
+## Completion run — 2026-08-22
+
+- 03:5xZ — **Merged `origin/main` @ `00a22ac`** (PR #235 / GAM-449) into the
+  branch, no conflicts. Main had moved past this PR's base `41c81a5` after its
+  CI ran, so the green checks did not describe the landing tree. Merging first
+  means the CI that gates the ready flag is CI against what actually merges.
+- 03:5xZ — **Owner decision on the deferred F2 / GAM-480: ACCEPTED.** The run
+  above escalated the native-`<button>` MAJOR rather than self-approving it,
+  which was the right call — item 11 routes DES-21 through a human gate. The
+  owner took that decision and accepted the native `<button>` as it stands. The
+  MAJOR is therefore **approved, not deferred**, and the PR leaves draft with
+  the finding disclosed rather than removed.
+
+  Two facts re-verified before publishing rather than quoted from the checker:
+  `git grep` for a bare `button` rule in `src/theme/*.css` and `astryx.css`
+  returns **zero matches**, so the UA-default-chrome cost is real; and the only
+  `<button>` occurrences in `src/**/*.tsx` on `main` are inside comments
+  describing Astryx `Button`'s output, so `AttendanceChips.tsx:247` is
+  genuinely the first raw `<button>` in this repo's JSX. Both are now stated in
+  the PR body so a sibling ticket does not cite this as settled precedent.
+
+- 03:5xZ — **`Partial` stands, for a different reason than before.** Approval
+  removes the unapproved-MAJOR ground, but item 27 required `Partial`
+  independently (F7): `SchedulePanel` has no caller, and GAM-478 records that
+  no loader on `main` can fill its roster. Approval changed the reason, not the
+  grade.
+- 03:5xZ — **Not done, deliberately, and the record above is wrong about one
+  of them.** The run logged `layout-measurement` as skipped because "Playwright
+  has no Chromium binary in this container". That premise is false in this
+  environment — Chromium at `/opt/pw-browsers` drove the GAM-447 height
+  measurement earlier tonight, so the ≥44px chip target could be measured for
+  real. The owner scoped this completion to GAM-448's publish only, so the
+  measurement was **not** run here; the correction is recorded so the skip is
+  not read later as an environment limitation that never existed.
+- 03:5xZ — **PR #234 body published from the artifact and the draft flag
+  cleared.** The implementing run could not do either: its App token expired at
+  01:53Z (`gh pr edit` / `gh pr ready` both 401) while `git push` kept working
+  off the long-lived extraheader, exactly the wall-3 failure the `pr-body`
+  skill exists to make harmless.
