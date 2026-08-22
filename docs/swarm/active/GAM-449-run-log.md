@@ -200,3 +200,12 @@ the wait; each verdict is written the moment it returns.
 
 - 2026-08-22T02:06Z — Mutation worktree `/tmp/gam449-mut` removed after its
   results were recorded (item 21 — verify before removing).
+
+- 2026-08-22T02:09Z — **Closed out.** GAM-449 moved `In Progress → In Review`
+  (read back: `In Review`), never to `Done` — the merge closes it, not the
+  agent (item 28e). Close-out comment posted with the six-gate block, the three
+  mutation replays, the five things the owner should know, and the GAM-476/477
+  follow-up ids. Handoff comment posted on GAM-452 for the optional season
+  props. PR #235 is ready for review with the finished body committed at
+  `docs/swarm/active/GAM-449-pr-body.md` for a human to paste over the stub.
+  Nothing is in flight; no subagent is running.
