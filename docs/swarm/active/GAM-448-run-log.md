@@ -72,3 +72,13 @@ the run died holding that subagent — that is the failure signature AGENTS.md
     `session_id,student_id`, `loaders/attendance.ts:506-528`) for every chip
     write. `makeOnEditAttendance` is additionally documented as deliberately
     unreachable by owner ruling T601.
+- 01:20Z — **Packet written**: `docs/swarm/active/GAM-448-packet.md`. Carries §0
+  (the five measured corrections), §1 Allowed Files, §3 thirteen acceptance
+  criteria, §4 evidence, §5 five Least confident decisions (item 19d), §6 the
+  two follow-ups to file. Worker model override deliberately NOT applied — item
+  18's four triggers are migrations / RLS / metric SQL / auth, and this packet
+  touches none of them; item 25 forbids bumping on a topic that merely sounds
+  sensitive.
+- 01:20Z — **DISPATCHED `checker-premise` (round 1), `run_in_background: false`.**
+  *If this line is the last one in this file, the run died holding this
+  subagent.*
