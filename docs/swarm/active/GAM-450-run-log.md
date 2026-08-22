@@ -99,3 +99,16 @@ wall 2, and it is written this way so the next reader does not have to guess.
     to measured values. The `pr-body` skill names this exact failure — "three
     runs in one session wrote timestamps that disagreed with their own commit
     times" — so the commit SHAs on this branch, not these times, are the record.
+- **03:09Z — packet revised**, all six findings applied (MAJOR mutation fix,
+  two citation corrections, three NIT rewordings). Round-1 resolution recorded
+  in the packet itself; the Least-confident list kept unedited as the record of
+  what was doubted.
+- **03:09Z — DISPATCHED premise gate round 2** (item 19a cap: this is the last
+  round; a third REVISE escalates to the owner, it does not loop). Re-submitted
+  to the SAME checker via SendMessage rather than a fresh gate — it already
+  holds every measurement, so this confirms the revisions landed instead of
+  re-paying ~105-130K tokens to re-audit settled ground (item 19b: the gate
+  exists to catch unverified premises, not to re-audit ones it just verified).
+  Blocking on it now.
+  **If this line is the last one in this file, the run died holding this
+  subagent.**
