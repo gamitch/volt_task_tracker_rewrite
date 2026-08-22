@@ -69,3 +69,15 @@ never writes `check_in_at`/`check_out_at` (`attendance.ts:436-446` says so and
 why). So an undo built from the seams that exist today would restore the
 status and the hours override and **silently drop the QR check-in timestamp**.
 Any real undo needs a new restore write path.
+
+## Round 1
+
+- **03:40Z — packet written**, `docs/swarm/active/GAM-479-packet.md`. Proposes
+  a new `makeRestoreAttendance` seam (the only write path that writes
+  `check_in_at`) plus an `Undo un-mark` affordance on the live outreach
+  `AttendancePanel`. No migration, no metric SQL, no reversal of D-7. Five
+  least-confident decisions declared (item 19d), the fifth of which is that
+  "no change" is still a legitimate close.
+- **03:41Z — dispatching `checker-premise` (round 1), `run_in_background: false`,
+  `model: "opus"`.** *If this line is the last one in this file, the run died
+  holding this subagent.*
