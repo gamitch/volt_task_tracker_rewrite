@@ -23,3 +23,4 @@ here in its **orchestrator-implements** form: `checker-premise` (read-only) gate
 the **orchestrator** makes the edit because no worker may, and `checker-reviewer` (read-only)
 grades it. The issue itself anticipates this: *"`.claude/skills/**` is owner/orchestrator
 territory, which is why this is filed rather than edited from a task branch."*
+- **03:31Z — packet written**, `docs/swarm/active/GAM-481-packet.md`. Premise measured before writing (item 19c): all four of the issue's claims **hold** against the working tree. Two corrections recorded — MTG-01g is at `VOLT_Portal_PRD.md:368-384`, not `:370-384`; and the issue itself **omits a fifth MTG-01g requirement** (`:383-384`, MTG-12's coach/admin-only `excused` restriction, "a student-facing surface must skip that stop"), which the packet folds in. Ten acceptance criteria, five Least confident decisions (item 19d).
