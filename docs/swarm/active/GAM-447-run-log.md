@@ -328,3 +328,7 @@ first closes the acceptance criterion the original run disclosed as a gap.
   above — appended log entries move gate 3, so the pre-publish run has to be on
   the head that actually lands): all six PASS, 109 files / 2666 tests against the
   measured 2638 baseline, scoped 52/52. That is the block the PR body quotes.
+- 00:09Z — Gate block above re-verified on `83696f2` — same six PASS, same
+  counts. Any commit after it on this branch is run-log prose only; gate 3
+  (`format:check`) is the sole gate a doc edit can move, and it is re-run on the
+  final head before the ready flag goes on rather than assumed to have held.

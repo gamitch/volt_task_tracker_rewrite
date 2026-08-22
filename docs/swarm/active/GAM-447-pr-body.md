@@ -98,7 +98,7 @@ Run on the committed tree with `--require-clean`, not quoted from the worker.
 actually land:
 
 ```
-GATE RUN — 5dfb802 on claude/gam-447-series-card — tree clean
+GATE RUN — 83696f2 on claude/gam-447-series-card — tree clean
 
   1 tsc                               exit 0  PASS
   2 vite build                        exit 0  PASS
