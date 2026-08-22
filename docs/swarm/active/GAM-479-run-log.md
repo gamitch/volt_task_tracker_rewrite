@@ -89,6 +89,8 @@ Any real undo needs a new restore write path.
   03:04Z, `833f17bb` 03:08Z, `a1658c2c` 03:10Z. Recorded rather than quietly
   fixed — the `pr-body` skill names "runs that wrote timestamps disagreeing with
   their own commit times" as a repeat failure, and this run was one of them.
+  The same slip recurred once more at 03:36Z and is corrected the same way; from
+  that point every time below is read from `date -u` or `git log`, not estimated.
 
 - **03:19Z — `checker-premise` round 1 returned `VERDICT: REVISE`**
   (1 BLOCKER, 3 MAJOR, 7 MINOR, 3 NIT; ~112K tokens, 49 tool calls, 9m15s).
@@ -116,11 +118,11 @@ Any real undo needs a new restore write path.
 
 ## Round 2
 
-- **03:22Z — merged `origin/main` @ `0b06c9e7`** into the branch (`8f6d17c4`) and
+- **03:24Z — merged `origin/main` @ `0b06c9e7`** into the branch (`8f6d17c4`) and
   pushed, so the packet's base is the tree the gate measured. Baseline for the
   two allowed test files re-measured on that merge: **2 files, 56 tests, all
   green** (41 + 15).
-- **03:38Z — packet round 2 written**, applying all 14 round-1 findings (§8 maps
+- **03:25Z — packet round 2 written** (commit `5c5f6dc5`), applying all 14 round-1 findings (§8 maps
   each). Three design changes the gate forced: `makeRemoveAttendance` now
   returns the row it deleted (answers MAJOR-3 — the chip holds only a bare
   status, so the seam has to hand it back); the restore uses `.insert()` not
@@ -130,12 +132,12 @@ Any real undo needs a new restore write path.
   persistent conditions to `Banner` and because `astryx-api.md`'s `Toast` Props
   table is stale against installed 0.1.6 — every `Banner` prop used is
   documented, so no item-2b annotation enters this PR.
-- **03:38Z — dispatching `checker-premise` (round 2 of 2), `run_in_background:
+- **03:25Z — dispatching `checker-premise` (round 2 of 2), `run_in_background:
   false`, `model: "opus"`.** Item 19a: a third REVISE escalates to the owner
   rather than looping. *If this line is the last one in this file, the run died
   holding this subagent.*
 
-- **03:49Z — `checker-premise` round 2 returned `VERDICT: REVISE`**
+- **03:36Z — `checker-premise` round 2 returned `VERDICT: REVISE`**
   (0 BLOCKER, 4 MAJOR, 8 MINOR, 3 NIT; ~121K tokens, 49 tool calls, 10m07s).
   Dispatched `run_in_background: false`; this orchestrator blocked on it.
 
@@ -166,7 +168,7 @@ Any real undo needs a new restore write path.
     which a `SupabaseLoaderError` is not — so a 23505 collision with a genuine
     new QR check-in shows the coach "Couldn't save this student's attendance."
 
-- **03:50Z — STOPPING AND ESCALATING (constitution item 19a).** Two gate rounds
+- **03:37Z — STOPPING AND ESCALATING (constitution item 19a).** Two gate rounds
   are the cap and neither returned DISPATCH, so Definition of Ready item 1 is
   unsatisfied and **no worker may be dispatched**. I am not running a round 3
   and I am not dispatching against a REVISE. The findings look mechanical, which
