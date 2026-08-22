@@ -20,10 +20,10 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   is Claude.
 - 22:41Z — **Tiered STANDARD** (item 28d, judged as part of claiming). Label
   `tier/unreviewed` → `tier/standard`, confirmed on the read-back. Defence: no
-  write path (the Edit action calls the *existing* `onSaveMeetingSeries` seam,
+  write path (the Edit action calls the _existing_ `onSaveMeetingSeries` seam,
   which this ticket does not implement), no schema/RLS/migration/metric SQL, no
   auth or role logic, and no export another session builds against — the props
-  interface is *frozen by the decomposition ticket*, so this component consumes
+  interface is _frozen by the decomposition ticket_, so this component consumes
   it rather than defines it. Too large for FAST (new component + edit panel +
   CSS + tests, well over ~20 lines). STANDARD it is: one worker on a compact
   packet, orchestrator replays the mutation and runs the gates.
@@ -31,10 +31,10 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   file write.
 - 22:45Z — **Draft PR opened: <https://github.com/gamitch/volt_task_tracker_rewrite/pull/232>**
   (~minute 5, ~55 minutes of PR credential still live). Body artifact
-  `docs/swarm/active/GAM-447-pr-body.md` written *before* the API call and
+  `docs/swarm/active/GAM-447-pr-body.md` written _before_ the API call and
   validated by the declaration checker (`OK declaration closes GAM-447`).
 - 22:52Z — Rebased the branch onto `origin/main` @ `3d27d8a`: PRs #230 (GAM-444)
-  and #231 (GAM-445) had merged *after* this run started, and they create
+  and #231 (GAM-445) had merged _after_ this run started, and they create
   `src/lib/meetings/types.ts` and the `src/pages/meetings/coach/` stubs this
   ticket builds on. The pre-rebase base would have made the packet's citations
   false.
@@ -71,7 +71,7 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
 - 22:58Z — **`checker-premise` round 2 FAILED without a verdict** — the agent
   terminated on `API Error: 529 Overloaded`, a server-side fault, after
   re-reading the revised packet but before emitting VERDICT. This is not a
-  REVISE and not a DISPATCH; it is a *missing* gate round, and it is recorded as
+  REVISE and not a DISPATCH; it is a _missing_ gate round, and it is recorded as
   such rather than rounded up to a pass. Round 1's verdict stands as the last
   real one: REVISE, all eight findings applied.
 - 22:58Z — Deadline arithmetic, done rather than guessed: PR credential dies
@@ -102,7 +102,7 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   yet independently replayed; that is the orchestrator's next act.** Named
   mutation to replay: `'—'` → `'0%'` in `formatAttendanceText`.
 - 23:14Z — PR credential expires 23:40:44Z. PR #232 stays a **draft**: the run
-  cannot mark it ready after that, and marking it ready *before* the gates ran
+  cannot mark it ready after that, and marking it ready _before_ the gates ran
   would have been a false claim. Its description already carries the premise
   findings and the declared item-19a deviation. Pushes continue to work.
 - 23:20Z — **Gates run independently by the orchestrator, on the committed tree
@@ -125,20 +125,22 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   `3d27d8a` in a separate worktree → 108 files / 2633 tests. The branch adds
   exactly one file and 21 tests; nothing disappeared. The 380 eslint warnings
   are the repo's standing `react-refresh/only-export-components` class — `npx
-  eslint` on the two changed files alone emits **zero**.
+eslint` on the two changed files alone emits **zero**.
+
 - 23:21Z — **Three mutations replayed by the orchestrator, in a detached worktree
   (item 23 — never the shared tree), each reverted and re-verified green.**
 
-  | Mutation (`SeriesCard.tsx`) | Result |
-  | -- | -- |
-  | `attendancePct === null ? '—'` → `? '0%'` — fabricate a zero where the metric view says nothing | **REDDENED** 21→20 passed, exit 1 (`attendancePct rendering (DATA-01 …)`) |
-  | `MAX_VISIBLE_SCHEDULE_CHIPS = 4` → `999` — remove the cap that wins height invariance | **REDDENED** 21→20 passed, exit 1 (`height invariance > never renders …`, "expected 12 to be 5") |
-  | `onSelect?.({ eventId: model.eventId })` → `{ eventId: model.title }` — raise the frozen focus request with the wrong identifier | **REDDENED** 21→20 passed, exit 1 (`onSelect > is called with exactly …`) |
+  | Mutation (`SeriesCard.tsx`)                                                                                                      | Result                                                                                           |
+  | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+  | `attendancePct === null ? '—'` → `? '0%'` — fabricate a zero where the metric view says nothing                                  | **REDDENED** 21→20 passed, exit 1 (`attendancePct rendering (DATA-01 …)`)                        |
+  | `MAX_VISIBLE_SCHEDULE_CHIPS = 4` → `999` — remove the cap that wins height invariance                                            | **REDDENED** 21→20 passed, exit 1 (`height invariance > never renders …`, "expected 12 to be 5") |
+  | `onSelect?.({ eventId: model.eventId })` → `{ eventId: model.title }` — raise the frozen focus request with the wrong identifier | **REDDENED** 21→20 passed, exit 1 (`onSelect > is called with exactly …`)                        |
 
   The first is the worker's own named mutation; the other two are the
   orchestrator's, chosen to attack the two claims a green suite is least likely
   to actually guard — the design's fixed-height promise and the contract a
   sibling ticket codes against. All three reverted cleanly; worktrees removed.
+
 - 23:21Z — **DISPATCHED `checker-reviewer`** on the actual diff. Item 26 does not
   require a checker round at STANDARD — this one is added deliberately because
   the item-19 premise gate never returned a DISPATCH verdict (two 529s), so an
@@ -180,13 +182,14 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
 - 23:38Z — **Two more mutations replayed** on the fix commit, isolated worktree,
   both reverted:
 
-  | Mutation | Result |
-  | -- | -- |
-  | `buildSelectionStyle` → `return undefined` — delete the selected-state ring | **REDDENED** 28→27, exit 1 (`isSelected > renders a visible s…`) |
-  | `TITLE_MAX_LINES = 2` → `99` — unclamp the title so it can grow the card | **REDDENED** 28→27, exit 1 (`height invariance > pins the tit…`, "expected '99' to be '2'") |
+  | Mutation                                                                    | Result                                                                                      |
+  | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+  | `buildSelectionStyle` → `return undefined` — delete the selected-state ring | **REDDENED** 28→27, exit 1 (`isSelected > renders a visible s…`)                            |
+  | `TITLE_MAX_LINES = 2` → `99` — unclamp the title so it can grow the card    | **REDDENED** 28→27, exit 1 (`height invariance > pins the tit…`, "expected '99' to be '2'") |
 
   Five mutations total across the two commits, five reddened. The two guards the
   checker specifically called unpinned are now pinned, and I watched both fail.
+
 - 23:40Z — **Item-20 follow-ups filed**, to `Backlog` carrying `tier/unreviewed`
   (never straight to `Todo` — promotion is the owner's signal, GAM-382):
   - **GAM-473** — the card's missing location / canceled count / hours / season
@@ -203,8 +206,9 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   count, which additionally has a `student_teams` writer problem), **GAM-452**
   (the assembly that gives this component its first render site) and **GAM-460**
   (graded marks beside attendance %).
+
 - 23:42Z — **Timestamp correction, kept rather than quietly fixed.** Every entry
-  from 22:58Z onward originally carried a *guessed* clock time, and the guesses
+  from 22:58Z onward originally carried a _guessed_ clock time, and the guesses
   drifted up to 45 minutes ahead of reality — the last four entries claimed
   `00:xx` while the commits they describe are stamped `23:36`–`23:40`. They have
   been rewritten to their own commit times (`git log --date=format:'%H:%M'`).
@@ -218,7 +222,7 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   `docs/swarm/active/GAM-447-pr-body.md` on this branch is the finished body and
   says so in its own first paragraph. A human pastes it and clears the draft flag.
 - 23:45Z — **Close-out.** Comment posted on GAM-447 (`**Run log · claude ·
-  close-out · 2026-08-21**`) carrying the six-gate block with exit codes, the
+close-out · 2026-08-21**`) carrying the six-gate block with exit codes, the
   declared item-19 deviation, the three deferrals with their new row ids, and
   the two disclosed gaps. Issue moved `In Progress → In Review` and **read back**
   (`state.name = "In Review"`, `tier/standard` still applied). Never `Done` —
@@ -231,3 +235,96 @@ subagent** — that is the failure signature `AGENTS.md` wall 2 describes.
   file over the PR description and clears the draft flag; nothing else is
   outstanding.** No subagent is in flight, and every dispatch line above has a
   matching verdict line.
+
+## Completion run — 2026-08-21 23:47Z–23:59Z
+
+The 23:45Z close-out above handed off two things to a human: paste the finished
+body over the PR description, and clear the draft flag. This run does both, and
+first closes the acceptance criterion the original run disclosed as a gap.
+
+- 23:47Z — **Merged `origin/main` @ `fb1c304` into the branch** (merge commit
+  `97bd49f`, no conflicts). Main had moved _after_ this PR's CI ran: PR #233
+  (GAM-446) merged at 23:47:15Z, and the PR's checks completed 23:43–23:46Z, so
+  the green run on `24ff321` had never seen it. Merging first means the CI that
+  gates the ready flag is CI against the tree that would actually land.
+- 23:52Z — **Gates re-run on the merged tree** (`--require-clean`), baseline
+  **measured, not carried over**: `npx vitest run` at the new merge base
+  `fb1c304` in a detached worktree → 108 files / 2638 tests. That is the earlier
+  2633 plus GAM-446's own 5, which is the arithmetic it should be.
+
+  ```
+  GATE RUN — 97bd49f on claude/gam-447-series-card — tree clean
+
+    1 tsc                               exit 0  PASS
+    2 vite build                        exit 0  PASS
+    3 format:check                      exit 0  PASS
+    4 eslint                            exit 0  PASS       0 errors, 380 warnings
+    5 vitest (full)                     exit 0  PASS       109 files / 2666 tests  baseline 2638 (+28)
+    6 vitest src/pages/meetings/coach/  exit 0  PASS       2 files / 52 tests
+
+  VERDICT: PASS — all six gates exit 0
+  ```
+
+- 23:56Z — **The disclosed "no browser measurement" gap is closed.** GAM-447's
+  first acceptance criterion is "height invariance measured … 4 vs 56 sessions
+  at 1440px; 375px no-overflow", and the original run skipped it after spending
+  its budget on the premise gate's two 529s. A throwaway Playwright rig mounted
+  `SeriesCard` directly (it renders from props and needs no provider stack) at
+  both viewports:
+
+  | Viewport | 4-session card | 56-session card | Card scrollH/clientH | Page overflow |
+  | -------- | -------------- | --------------- | -------------------- | ------------- |
+  | 1440×900 | **380 px**     | **380 px**      | 378 / 378            | 0             |
+  | 375×812  | **380 px**     | **380 px**      | 378 / 378            | 0             |
+
+  Every number is paired with a presence check, per the skill's own trap: a card
+  that measured small because its content vanished must not read as a pass. All
+  passed — "View full schedule (4 sessions)" / "(56 sessions)", attendance `87%`
+  / `96.5%`, the chip row capped at 4 plus `+3 more` plus the `3 overlap` badge,
+  the title present, and **zero page errors**.
+
+- 23:58Z — **The rig was counter-checked, and it corrected a claim this log has
+  been making.** `MAX_VISIBLE_SCHEDULE_CHIPS` 4 → 999, re-measured, reverted:
+
+  | Viewport | Height with cap removed | Card scrollH / clientH                   |
+  | -------- | ----------------------- | ---------------------------------------- |
+  | 1440×900 | 380 px — _unchanged_    | 378 / 378 — _unchanged_                  |
+  | 375×812  | 380 px — _unchanged_    | **391 / 378 — 13 px of content clipped** |
+
+  The card never grows, because `Card height={380}` is unconditional. So the
+  chip cap does **not** "win height invariance" — the earlier entry at 23:21Z
+  and the PR body both say it does, and measured, that is wrong. What the cap
+  actually buys is that content still _fits inside_ the fixed box at phone
+  width; without it the box silently clips 13 px at 375 px and nothing at 1440
+  px. The jsdom mutation test that reddens on this counts chips, which is a
+  structural proxy that happens to fire — it cannot see the clipping, which is
+  the real consequence. Correction kept in place of quietly rewriting the
+  earlier line.
+
+  Rig deleted (`measure-seriescard.html`, `src/__measure__/`), dev server
+  stopped, baseline worktree removed; tree confirmed clean afterwards. Nothing
+  from the rig is committed.
+
+- 23:59Z — **New finding from the merge: GAM-460 is now live against this card.**
+  GAM-446, which landed on main after this PR's body was written, adds
+  `gradedMarksCt` / `attendedMarksCt` / `excusedCt` to `CoachMeetingRow`
+  (`types.ts`) carrying the view's own capitalised warning that _"a consumer
+  that renders attendance_pct without also rendering graded_marks_ct
+  reintroduces D014's known regression"_. `SeriesCard` is exactly such a
+  consumer: it renders `attendancePct` alone. GAM-460's own text says the
+  obligation _"should be closed by GAM-447's own acceptance criteria, not by
+  separate work"_.
+
+  **Not done here, deliberately.** `SeriesCardModel` has no `gradedMarksCt`, and
+  `src/lib/meetings/types.ts` is outside this ticket's Allowed Files — adding it
+  is a scope change an owner should make, not one a completion run should slip
+  in under a ready flag. It is raised in the PR body as the open decision it is,
+  rather than left to be found after merge.
+
+- 23:59Z — **Handover discharged.** PR body published from the artifact and the
+  draft flag cleared.
+
+- 00:05Z — **Gates re-run on the final branch state** `5dfb802` (the doc commit
+  above — appended log entries move gate 3, so the pre-publish run has to be on
+  the head that actually lands): all six PASS, 109 files / 2666 tests against the
+  measured 2638 baseline, scoped 52/52. That is the block the PR body quotes.
