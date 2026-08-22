@@ -275,3 +275,25 @@ the run died holding that subagent — that is the failure signature AGENTS.md
   `buildOverlapIndex` and filing a second row for it would duplicate an open
   issue. The expected-attendee gap (§0g) is folded into GAM-478 rather than
   filed alone, since both are the same missing roster source.
+- 03:30Z — **PR body finalized** (`docs/swarm/active/GAM-448-pr-body.md`,
+  declaration check exit 0) and pushed. **`gh pr edit` / `gh pr ready` both
+  returned HTTP 401** — the App token expired at 01:53Z exactly as
+  `AGENTS.md` wall 3 documents, while `git push` kept working off the
+  long-lived extraheader. PR #234 therefore remains a draft carrying its
+  minute-8 body; the finished body is preserved on the branch for a one-paste
+  publish. This is the failure the pr-body skill exists to make harmless, and
+  it was harmless.
+- 03:31Z — **Issue moved `In Progress` → `In Review`** (never `Done` — item
+  28e) with the close-out comment posted, and **read back**: `GAM-448 | state:
+  In Review`. Close-out names the six-gate block, the skipped gate and why,
+  the four follow-ups, and the two decisions left to the owner.
+- 03:31Z — **Process miss, recorded rather than hidden:** AGENTS.md asks for a
+  run-log comment at three transitions and I posted only the close-out — the
+  **claim** comment was never posted to the issue. Everything it would have
+  carried (branch, tier + defence, intent) went into this file and was pushed
+  from minute 5, so nothing was lost, but a reader watching Linear alone saw
+  silence for the whole run. Backdating one now would misrepresent when it was
+  written, so I have not.
+- 03:32Z — **RUN COMPLETE.** No subagent in flight; all four dispatches
+  (premise ×2, worker ×2) were run with `run_in_background: false` and each
+  verdict is recorded above its own dispatch line.
