@@ -80,6 +80,43 @@ export function formatWeekdayDate(sessionDate: string): string {
   return WEEKDAY_DATE_FORMATTER.format(parseDateOnly(sessionDate));
 }
 
+/** The compact day number used by the student meeting hero's date square. */
+export function formatDateSquare(sessionDate: string): { month: string; day: string } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: CHICAGO_TIME_ZONE,
+  }).formatToParts(parseDateOnly(sessionDate));
+  return {
+    month: parts.find((part) => part.type === 'month')?.value ?? '',
+    day: parts.find((part) => part.type === 'day')?.value ?? '',
+  };
+}
+
+/**
+ * A static, render-time Chicago calendar label. It intentionally has no
+ * clock/timer dependency: this is wayfinding, not a countdown.
+ */
+export function formatRelativeChicagoDay(sessionDate: string, now: Date): string | null {
+  const chicagoCalendarParts = new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: CHICAGO_TIME_ZONE,
+  }).formatToParts(now);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(chicagoCalendarParts.find((item) => item.type === type)?.value);
+  const currentMidnight = Date.UTC(part('year'), part('month') - 1, part('day'));
+  const [year, month, day] = sessionDate.split('-').map(Number);
+  const session = Date.UTC(year, month - 1, day);
+  const days = Math.round((session - currentMidnight) / 86_400_000);
+  if (days < 0) return null;
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Tomorrow';
+  if (days <= 6) return `in ${days} days`;
+  return formatWeekdayDate(sessionDate);
+}
+
 /** The ONE shared duration-in-minutes computation `formatDuration`
  * (unchanged worked output) and `sessionDurationHours` both build on, so
  * there is exactly one duration formula in this module, not two (moved from

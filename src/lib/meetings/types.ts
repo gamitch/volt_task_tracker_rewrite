@@ -169,6 +169,8 @@ export type LoadCoachMeetingsDataFn = () => Promise<CoachMeetingsData>;
 export interface StudentMeetingHistoryRow {
   sessionId: string;
   title: string;
+  /** The event's real, already-loaded location name. */
+  locationName: string;
   sessionDate: string;
   startsAt: string;
   endsAt: string;

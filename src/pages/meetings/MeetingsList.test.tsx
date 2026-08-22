@@ -17,7 +17,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  aggregateParticipationRows,
+  selectSingleParticipationRow,
   makeCancelMeetingSession,
   makeCreateMeetings,
   makeLoadCoachMeetingsData,
@@ -240,6 +240,7 @@ describe('loadStudentMeetingsData (T096 real load; T122 .limit(1) fix)', () => {
     const sessionsOrderSpy = vi.fn().mockResolvedValue({ data: [], error: null });
     const attendanceEqSpy = vi.fn().mockResolvedValue({ data: [], error: null });
     const participationEqSpy = vi.fn().mockResolvedValue({ data: [], error: null });
+    const activeTeamsIsSpy = vi.fn().mockResolvedValue({ data: [], error: null });
 
     const fromSpy = vi.fn((table: string) => {
       if (table === 'events') return { select: eventsSelectSpy };
@@ -249,6 +250,8 @@ describe('loadStudentMeetingsData (T096 real load; T122 .limit(1) fix)', () => {
         // T122: `.limit(1)` REMOVED -- `.eq(...)` is awaited directly now.
         return { select: vi.fn(() => ({ eq: participationEqSpy })) };
       }
+      if (table === 'student_teams')
+        return { select: vi.fn(() => ({ eq: vi.fn(() => ({ is: activeTeamsIsSpy })) })) };
       throw new Error(`unexpected table: ${table}`);
     });
     const client = { from: fromSpy } as unknown as SupabaseClient;
@@ -258,20 +261,13 @@ describe('loadStudentMeetingsData (T096 real load; T122 .limit(1) fix)', () => {
 
     expect(attendanceEqSpy).toHaveBeenCalledWith('student_id', 'student-42');
     expect(participationEqSpy).toHaveBeenCalledWith('student_id', 'student-42');
+    expect(activeTeamsIsSpy).toHaveBeenCalledWith('left_on', null);
   });
 
-  // T122's own ".limit(1)" fix decision, end-to-end: a dual-member student's
-  // TWO real `v_student_participation` rows (T116's own migration doc: one
-  // per membership-team) are summed, not arbitrarily reduced to one team.
-  it('a dual-member student with two v_student_participation rows gets an aggregated participation figure, not an arbitrary single team', async () => {
+  it('returns no participation metric for a dual-member student with ambiguous metric-view rows', async () => {
     const eventsSelectSpy = vi.fn().mockResolvedValue({ data: [], error: null });
     const sessionsOrderSpy = vi.fn().mockResolvedValue({ data: [], error: null });
     const attendanceEqSpy = vi.fn().mockResolvedValue({ data: [], error: null });
-    // FRC team: 5 expected, 5 present (100%). FTC team: 5 expected, 0
-    // present, 0 excused (0%). T120's own twin decision's "no-arithmetic"
-    // option does not apply here (no team in context at this call site --
-    // this file's own module doc #10g / `loaders/meetings.ts`'s own module
-    // doc), so this is the aggregate path.
     const participationEqSpy = vi.fn().mockResolvedValue({
       data: [
         {
@@ -297,6 +293,7 @@ describe('loadStudentMeetingsData (T096 real load; T122 .limit(1) fix)', () => {
       ],
       error: null,
     });
+    const activeTeamsIsSpy = vi.fn().mockResolvedValue({ data: [], error: null });
 
     const fromSpy = vi.fn((table: string) => {
       if (table === 'events') return { select: eventsSelectSpy };
@@ -305,6 +302,8 @@ describe('loadStudentMeetingsData (T096 real load; T122 .limit(1) fix)', () => {
       if (table === 'v_student_participation') {
         return { select: vi.fn(() => ({ eq: participationEqSpy })) };
       }
+      if (table === 'student_teams')
+        return { select: vi.fn(() => ({ eq: vi.fn(() => ({ is: activeTeamsIsSpy })) })) };
       throw new Error(`unexpected table: ${table}`);
     });
     const client = { from: fromSpy } as unknown as SupabaseClient;
@@ -312,24 +311,16 @@ describe('loadStudentMeetingsData (T096 real load; T122 .limit(1) fix)', () => {
     const load = makeLoadStudentMeetingsData(() => client);
     const data = await load('student-dual');
 
-    // Summed: expected 10, present 5 -> round(100*5/10, 1) = 50.0 -- NOT
-    // 100% (FRC only) or 0% (FTC only), either of which `.limit(1)` could
-    // have silently produced depending on row order.
-    expect(data.participation).toMatchObject({
-      studentId: 'student-dual',
-      expectedCt: 10,
-      presentCt: 5,
-      participationPct: 50,
-    });
+    expect(data.participation).toBeNull();
   });
 });
 
-describe('aggregateParticipationRows (T122 .limit(1) fix decision)', () => {
+describe('selectSingleParticipationRow (GAM-451 metric-view provenance)', () => {
   it('returns null for zero rows', () => {
-    expect(aggregateParticipationRows([])).toBeNull();
+    expect(selectSingleParticipationRow([])).toBeNull();
   });
 
-  it('passes a single row through unchanged (the common, non-dual-member case)', () => {
+  it('passes a single row through unchanged', () => {
     const row = {
       student_id: 's1',
       team_id: 't1',
@@ -340,120 +331,34 @@ describe('aggregateParticipationRows (T122 .limit(1) fix decision)', () => {
       excused_ct: 0,
       participation_pct: 57.1,
     };
-    // T162: `toBe`, NOT `toEqual`. The function short-circuits on
-    // `rows.length === 1` and returns the SAME OBJECT. Deleting that
-    // short-circuit makes it recompute -- and the recomputed object is
-    // byte-identical here (round(100*4/(7-0),1) === 57.1), so `toEqual`
-    // stays GREEN under that mutation and proves nothing. Reference
-    // identity is the only assertion that reddens. Measured, not assumed.
-    expect(aggregateParticipationRows([row])).toBe(row);
+    expect(selectSingleParticipationRow([row])).toBe(row);
   });
 
-  // T162: the `Math.max(expectedCt - excusedCt, 1)` denominator floor
-  // (`loaders/meetings.ts:477`) had NO test -- deleting it left all 1946
-  // tests green. Without it, a student whose every expected session was
-  // excused divides by zero. Mirrors the same guard's coverage on the twin
-  // function at `loaders/checkin.test.ts:86-93`.
-  //
-  // Fixture is view-possible, deliberately: if every expected session was
-  // excused then none can have been attended, so `present_ct` MUST be 0.
-  // That is why the mutation yields NaN rather than Infinity.
-  it('guards the denominator at 1 when every expected session was excused (no divide-by-zero)', () => {
-    const result = aggregateParticipationRows([
-      {
-        student_id: 's1',
-        team_id: 'team-a',
-        season_id: 'season-1',
-        expected_ct: 3,
-        present_ct: 0,
-        late_ct: 0,
-        excused_ct: 3,
-        participation_pct: 0,
-      },
-      {
-        student_id: 's1',
-        team_id: 'team-b',
-        season_id: 'season-1',
-        expected_ct: 2,
-        present_ct: 0,
-        late_ct: 0,
-        excused_ct: 2,
-        participation_pct: 0,
-      },
-    ]);
-    // Summed: expected 5, excused 5 -> 5 - 5 = 0 -> greatest(0, 1) = 1.
-    // 100 * 0 / 1 = 0. Without the floor: 0 / 0 -> NaN.
-    expect(result?.participation_pct).toBe(0);
-    expect(Number.isFinite(result?.participation_pct)).toBe(true);
-  });
-
-  it("sums counters across every row and recomputes participation_pct using the view's own expression", () => {
-    // Dual-member fixture: team A perfect attendance (4 expected, 4
-    // present -- `present_ct` already includes late per the view's own
-    // `status in ('present','late')` filter, `late_ct` is a breakdown of
-    // it, never additive on top), team B one excused absence (denominator
-    // shrinks) -- matches `20260717000003_metric_views.sql`'s NFR-03
-    // "excused-shrinks-denominator" fixture class, applied across two rows
-    // instead of one.
-    const result = aggregateParticipationRows([
-      {
-        student_id: 's1',
-        team_id: 'team-a',
-        season_id: 'season-1',
-        expected_ct: 4,
-        present_ct: 4,
-        late_ct: 0,
-        excused_ct: 0,
-        participation_pct: 100,
-      },
-      {
-        student_id: 's1',
-        team_id: 'team-b',
-        season_id: 'season-1',
-        expected_ct: 4,
-        present_ct: 2, // includes 1 late (late_ct below)
-        late_ct: 1,
-        excused_ct: 1,
-        participation_pct: 66.7, // round(100*2/(4-1),1) for THIS row alone
-      },
-    ]);
-    // Summed: expected 8, present 6 (4+2), late 1, excused 1.
-    // round(100 * 6 / greatest(8 - 1, 1), 1) = round(600/7, 1) = 85.7.
-    expect(result).toMatchObject({
-      expected_ct: 8,
-      present_ct: 6,
-      late_ct: 1,
-      excused_ct: 1,
-      participation_pct: 85.7,
-    });
-  });
-
-  it("never double-counts: a dual member's 10h-equivalent expected/present sums exactly (D-3 personal-total posture applied to participation)", () => {
-    // 10 expected / 10 present split evenly across two teams (5+5 each) --
-    // the aggregate must read exactly 10/10 (100%), not 20/20 or 5/5.
-    const result = aggregateParticipationRows([
-      {
-        student_id: 's1',
-        team_id: 'team-a',
-        season_id: 'season-1',
-        expected_ct: 5,
-        present_ct: 5,
-        late_ct: 0,
-        excused_ct: 0,
-        participation_pct: 100,
-      },
-      {
-        student_id: 's1',
-        team_id: 'team-b',
-        season_id: 'season-1',
-        expected_ct: 5,
-        present_ct: 5,
-        late_ct: 0,
-        excused_ct: 0,
-        participation_pct: 100,
-      },
-    ]);
-    expect(result).toMatchObject({ expected_ct: 10, present_ct: 10, participation_pct: 100 });
+  it('returns null for multiple rows rather than calculating a percentage', () => {
+    expect(
+      selectSingleParticipationRow([
+        {
+          student_id: 's1',
+          team_id: 'team-a',
+          season_id: 'season-1',
+          expected_ct: 5,
+          present_ct: 5,
+          late_ct: 0,
+          excused_ct: 0,
+          participation_pct: 100,
+        },
+        {
+          student_id: 's1',
+          team_id: 'team-b',
+          season_id: 'season-1',
+          expected_ct: 5,
+          present_ct: 0,
+          late_ct: 0,
+          excused_ct: 0,
+          participation_pct: 0,
+        },
+      ]),
+    ).toBeNull();
   });
 });
 

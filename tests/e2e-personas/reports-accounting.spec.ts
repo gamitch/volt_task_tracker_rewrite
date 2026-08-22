@@ -456,8 +456,7 @@ test.describe('RPT-03 hours accounting', () => {
 });
 
 // ---------------------------------------------------------------------------
-// AC3 — all-excused reads as NO RATE, not zero. Two screens get this right;
-// `/meetings` does not, and this spec pins the wrong behaviour deliberately.
+// AC3 — all-excused reads as NO RATE, not zero, on every student surface.
 // ---------------------------------------------------------------------------
 
 test.describe('MET-01 an all-excused student has no participation rate', () => {
@@ -501,58 +500,16 @@ test.describe('MET-01 an all-excused student has no participation rate', () => {
     await expect(page.getByText(/Participation: 0(\.0)?%/)).toHaveCount(0);
     await capture(page, '79-student-home-all-excused');
 
-    // --- leg 3: /meetings. GAM-356 — THIS WAS A PINNED DEFECT, NOW FIXED.
-    //
-    // Was rendered:  an accessible name of "Participation: null%" over a
-    //                ProgressBar that clamped to and announced 0%.
-    // Now rendered:  "— (no participation rate yet)", no ProgressBar at all.
-    //
-    // Mechanism (as it was). NOTE: the loader on this path is `checkin.ts`,
-    // NOT `meetings.ts`. `MeetingsList.tsx:2769` renders
-    // `<StudentMeetingView variant="own" studentId={…} />` with no `loadStripData`,
-    // so the default at `StudentMeetingView.tsx:1072` won:
-    // `loadConsistencyStripData` from `loaders/checkin.ts` (imported as
-    // `loadConsistencyStripDataFromSupabase` at `StudentMeetingView.tsx:317`).
-    // `meetings.ts`'s own `aggregateParticipationRows` feeds a DIFFERENT
-    // consumer (`meetings.ts:949`'s `loadStudentMeetingsData`). Established by
-    // mutation: changing `meetings.ts:519` left this assertion GREEN; changing
-    // `checkin.ts:363-365` turned it red.
-    //
-    //   1. `loaders/checkin.ts:239` declared `participation_pct: number` for a
-    //      column `v_student_participation` returns as SQL NULL (met01:123-128).
-    //   2. `aggregateParticipationForStudent` (`checkin.ts:363-365`) returns the
-    //      single row VERBATIM, so the `Math.max(expectedCt - excusedCt, 1)`
-    //      floor at `checkin.ts:375` — GAM-300's floor, still unfixed for the
-    //      dual-team case (Known Risk below) — was never reached here.
-    //   3. `checkin.ts:291` renamed it to `participationPct` unchanged.
-    //   4. `StudentMeetingView.tsx:757` interpolated it:
-    //      label={`Participation: ${participation.participationPct}%`}
-    //   5. `ProgressBar value={null}` clamped to 0 and rendered "0%".
-    //
-    // `loaders/meetings.ts:302` and `loaders/reports.ts:221` carried the
-    // IDENTICAL type lie. The Participation tab escaped the symptom only
-    // because `ParticipationTab.tsx:838` does a runtime `=== null` check. One
-    // mistyped column, three loaders, one guard.
-    //
-    // FIXED (GAM-356) by widening `participation_pct` to `number | null` in
-    // `checkin.ts:239`, `meetings.ts:302`, `reports.ts:221` and the two
-    // `types.ts` view row types, then giving `StudentMeetingView.tsx:751-761`
-    // a second guard alongside the existing `participation === null` one —
-    // `participation.participationPct === null` renders the em dash instead
-    // of a `ProgressBar`, never merged into the first branch, because the two
-    // no-rate causes ("no row at all" vs. "a real row, no marks after
-    // excusals") are genuinely different.
-    //
-    // KNOWN RISK, deliberately NOT fixed here: `aggregateParticipationForStudent`
-    // (`checkin.ts:367-376`) still applies GAM-300's `Math.max(expectedCt -
-    // excusedCt, 1)` floor when a student has more than one same-season row
-    // (a dual-team member). A dual-team all-excused student is summed across
-    // both rows before this guard ever sees a `null`, hits the floor, and
-    // still sees a fabricated 0%. Tracked on GAM-300 (open, Backlog), not
-    // folded in here — see the GAM-356 packet's "Known Risk" section.
+    // --- leg 3: /meetings. The real `meetings.ts` loader passes through the
+    // sole metric-view row, and `AttendanceCard` renders one unavailable bar
+    // beside an exact em dash. The indeterminate bar has no numeric ARIA value,
+    // so it communicates "unknown" without fabricating 0%.
     await page.goto('/meetings');
-    await expect(page.getByText('(no participation rate yet)')).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByRole('progressbar', { name: /Participation/ })).toHaveCount(0);
+    await expect(page.getByText('Participation: —', { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/Participation: 0(\.0)?%/)).toHaveCount(0);
+    const unavailableBar = page.getByRole('progressbar', { name: 'Participation unavailable' });
+    await expect(unavailableBar).toHaveCount(1);
+    await expect(unavailableBar).not.toHaveAttribute('aria-valuenow');
     await capture(page, '80-student-meetings-participation-null');
   });
 });

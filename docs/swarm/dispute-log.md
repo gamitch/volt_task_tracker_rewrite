@@ -2128,3 +2128,28 @@ the **SideNav Example block**, not from a props table, so per item 2 they must b
 
 Item 9 says "recorded in the ledger." `task-ledger.md` is **frozen** (item 29), so the record is this
 entry plus the decision record plus the Linear row — not a new ledger line.
+
+## D022 - GAM-451 may take one boss-directed narrow correction after the three-attempt cap; dd84dca is not passable
+
+Boss-arbiter ruling 2026-08-22 on `dd84dca` against `154f9fd`: decision 1,
+candidate wrong. The third checker correctly found a MAJOR because
+`tests/e2e-personas/reports-accounting.spec.ts` still asserted the removed
+legacy null-participation copy and zero-bar contract, while GAM-451 requires
+`Participation: —` plus exactly one unavailable indeterminate bar. The full
+persona suite would therefore fail.
+
+The loop cap forbids a fourth worker attempt, not a boss-ordered simplification.
+The primary orchestrator may update only that authorized persona assertion and
+prose, change the decorative hero date from a heading to text, make the
+no-linked empty-state title H2, and strengthen the heading tests to assert exact
+order and one H1. A separate checker must then verify the clean committed result
+with the focused tests, all six gates, the full persona suite, the packet
+mutations, and heading mutations.
+
+The stale `aggregateParticipationRows` prose in
+`src/lib/supabase/loaders/students.ts` and
+`src/pages/meetings/coach/CoachMeetingsView.tsx` is comment-only, out of GAM-451
+scope, and MINOR. It does not block after item-20 follow-up **GAM-486** was
+filed in Backlog.
+The e2e-personas findings JSON must be regenerated against the corrected source
+SHA even when its findings array remains empty.

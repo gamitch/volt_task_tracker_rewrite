@@ -63,8 +63,9 @@ insert into students (id, profile_id, display_name, team_id, grad_year, is_activ
 insert into student_teams (student_id, team_id, joined_on) select id, team_id, (current_date - 80) from students;
 
 /* ------------------------------------------------- parent guardian link  */
-insert into guardian_links (parent_profile_id, student_id, relationship) values
-  ('a0000000-0000-4000-8000-000000000004', '57000000-0000-4000-8000-000000000001', 'parent');
+insert into guardian_links (parent_profile_id, student_id, relationship, created_at) values
+  ('a0000000-0000-4000-8000-000000000004', '57000000-0000-4000-8000-000000000001', 'parent', '2026-01-01T00:00:00Z'),
+  ('a0000000-0000-4000-8000-000000000004', '57000000-0000-4000-8000-000000000004', 'parent', '2026-01-02T00:00:00Z');
 
 /* ---------------------------------------------------------------- events */
 insert into events (id, season_id, type, title, description, location_name, address, team_ids,
@@ -79,7 +80,13 @@ values
   ('e0e00000-0000-4000-8000-000000000003', '50000000-0000-4000-8000-000000000001', 'competition',
    'District Qualifier', 'Two-day district event.', 'Riverside Arena', '900 Riverside Dr',
    array['7ea11000-0000-4000-8000-000000000001','7ea11000-0000-4000-8000-000000000002']::uuid[],
-   true, false, 2, 16, 'a0000000-0000-4000-8000-000000000001');
+   true, false, 2, 16, 'a0000000-0000-4000-8000-000000000001'),
+  ('e0e00000-0000-4000-8000-000000000004', '50000000-0000-4000-8000-000000000001', 'meeting',
+   'Nina Team Meeting', 'A distinct FTC meeting for Nina.', 'FTC Lab', '22 Circuit Way',
+   array['7ea11000-0000-4000-8000-000000000002']::uuid[], true, false, 0, 0, 'a0000000-0000-4000-8000-000000000002'),
+  ('e0e00000-0000-4000-8000-000000000005', '50000000-0000-4000-8000-000000000001', 'meeting',
+   'Nina Retrospective', 'A completed FTC meeting that distinguishes Nina history.', 'FTC Review Room', '22 Circuit Way',
+   array['7ea11000-0000-4000-8000-000000000002']::uuid[], true, false, 0, 0, 'a0000000-0000-4000-8000-000000000002');
 
 /* -------------------------------------------------------------- sessions */
 -- Four completed build sessions (so the metric views have something to
@@ -94,7 +101,9 @@ insert into event_sessions (id, event_id, session_date, starts_at, ends_at, stat
   ('5e550000-0000-4000-8000-000000000007', 'e0e00000-0000-4000-8000-000000000003', (current_date + 21), now() + interval '21 days', now() + interval '21 days' + interval '9 hours', 'scheduled', ''),
   -- An UPCOMING outreach session with no RSVP rows, so the student home has a
   -- real "Sign-up opportunities" entry to exercise.
-  ('5e550000-0000-4000-8000-000000000008', 'e0e00000-0000-4000-8000-000000000002', (current_date + 10), now() + interval '10 days', now() + interval '10 days' + interval '4 hours', 'scheduled', '');
+  ('5e550000-0000-4000-8000-000000000008', 'e0e00000-0000-4000-8000-000000000002', (current_date + 10), now() + interval '10 days', now() + interval '10 days' + interval '4 hours', 'scheduled', ''),
+  ('5e550000-0000-4000-8000-000000000009', 'e0e00000-0000-4000-8000-000000000004', (current_date + 2), now() + interval '2 days', now() + interval '2 days' + interval '2 hours', 'scheduled', ''),
+  ('5e550000-0000-4000-8000-000000000010', 'e0e00000-0000-4000-8000-000000000005', (current_date - 5), now() - interval '5 days', now() - interval '5 days' + interval '2 hours', 'completed', 'Nina completed this FTC meeting.');
 
 update event_sessions set people_reached = 140 where id = '5e550000-0000-4000-8000-000000000006';
 
@@ -120,6 +129,11 @@ insert into attendance (session_id, student_id, status, check_in_at, check_out_a
 values ('5e550000-0000-4000-8000-000000000006', '57000000-0000-4000-8000-000000000001', 'present',
         now() - interval '30 days', now() - interval '30 days' + interval '4 hours', 'coach',
         'a0000000-0000-4000-8000-000000000001');
+
+insert into attendance (session_id, student_id, status, check_in_at, check_out_at, method, recorded_by)
+values ('5e550000-0000-4000-8000-000000000010', '57000000-0000-4000-8000-000000000004', 'late',
+        now() - interval '5 days', now() - interval '5 days' + interval '2 hours', 'coach',
+        'a0000000-0000-4000-8000-000000000002');
 
 /* ----------------------------------------------------------------- rsvps */
 insert into rsvps (session_id, student_id, status, responded_by) values
