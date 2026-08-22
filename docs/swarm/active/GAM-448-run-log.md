@@ -31,3 +31,7 @@ the run died holding that subagent — that is the failure signature AGENTS.md
   the judgement is mine to make and defend, not to inherit.
 - 00:55Z — Branch `claude/gam-448-schedule-panel` created; run log is the first
   file write.
+- 00:58Z — **Draft PR opened: #234** (`git log` SHA `8b4cbcd5`..). Body artifact
+  `docs/swarm/active/GAM-448-pr-body.md` written BEFORE the API call and
+  validated by `.claude/skills/pr-body/scripts/check.mjs` (exit 0, "declaration
+  closes GAM-448"). ~55 minutes of PR credential still unspent — wall 3 closed.
