@@ -35,3 +35,40 @@ the run died holding that subagent — that is the failure signature AGENTS.md
   `docs/swarm/active/GAM-448-pr-body.md` written BEFORE the API call and
   validated by `.claude/skills/pr-body/scripts/check.mjs` (exit 0, "declaration
   closes GAM-448"). ~55 minutes of PR credential still unspent — wall 3 closed.
+- 01:10Z — **Premise measured against `main` before writing the packet.** Five
+  findings, all from live reads, four of which the issue does not know about:
+  - **G1 (resolved, not a blocker).** `SchedulePanel` is imported by nothing
+    (`grep -rn SchedulePanel src/` returns only its own file). That is by
+    design: **GAM-452** ("Assemble the redesigned meetings page — wire cards,
+    panel and rail together") is the wiring ticket and is still `Backlog`. So
+    this ticket closes **Partial** under item 27 with GAM-452 named, not
+    Passed.
+  - **G2 (hard gap).** Tap-to-cycle chips need `{studentId, name, status}` per
+    student. The frozen `CoachMeetingSessionDetail` carries only
+    `attendeeNames: readonly string[]` — display names of present/late
+    students, no ids, no statuses, no absent/excused students
+    (`src/lib/meetings/types.ts:78-103`). `makeSetAttendanceStatus` requires a
+    `studentId`. Widening the frozen type is forbidden by the meetings-design
+    skill and `types.ts` is outside Allowed Files. **GAM-471** independently
+    records that `student_teams` has no writer on `main` to build a roster
+    from. Chips must therefore take the roster as an injected prop and the
+    data wiring becomes a filed follow-up.
+  - **G3 (unmet dependency).** `src/lib/meetings/overlap.ts` /
+    `buildOverlapIndex` **do not exist** — GAM-450 owns them and is `Backlog`.
+    The Overlap badge the issue requires on session rows cannot be built here
+    without duplicating a frozen name. Deferred behind an optional prop.
+  - **G4 (surmountable).** Frozen `SchedulePanelProps` has none of the
+    injection props the issue names. This ticket owns the file; the props are
+    added as OPTIONAL so the unwritten GAM-452 caller inherits no obligation.
+  - **G5 (correctness — the finding this gate exists for).** The issue names
+    `makeOnEditAttendance` as a write seam. It emits a bare
+    `UPDATE attendance ... WHERE session_id AND student_id`
+    (`loaders/endMeeting.ts:496-505`) with **no insert path**, and
+    `types.ts:138-148` records that since T508 an unmarked student normally has
+    **no attendance row at all**. Correcting an unmarked student through that
+    seam updates zero rows and resolves successfully — the optimistic chip
+    would show the new status and the database would keep nothing. The panel
+    must use `makeSetAttendanceStatus` (a real upsert on
+    `session_id,student_id`, `loaders/attendance.ts:506-528`) for every chip
+    write. `makeOnEditAttendance` is additionally documented as deliberately
+    unreachable by owner ruling T601.
