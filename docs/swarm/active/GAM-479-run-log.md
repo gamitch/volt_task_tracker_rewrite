@@ -25,3 +25,12 @@ uses the long-lived PAT and survives.
   constraint), which is a second independent HEAVY trigger and an item 18
   `model: "opus"` trigger for the worker. Two tiers are not arguable here; even
   if they were, item 26 says take the heavier.
+- **03:08Z — draft PR #238 opened** (<https://github.com/gamitch/volt_task_tracker_rewrite/pull/238>),
+  ~minute 6, with `docs/swarm/active/GAM-479-pr-body.md` written before the API
+  call. Wall 3 satisfied with ~54 minutes of credential left.
+- **03:09Z — claim comment posted to Linear** (`**Run log · Claude · claim ·
+  2026-08-22**`), carrying the branch, the tier defence and the one thing known
+  to be unresolved: the issue asks for a *decision* (undo affordance vs. null-status
+  preservation) and does not pick one.
+- **03:10Z — measuring the premise before anything else.** If it does not hold,
+  this run stops and the issue goes back to `Todo` with the measurement recorded.
