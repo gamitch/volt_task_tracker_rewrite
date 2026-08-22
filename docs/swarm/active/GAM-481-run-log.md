@@ -76,3 +76,14 @@ territory, which is why this is filed rather than edited from a task branch."*
   - **N1** — `AttendanceChips.tsx:2-3` → `:3-4`, plus three sibling off-by-N citations in the packet that my 03:52Z line claimed were already fixed and were not. Now fixed.
   - **N2** — the rewrite dropped the positive direction with the banned string. Restored as *"Missing any one of the four is a finding on its own — that has not changed"*, phrased to state the rule rather than to slip past A4's grep.
   - **N3** — removed *"which is what an earlier version of this section got wrong"* from the contract text. A binding contract does not need its own edit history; this log does.
+- **04:36Z — re-verified the artifact after the corrections**, because editing it invalidates the checker's measurement of it:
+
+```
+OLD-vs-LIVE: BYTE-IDENTICAL   md5 749da43c16edc6aca5f8fd8f6518f084 (both)
+A1 five-stop order 1 | A5 reduced order 1 | A2 Shift 1 + BLOCKER 1
+A3 DES-17 4, MTG-12 3 | A4a ADDITIVE quote 1 | A4b banned string 0 (want 0)
+A6 SegmentedControl 1 | A11 AttendanceChips 1 | A9 file:line citations 0 (want 0)
+new text: 62 lines
+```
+
+  The md5 is the same value `checker-reviewer` computed independently, so my N2/N3 edits to the *New* text did not disturb the *Old* block the splice matches against. All criteria still pass.
