@@ -87,3 +87,5 @@ new text: 62 lines
 ```
 
   The md5 is the same value `checker-reviewer` computed independently, so my N2/N3 edits to the *New* text did not disturb the *Old* block the splice matches against. All criteria still pass.
+- **04:40Z — closed out.** GAM-481 moved `In Progress → In Review` (item 28e — never `Done`; the merge closes it, not the agent), read-back confirms `state: In Review`. Close-out comment posted with the gate block, the PR, the three verdicts and GAM-485's id. PR #239 is out of draft. **No subagent is in flight; every one of the three was dispatched with `run_in_background: false` and waited on, and each has its verdict line above its dispatch line's successor.**
+- **Recommendation left with the owner, not acted on:** promote **GAM-485** to `Todo` before the next `meetings-redesign` ticket is dispatched — until it applies, the eleven siblings still read the narrow contract. Item 28a makes promotion the owner's authorization; a row created or promoted by an agent into `Todo` is not dispatchable work (GAM-382).
