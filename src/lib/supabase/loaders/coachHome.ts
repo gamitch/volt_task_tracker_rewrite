@@ -139,6 +139,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createLoader, type LoaderQueryResult } from '../loader';
 import { getSupabaseClient } from '../client';
+import { excludeUnmarked } from './attendance';
 import type {
   CoachHomeData,
   HomeAttendanceRow,
@@ -339,7 +340,10 @@ async function queryCoachHomeAttendance(
     .from('attendance')
     .select('session_id, student_id, status')
     .in('session_id', sessionIds as string[]);
-  return { data: (result.data as CoachHomeAttendanceDbRow[] | null) ?? null, error: result.error };
+  return {
+    data: excludeUnmarked(result.data as CoachHomeAttendanceDbRow[] | null),
+    error: result.error,
+  };
 }
 
 async function queryCoachHomeStudentHours(

@@ -132,7 +132,7 @@ import { getSupabaseClient } from '../client';
 import { invokeEdgeFunction } from '../functions';
 // T403 step 2: import-only. `./attendance` is shared at runtime with W2's
 // panels and W3's `endMeeting.ts`; this file reads it and never edits it.
-import { makeLoadAttendanceForSessions } from './attendance';
+import { makeLoadAttendanceForSessions, excludeUnmarked } from './attendance';
 // Type-only, so no runtime module edge is added back toward the page (the
 // value-level `Kiosk.tsx` cycle below is the pre-existing, deliberate one).
 import type {
@@ -247,7 +247,10 @@ async function queryAttendanceStatuses(
   sessionId: string,
 ): Promise<LoaderQueryResult<AttendanceStatusDbRow[]>> {
   const result = await client.from('attendance').select('status').eq('session_id', sessionId);
-  return { data: (result.data as AttendanceStatusDbRow[] | null) ?? null, error: result.error };
+  return {
+    data: excludeUnmarked(result.data as AttendanceStatusDbRow[] | null),
+    error: result.error,
+  };
 }
 
 // ---------------------------------------------------------------------------

@@ -323,20 +323,22 @@ describe('attendance write (criterion 7)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Criterion 8 -- reaching (unset) calls onRemoveAttendance, not a status write.
+// Criterion 8 -- reaching (unset) calls onClearAttendance, not a status write.
+// GAM-479: that seam is a sentinel-status upsert, not a row DELETE, so the
+// payload now carries `method`/`recordedBy` like every other stop.
 // ---------------------------------------------------------------------------
 
 describe('the (unset) stop (criterion 8)', () => {
-  it('calls onRemoveAttendance exactly once with { sessionId, studentId }, never onSetAttendanceStatus', () => {
+  it('calls onClearAttendance exactly once with the full clear payload, never onSetAttendanceStatus', () => {
     const onSetAttendanceStatus = vi.fn().mockResolvedValue({});
-    const onRemoveAttendance = vi.fn().mockResolvedValue(undefined);
+    const onClearAttendance = vi.fn().mockResolvedValue(undefined);
     renderRow(
       baseProps({
         session: baseSession({ status: 'completed', sessionId: 'session-9' }),
         isExpanded: true,
         roster: [rosterEntry({ studentId: 'student-9', displayName: 'Ada L.', status: 'absent' })],
         onSetAttendanceStatus,
-        onRemoveAttendance,
+        onClearAttendance,
         recordedBy: 'coach-1',
         canSetExcused: true,
       }),
@@ -347,10 +349,12 @@ describe('the (unset) stop (criterion 8)', () => {
     act(() => {
       chipButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(onRemoveAttendance).toHaveBeenCalledTimes(1);
-    expect(onRemoveAttendance).toHaveBeenCalledWith({
+    expect(onClearAttendance).toHaveBeenCalledTimes(1);
+    expect(onClearAttendance).toHaveBeenCalledWith({
       sessionId: 'session-9',
       studentId: 'student-9',
+      method: 'coach',
+      recordedBy: 'coach-1',
     });
     expect(onSetAttendanceStatus).not.toHaveBeenCalled();
   });
@@ -403,14 +407,14 @@ describe('optimistic rollback (criterion 9)', () => {
 describe('local unset is not overwritten by the stale server status (rework defect 1)', () => {
   it('reads "…, not recorded" after the unset tap, then "…, present" after the next tap', () => {
     const onSetAttendanceStatus = vi.fn().mockResolvedValue({});
-    const onRemoveAttendance = vi.fn().mockResolvedValue(undefined);
+    const onClearAttendance = vi.fn().mockResolvedValue(undefined);
     renderRow(
       baseProps({
         session: baseSession({ status: 'completed', sessionId: 'session-9' }),
         isExpanded: true,
         roster: [rosterEntry({ studentId: 'student-9', displayName: 'Ada L.', status: 'absent' })],
         onSetAttendanceStatus,
-        onRemoveAttendance,
+        onClearAttendance,
         recordedBy: 'coach-1',
       }),
     );
@@ -420,12 +424,12 @@ describe('local unset is not overwritten by the stale server status (rework defe
     // BEFORE -- server-supplied 'absent'.
     expect(chipButton().getAttribute('aria-label')).toBe('Ada L., absent');
 
-    // tap 1: absent -> (unset). Calls onRemoveAttendance, and the local
+    // tap 1: absent -> (unset). Calls onClearAttendance, and the local
     // `null` override must stick, not fall back to the server's 'absent'.
     act(() => {
       chipButton().dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(onRemoveAttendance).toHaveBeenCalledTimes(1);
+    expect(onClearAttendance).toHaveBeenCalledTimes(1);
     expect(chipButton().getAttribute('aria-label')).toBe('Ada L., not recorded');
 
     // tap 2: (unset) -> present. The cycle must have actually closed and
@@ -436,7 +440,7 @@ describe('local unset is not overwritten by the stale server status (rework defe
     expect(onSetAttendanceStatus).toHaveBeenCalledTimes(1);
     expect(onSetAttendanceStatus.mock.calls[0][0]).toMatchObject({ status: 'present' });
     expect(chipButton().getAttribute('aria-label')).toBe('Ada L., present');
-    expect(onRemoveAttendance).toHaveBeenCalledTimes(1);
+    expect(onClearAttendance).toHaveBeenCalledTimes(1);
   });
 });
 

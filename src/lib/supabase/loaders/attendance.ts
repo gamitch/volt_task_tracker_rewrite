@@ -215,6 +215,46 @@ import { getSupabaseClient } from '../client';
 // ---------------------------------------------------------------------------
 
 export type AttendanceStatus = 'present' | 'late' | 'excused' | 'absent';
+
+/**
+ * GAM-479 -- the `attendance.status` sentinel meaning "a coach cleared this
+ * mark and the row's other columns are being kept"
+ * (`supabase/migrations/20260822000000_attendance_unmarked_sentinel.sql`).
+ *
+ * **It is deliberately NOT a member of `AttendanceStatus`.** `'unmarked'` is a
+ * STORAGE state, not an application state: every read in this directory
+ * filters it out with `.neq('status', UNMARKED_DB_STATUS)`, so above the
+ * loader boundary a cleared row is indistinguishable from no row at all and
+ * the four-value union -- and every exhaustive `Record<AttendanceStatus, ...>`
+ * built on it -- stays exactly as it was. Widening the union instead would
+ * push a fifth arm into every consumer for a value none of them can ever see.
+ *
+ * The two reads that deliberately do NOT filter it are
+ * `meetings.ts`'s `queryAttendanceExistsForSessions` and `endMeeting.ts`'s
+ * `markAbsences` sweep; both say why at their own call sites.
+ */
+export const UNMARKED_DB_STATUS = 'unmarked';
+
+/**
+ * GAM-479 -- the ONE filter that enforces `UNMARKED_DB_STATUS`'s "storage
+ * state, never an application state" invariant. Every `query*` function in
+ * this directory that selects `attendance.status` wraps its result in this.
+ *
+ * It filters in TypeScript rather than adding `.neq('status', ...)` to each
+ * query on purpose. A `.neq` clause is invisible to this repo's hand-rolled
+ * per-file query-builder fakes, whose `.eq`/`.in` chains are deliberate
+ * passthroughs that record arguments instead of filtering
+ * (`coachHome.test.ts:38-42` states that trap explicitly) -- so a fixture
+ * carrying a cleared row could never reach the filter, and the tests below
+ * could not show it being dropped. Filtering here puts the invariant on the
+ * path the fixtures actually exercise.
+ *
+ * `null` is preserved as `null`: every caller distinguishes it (a query
+ * error) from `[]` (no rows).
+ */
+export function excludeUnmarked<T extends { status: string }>(rows: T[] | null): T[] | null {
+  return rows === null ? null : rows.filter((row) => row.status !== UNMARKED_DB_STATUS);
+}
 /** `attendance.method` check constraint -- widened to permit `'self'` by
  * `supabase/migrations/20260724000000_self_checkoff.sql:31-33` (current
  * source of truth; the original three-value constraint was
@@ -530,6 +570,71 @@ export function makeSetAttendanceStatus(
 /** Default `onSetAttendanceStatus` for `LiveConsole.tsx` -- real upsert that
  * never touches `hours_override` (module doc #5). */
 export const setAttendanceStatus: SetAttendanceStatusFn = makeSetAttendanceStatus();
+
+// ---------------------------------------------------------------------------
+// Clear -- GAM-479. The chip cycle's `(unset)` stop, as a non-destructive
+// write. This is what `SessionRow.tsx` calls; it is NOT the outreach
+// checkbox's un-mark, which is still the real DELETE below.
+// ---------------------------------------------------------------------------
+
+export interface ClearAttendanceStatusParams {
+  sessionId: string;
+  studentId: string;
+  method: AttendanceMethod;
+  /** `attendance.recorded_by` -- the ACTING coach, same contract as
+   * `SetAttendanceStatusParams.recordedBy`. Clearing a mark is an edit, so
+   * the row records who cleared it even though `method` is left alone as the
+   * provenance of the `check_in_at` being preserved. */
+  recordedBy: string;
+}
+
+export type ClearAttendanceStatusFn = (params: ClearAttendanceStatusParams) => Promise<void>;
+
+/**
+ * GAM-479. Writes `status: UNMARKED_DB_STATUS` through the SAME upsert shape
+ * `makeSetAttendanceStatus` above uses, and for the same reason: the payload
+ * omits `hours_override` AND `check_in_at`/`check_out_at`, so Postgrest's
+ * generated `ON CONFLICT DO UPDATE SET` cannot touch them. Clearing a mark
+ * therefore preserves the QR check-in timestamp and any coach-set hours
+ * override -- the exact columns the old `makeRemoveAttendance` wiring
+ * destroyed, with no audit trail behind them
+ * (`20260803000000_simplify_attendance_audit.sql:38-39` dropped it).
+ *
+ * `method` is a required param rather than a hardcoded `'coach'` because the
+ * insert path needs a value for a `not null` column when no row exists yet
+ * (a `Shift`-tap backward from `Present` reaches this stop with nothing in the
+ * table). Callers pass `resolveAttendanceWriteMethod`'s answer, so a cleared
+ * `'qr'` row keeps saying `'qr'`.
+ *
+ * Returns `void`, not an `AttendanceRow`: the written row's `status` is the
+ * sentinel, which is by construction not an `AttendanceStatus`, and no caller
+ * uses the round-trip -- `SessionRow.tsx` has already applied its optimistic
+ * `null` before awaiting.
+ */
+export function makeClearAttendanceStatus(
+  getClient: () => SupabaseClient = getSupabaseClient,
+): ClearAttendanceStatusFn {
+  const mutate = runMutation<ClearAttendanceStatusParams, void>(
+    (client, params) =>
+      client.from('attendance').upsert(
+        {
+          session_id: params.sessionId,
+          student_id: params.studentId,
+          status: UNMARKED_DB_STATUS,
+          method: params.method,
+          recorded_by: params.recordedBy,
+        },
+        { onConflict: 'session_id,student_id' },
+      ),
+    getClient,
+  );
+  return async (params) => {
+    await mutate(params);
+  };
+}
+
+/** Default `onClearAttendance` for `SessionRow.tsx`'s chip cycle. */
+export const clearAttendanceStatus: ClearAttendanceStatusFn = makeClearAttendanceStatus();
 
 // ---------------------------------------------------------------------------
 // Delete -- the ONE place the `'delete'` un-mark action (module doc #2) is

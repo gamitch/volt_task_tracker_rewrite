@@ -104,6 +104,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createLoader, type LoaderQueryResult } from '../loader';
 import { getSupabaseClient } from '../client';
+import { excludeUnmarked } from './attendance';
 
 // ---------------------------------------------------------------------------
 // Season-wide secondary stat tiles.
@@ -556,7 +557,10 @@ async function queryFeedAttendance(
     .from('attendance')
     .select('id, session_id, student_id, status, recorded_by, updated_at, created_at')
     .in('session_id', sessionIds as string[]);
-  return { data: (result.data as FeedAttendanceDbRow[] | null) ?? null, error: result.error };
+  return {
+    data: excludeUnmarked(result.data as FeedAttendanceDbRow[] | null),
+    error: result.error,
+  };
 }
 
 async function queryFeedStudents(

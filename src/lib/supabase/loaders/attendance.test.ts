@@ -28,8 +28,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it, vi } from 'vitest';
 import {
   ATTENDANCE_PAGE_SIZE,
+  excludeUnmarked,
+  makeClearAttendanceStatus,
   makeLoadAttendanceForSessions,
   makeSetAttendanceStatus,
+  UNMARKED_DB_STATUS,
 } from './attendance';
 
 interface AttendanceRowFixture {
@@ -385,5 +388,146 @@ describe('makeSetAttendanceStatus — T403 step 3 (Trap 1 fix)', () => {
         recordedBy: 'coach-1',
       }),
     ).rejects.toMatchObject({ code: 'XX000' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GAM-479 -- the un-mark stops being a row DELETE.
+//
+// The defect: the chip cycle's fifth stop called `makeRemoveAttendance`, an
+// unconditional `delete from attendance`. The deleted row carried
+// `check_in_at`, `check_out_at`, `hours_override`, `method` and `recorded_by`,
+// so one tap past `Absent` destroyed a QR check-in timestamp and a coach-set
+// hours override -- unrecoverably, since
+// `20260803000000_simplify_attendance_audit.sql:38-39` dropped the audit
+// trigger. These tests pin the replacement.
+// ---------------------------------------------------------------------------
+
+/** No `.select().single()` on this path -- `makeClearAttendanceStatus`
+ * returns `void`, so the upsert itself is the thenable. */
+function makeClearStubClient(resolved: {
+  data: unknown;
+  error: { message: string; code?: string } | null;
+}) {
+  const upsertSpy = vi.fn((payload: unknown, options: unknown) => {
+    void payload;
+    void options;
+    return Promise.resolve(resolved);
+  });
+  const fromSpy = vi.fn((table: string) => {
+    if (table === 'attendance') return { upsert: upsertSpy };
+    throw new Error(`unexpected table: ${table}`);
+  });
+  return { client: { from: fromSpy } as unknown as SupabaseClient, fromSpy, upsertSpy };
+}
+
+describe('makeClearAttendanceStatus — GAM-479', () => {
+  it('upserts the sentinel status and NEVER names check_in_at, check_out_at or hours_override — the three columns the old DELETE destroyed', async () => {
+    const stub = makeClearStubClient({ data: null, error: null });
+    const clear = makeClearAttendanceStatus(() => stub.client);
+
+    await clear({
+      sessionId: 'session-1',
+      studentId: 'student-1',
+      method: 'coach',
+      recordedBy: 'coach-1',
+    });
+
+    expect(stub.fromSpy).toHaveBeenCalledWith('attendance');
+    expect(stub.upsertSpy).toHaveBeenCalledTimes(1);
+    const [payload, options] = stub.upsertSpy.mock.calls[0];
+    // Captured exactly, not described. Any key beyond these five would let
+    // Postgrest's generated `ON CONFLICT DO UPDATE SET` write that column,
+    // which is the whole defect this change exists to close.
+    expect(payload).toEqual({
+      session_id: 'session-1',
+      student_id: 'student-1',
+      status: 'unmarked',
+      method: 'coach',
+      recorded_by: 'coach-1',
+    });
+    expect(Object.keys(payload as object)).not.toContain('check_in_at');
+    expect(Object.keys(payload as object)).not.toContain('check_out_at');
+    expect(Object.keys(payload as object)).not.toContain('hours_override');
+    expect(options).toEqual({ onConflict: 'session_id,student_id' });
+  });
+
+  it('issues an UPSERT, never a DELETE — the seam cannot reach a delete builder at all', async () => {
+    const deleteSpy = vi.fn();
+    const upsertSpy = vi.fn(() => Promise.resolve({ data: null, error: null }));
+    const client = {
+      from: vi.fn(() => ({ upsert: upsertSpy, delete: deleteSpy })),
+    } as unknown as SupabaseClient;
+
+    await makeClearAttendanceStatus(() => client)({
+      sessionId: 'session-1',
+      studentId: 'student-1',
+      method: 'qr',
+      recordedBy: 'coach-1',
+    });
+
+    expect(upsertSpy).toHaveBeenCalledTimes(1);
+    expect(deleteSpy).not.toHaveBeenCalled();
+  });
+
+  it("preserves the row's provenance: `method` is whatever the caller passes, so clearing a qr row keeps saying qr", async () => {
+    const stub = makeClearStubClient({ data: null, error: null });
+
+    await makeClearAttendanceStatus(() => stub.client)({
+      sessionId: 'session-1',
+      studentId: 'student-1',
+      method: 'qr',
+      recordedBy: 'coach-9',
+    });
+
+    expect(stub.upsertSpy.mock.calls[0][0]).toMatchObject({
+      method: 'qr',
+      recorded_by: 'coach-9',
+    });
+  });
+
+  it('propagates a mutation error as a SupabaseLoaderError, same normalization every other write in this file uses', async () => {
+    const stub = makeClearStubClient({
+      data: null,
+      error: { message: 'db exploded', code: 'XX000' },
+    });
+
+    await expect(
+      makeClearAttendanceStatus(() => stub.client)({
+        sessionId: 'session-1',
+        studentId: 'student-1',
+        method: 'coach',
+        recordedBy: 'coach-1',
+      }),
+    ).rejects.toMatchObject({ code: 'XX000' });
+  });
+});
+
+describe('excludeUnmarked — GAM-479 storage-state invariant', () => {
+  it('drops sentinel rows and keeps all four real statuses', () => {
+    const rows = [
+      { status: 'present' },
+      { status: UNMARKED_DB_STATUS },
+      { status: 'late' },
+      { status: 'excused' },
+      { status: UNMARKED_DB_STATUS },
+      { status: 'absent' },
+    ];
+
+    expect(excludeUnmarked(rows)).toEqual([
+      { status: 'present' },
+      { status: 'late' },
+      { status: 'excused' },
+      { status: 'absent' },
+    ]);
+  });
+
+  it('preserves null as null — every caller reads that as a query error, distinct from [] meaning no rows', () => {
+    expect(excludeUnmarked(null)).toBeNull();
+    expect(excludeUnmarked([])).toEqual([]);
+  });
+
+  it('returns an all-sentinel page as [], not null — a page of only cleared rows is a real, empty answer', () => {
+    expect(excludeUnmarked([{ status: UNMARKED_DB_STATUS }])).toEqual([]);
   });
 });

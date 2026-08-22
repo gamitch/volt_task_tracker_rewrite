@@ -83,6 +83,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createLoader, runMutation, type LoaderQueryResult } from '../loader';
 import { getSupabaseClient } from '../client';
+import { excludeUnmarked } from './attendance';
 
 // ---------------------------------------------------------------------------
 // Types -- verbatim camelCase renames of the real `attendance` column subset
@@ -136,7 +137,7 @@ async function querySelfCheckoffAttendance(
     .in('session_id', [...args.sessionIds])
     .eq('student_id', args.studentId);
   return {
-    data: (result.data as SelfCheckoffAttendanceDbRow[] | null) ?? null,
+    data: excludeUnmarked(result.data as SelfCheckoffAttendanceDbRow[] | null),
     error: result.error,
   };
 }
