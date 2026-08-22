@@ -51,11 +51,11 @@ not write your own overlap builder** — that duplicates a frozen name.
 **0e. ⚠ The issue names the wrong write seam, and using it would ship a lie.**
 The issue says to wire `makeOnEditAttendance` (`loaders/endMeeting.ts:489`).
 That factory emits a bare `UPDATE attendance … WHERE session_id AND student_id`
-(`:496-505`) **with no insert path**, and `types.ts:138-148` records that since
+(`:496-499`) **with no insert path**, and `types.ts:143` records that since
 T508 an unmarked student normally has **no attendance row at all**. Correcting
 an unmarked student through it updates zero rows *and resolves successfully* —
 the optimistic chip would show the new status and the database would keep
-nothing. It is also documented at `:479-488` as deliberately unreachable by
+nothing. It is also documented at `:476-488` as deliberately unreachable by
 owner ruling T601.
 
 > **Every chip write goes through `makeSetAttendanceStatus`**
@@ -63,6 +63,48 @@ owner ruling T601.
 > `onConflict: 'session_id,student_id'` that deliberately omits
 > `hours_override` so an existing coach-set override survives a status change.
 > `makeOnEditAttendance` is **not** used by this task.
+
+**0f. ⚠ THE `meetings-design` SKILL IS NARROWER THAN THE PRD, AND THE PRD
+WINS.** Constitution item 1 puts PRD requirement IDs above every other
+document, and the skill's own preamble says so: *"Where the two disagree, the
+PRD wins and this file is the bug — say so rather than following it."* Round 1
+of the premise gate found four places where following the skill would have
+shipped a defect. **Code against MTG-01g (`docs/swarm/VOLT_Portal_PRD.md:370-384`),
+not against the skill's summary of it:**
+
+- **The cycle has FIVE stops, not four.** MTG-01g:382 verbatim: *"Cycle order
+  is Present → Late → Excused → Absent → (unset), `Shift`-activation
+  reverses."* `(unset)` means **removing the attendance row**, and the seam for
+  that already exists: `makeRemoveAttendance` / `RemoveAttendanceFn`
+  (`loaders/attendance.ts:544-562`). Inject it; do not design around a `null`.
+- **The four a11y requirements are ADDITIVE and explicitly NOT exhaustive.**
+  MTG-01g:375-380 verbatim: *"These four requirements are ADDITIVE and are NOT
+  exhaustive. This ruling narrows nothing: DES-17, NFR-07 and constitution item
+  15 apply in full, including DES-17's direct-set roll-call keys (`1`–`4` set
+  Present / Late / Excused / Absent on the focused row), which a cycling
+  control must not remove — forward-only traversal with no reverse is a
+  keyboard-path failure, and item 15 makes that a BLOCKER."*
+- **MTG-12 does not mean "no cycle for students".** MTG-01g:383-384: a
+  student-facing surface **skips the excused stop** — it does not lose the
+  control. The shipped shape to mirror is `LiveConsole.tsx:908/987/1073`
+  (`canSetExcused` prop + a defence-in-depth no-op).
+- **UXC-07's ≤72px cap does NOT bind these rows.**
+  `docs/swarm/VOLT_UX_Craft_PRD_v3.md:82` verbatim: *"Whether the ≤72px cap
+  binds MTG-01b's schedule-panel session rows is explicitly NOT ruled on here…
+  Treat it as a MINOR target on those rows, and where it conflicts with
+  MTG-01g's ≥44px tap target, ≥44px wins; GAM-448 raises a dispute if it turns
+  out to bind."* So: aim for ≤72px collapsed, **never at the cost of the 44px
+  target**, and if the two genuinely collide, say so in your report — this
+  ticket is the named dispute-raiser.
+
+**0g. `expectedCt` must NOT be rendered on a meeting session.** It is a count
+of RSVPs with `status === 'going'` (`src/lib/meetings/coachModel.ts:324-326`),
+and **MTG-03 (`VOLT_Portal_PRD.md:403`) says meetings do not use RSVP** —
+"Expected attendees = active roster of the scoped team(s) as of the session
+date." So `expectedCt` is structurally `0` on every meeting session, and
+putting "0 expected" in front of a coach is precisely item 26's *lie to a user
+about their own data*. The scheduled-state expander shows no expected count
+until a real one is injected (§6 files the gap).
 
 ---
 
@@ -94,16 +136,27 @@ ones:
 ```ts
 onCancelSession?: CancelMeetingSessionFn;          // types.ts:207, frozen
 onSetAttendanceStatus?: SetAttendanceStatusFn;     // loaders/attendance.ts:494
+onRemoveAttendance?: RemoveAttendanceFn;           // loaders/attendance.ts:544 — the (unset) stop
 roster?: ReadonlyMap<string, readonly SessionRosterEntry[]>;  // keyed by sessionId
+isRosterLoading?: boolean;                         // DES-12 loading channel
+rosterError?: string;                              // DES-12 error channel
 overlapIndex?: OverlapIndex;                       // types.ts:356, frozen
 focusRequest?: MeetingsFocusRequest;               // types.ts:286, frozen
 recordedBy?: string;                               // acting coach profiles.id
+canSetExcused?: boolean;                           // default FALSE — see MTG-12 below
 ```
 
 `SessionRosterEntry` is declared **locally in this file and exported from it**
 (`{ studentId: string; displayName: string; status: AttendanceStatus | null }`)
 — it is this ticket's own shape, not a frozen one, so it does not belong in
-`types.ts`. `displayName` is **first name + last initial** (item 6).
+`types.ts`. `displayName` is **first name + last initial** (item 6); the shipped
+shortener to follow is `formatDisplayName` (`src/pages/outreach/Leaderboard.tsx:365`)
+— read it and match its behaviour, but do **not** import across pages: restate
+the two-line derivation locally or take the already-shortened string.
+
+`isRosterLoading` / `rosterError` follow the precedent GAM-447 already shipped
+on the sibling stub (`docs/swarm/active/GAM-447-packet.md:158-167`) — copy that
+shape rather than inventing one.
 
 - **Month tabs** — Astryx `TabList` + `Tab` (`astryx-api.md:2003`; props
   `value`, `onChange`, `children` required — verify any other prop against that
@@ -113,37 +166,85 @@ recordedBy?: string;                               // acting coach profiles.id
   **by the stored session date, never by re-deriving from the UTC instant** —
   the skill is explicit that a session stored at 11 PM Chicago is the next day
   in UTC. Pin every `Intl.DateTimeFormat` to `timeZone: 'America/Chicago'`.
-- **Row line** — `"Thu, Oct 1 · 4–6 PM"` via `formatWeekdayDate` /
-  `formatTimeRangeWithDuration` **imported from `src/lib/meetings/format.ts`**.
-  Do not re-derive a formatter (GAM-443's entire reason for existing).
+- **Row line** — **the achievable string is `"Thu, Oct 1 · 4:00–6:00 PM · 2h"`,
+  and that is what you build.** `formatTimeRangeWithDuration`
+  (`src/lib/meetings/format.ts:157-165`, `CLOCK_TIME_FORMATTER` at `:56-60`)
+  returns `"4:00–6:00 PM · 2h"` — the `:00`-dropping rule belongs to
+  `buildScheduleChips`, not to this function. The issue's `"4–6 PM"` example is
+  therefore **not producible** from the formatters you are required to import,
+  and re-deriving one to get it is forbidden (GAM-443's entire reason for
+  existing). Import `formatWeekdayDate` / `formatTimeRangeWithDuration` from
+  `format.ts` and render exactly what they return.
   Status badge: `scheduled` → `info`, `completed` → `success`, `canceled` →
-  `error`. Overlap badge only when `overlapIndex` is supplied (§0d).
-  **UXC-07's ≤72px row-height cap still applies to these rows** — the skill
-  lifts it for cards only.
+  `error`. (All five variant names verified present at `astryx-api.md:531`.)
+  Overlap badge only when `overlapIndex` is supplied (§0d).
+  **UXC-07 does not bind these rows** — §0f. Aim for ≤72px collapsed as a
+  MINOR target; **≥44px wins any conflict**; report a genuine collision rather
+  than silently choosing.
 - **Expand in place** — hand-rolled `useState`. `useTableRowExpansion` is
   **forbidden** and these are not `Table` rows.
-  - `scheduled` → expected count (`expectedCt`; it is a count, not names —
-    there are no names to show) + **"Cancel this session"** behind an inline
-    confirm with DES-11 semantics, calling `onCancelSession(sessionId)`.
-  - `completed` → roster rows with tap-to-cycle chips, when `roster` is
-    supplied; when it is not, the **empty state** for the roster region (item
-    12 / DES-12 — all four states, no happy path only).
+  - `scheduled` → **no expected count** (§0g — `expectedCt` is RSVP-derived and
+    structurally `0` on a meeting) + **"Cancel this session"** confirmed via
+    Astryx **`AlertDialog`**, calling `onCancelSession(sessionId)`. DES-11
+    (`VOLT_Portal_PRD.md:219`) names cancel-session explicitly and has **no
+    inline form**; MTG-01 (`:401`) repeats it. **Mirror the shipped, green
+    `cancelTarget` + `AlertDialog` pair at
+    `src/pages/meetings/coach/CoachMeetingsView.tsx:1634`** (its props verified
+    at `:453`) — do not hand-roll one.
+  - `completed` → roster rows with tap-to-cycle chips. All four DES-12 states
+    (`VOLT_Portal_PRD.md:220`): `isRosterLoading` → `Skeleton`; `rosterError` →
+    `Banner status="error"` with a retry; roster present but empty →
+    `EmptyState` with one action; populated → the chips.
   - `canceled` → exactly `"Canceled — no attendance recorded."`
-- **`AttendanceChips.tsx`** — a pure presentational component. Cycle order is
-  **exactly** `Present → Late → Excused → Absent → Present`. DES-05 colors via
-  Astryx semantic variants only: present `success`, late `warning`, excused
-  `neutral`, absent `error`. **The a11y contract is binding, all four:** a real
-  `<button>`; accessible name = student name + current status ("Ada L.,
-  present"); every change announced via `aria-live`; target **≥44px**.
-- **Optimistic update with rollback** — set local state, call
-  `onSetAttendanceStatus`, and on rejection restore the prior status and
-  surface the failure. **LAST WRITE WINS** (2026-08-02 ruling) — invent no
-  optimistic-concurrency check, no version column, no conflict dialog.
+- **Per-row `Edit` chip — build it.** MTG-01b (`VOLT_Portal_PRD.md:314-317`)
+  and this stub's own header (`SchedulePanel.tsx:5-7`) both retain the
+  2026-07-28 deviation's per-row `Edit` affordance. Surface it as an optional
+  `onEditSession?: (sessionId: string) => void` that the row calls; this ticket
+  owns the affordance, **not** the dialog behind it (`EditMeetingSessionDialog`
+  is outside Allowed Files and GAM-452 wires it).
+- **`AttendanceChips.tsx`** — a pure presentational component.
+  - **Cycle order is FIVE stops: `Present → Late → Excused → Absent → (unset)
+    → Present`** (MTG-01g, `VOLT_Portal_PRD.md:382`). `(unset)` **removes the
+    attendance row** via the injected `onRemoveAttendance`
+    (`loaders/attendance.ts:544`) — it is a real stop, not an edge case.
+  - **`Shift`-activation reverses the cycle** (same line). Forward-only is a
+    keyboard-path failure and item 15 makes that a **BLOCKER**.
+  - **DES-17 direct-set roll-call keys `1`–`4`** set Present / Late / Excused /
+    Absent on the focused row (`VOLT_Portal_PRD.md:234`). MTG-01g:375-380 says
+    the four a11y rules are *"ADDITIVE and are NOT exhaustive"* and that a
+    cycling control **must not remove** these keys.
+  - The four named rules still hold in full: a real `<button>`; accessible name
+    = student name + current status ("Ada L., present"); every change announced
+    via `aria-live`; target **≥44px**.
+  - DES-05 colors via Astryx semantic variants only: present `success`, late
+    `warning`, excused `neutral`, absent `error`.
+- **Optimistic update with rollback** — set local state, call the seam, and on
+  rejection restore the prior status and surface the failure. **LAST WRITE
+  WINS** (2026-08-02 ruling) — invent no optimistic-concurrency check, no
+  version column, no conflict dialog.
+- **The write payload has FIVE required fields**, not three.
+  `SetAttendanceStatusParams` (`loaders/attendance.ts:482-492`) requires
+  `sessionId`, `studentId`, `status`, `method: AttendanceMethod`, and
+  `recordedBy: string`.
+  - **`method` is always `'coach'` here** — settled by owner ruling 2026-08-02
+    and implemented at `src/pages/meetings/LiveConsole.tsx:1080-1093`, where
+    `resolveAttendanceWriteMethod` (`attendance.ts:287`) is **deliberately not
+    called** because a coach tap is always a coach write. Do not call it; do
+    not re-litigate the ruling.
+  - **`recordedBy` is optional on the panel but required by the seam.** When it
+    is absent the chip renders **disabled with an explanatory title** and emits
+    **no write** — never send a fabricated or empty `recordedBy`.
 - **`focusRequest`** — when passed and `eventId` matches, open that
   `monthKey`'s tab and expand that `sessionId`.
-- **MTG-12** — excused is coach/admin-only. This panel renders only under the
-  coach view; the chip cycle must not be reachable by a student/parent role.
-  **Assert it in tests.**
+- **MTG-12 — read the ruling, it is not what it sounds like.** MTG-01g:383-384:
+  a student-facing surface **skips the excused stop**; it does not lose the
+  control. Gate it with `canSetExcused?: boolean` **defaulting to `false`**,
+  mirroring the shipped `LiveConsole.tsx:908` prop, plus `:1073`'s
+  defence-in-depth no-op (a write with `status: 'excused'` while
+  `canSetExcused` is false must not be emitted even if something calls the
+  handler directly). **Do NOT call `useAuth()` inside these components** — a
+  role read here would engage item 18's fourth trigger and change the worker
+  tier mid-task.
 - **No page-level overlap banner** (owner ruling). **No countdowns, streaks or
   urgency copy** (item 17, BLOCKER). **No internal jargon in user copy** —
   no `GAM-nnn`, no `SessionRosterEntry` in a label (UXC-10, BLOCKER).
@@ -155,37 +256,85 @@ recordedBy?: string;                               // acting coach profiles.id
    the Chicago month.
 2. A session stored at 11 PM Chicago buckets into its **Chicago** month, not
    the UTC one.
-3. Cycle order is exactly Present → Late → Excused → Absent → Present.
-4. Chip is a real `<button>`, accessible name contains student name **and**
+3. Cycle order is exactly **Present → Late → Excused → Absent → (unset) →
+   Present** — five stops, asserted by walking the full loop back to the start.
+4. **`Shift`-activation reverses** the cycle, asserted across at least one
+   wrap boundary.
+5. **DES-17 keys `1`–`4`** set Present / Late / Excused / Absent directly on
+   the focused chip, without cycling through the intermediate stops.
+6. Chip is a real `<button>`, accessible name contains student name **and**
    current status, change is announced via `aria-live`.
-5. A chip write calls the injected `onSetAttendanceStatus` **exactly once**
-   with the right `sessionId`/`studentId`/`status` — asserted on a `vi.fn()`.
-6. **Optimistic rollback:** a rejecting `onSetAttendanceStatus` restores the
+7. A chip write calls the injected `onSetAttendanceStatus` **exactly once**
+   with **all five** params — `sessionId`, `studentId`, `status`,
+   `method: 'coach'`, `recordedBy` — asserted on a `vi.fn()` with
+   `toHaveBeenCalledWith`, not a partial match.
+8. Reaching the `(unset)` stop calls the injected `onRemoveAttendance` exactly
+   once — **not** `onSetAttendanceStatus` with some sentinel value.
+9. **Optimistic rollback:** a rejecting `onSetAttendanceStatus` restores the
    previous status in the DOM.
-7. "Cancel this session" calls the injected `onCancelSession` exactly once with
-   that `sessionId`, only after the inline confirm.
-8. A `canceled` session renders `"Canceled — no attendance recorded."` and no
-   chips.
-9. **Zero new mutation code, grep-provable:** no `.from(`, `.upsert(`,
-   `.update(`, `.insert(`, `.delete(` and no `getSupabaseClient` in any of the
-   three new components.
-10. `makeOnEditAttendance` appears **nowhere** in the new files (§0e).
-11. All four states present for the roster region (loading, empty, error,
-    populated).
-12. A student/parent role cannot reach the chip cycle.
-13. Every Astryx prop used is present in `docs/swarm/astryx-api.md` (item 2).
+10. With `recordedBy` absent the chip is disabled and **no** write is emitted.
+11. "Cancel this session" calls the injected `onCancelSession` exactly once with
+    that `sessionId`, and only after the **`AlertDialog`** is confirmed.
+12. A `canceled` session renders `"Canceled — no attendance recorded."` and no
+    chips.
+13. **Zero new mutation code, grep-provable:** no `.from(`, `.upsert(`,
+    `.update(`, `.insert(`, `.delete(` and no `getSupabaseClient` in any of the
+    three new components.
+14. `makeOnEditAttendance` appears **nowhere** in the new files (§0e).
+15. All four DES-12 states render for the roster region: `isRosterLoading` →
+    `Skeleton`; `rosterError` → `Banner status="error"`; empty roster →
+    `EmptyState`; populated → chips.
+16. **`canSetExcused={false}` (the default) makes the cycle skip the excused
+    stop**, and a direct handler call with `status: 'excused'` emits no write
+    (defence in depth). This replaces the old, unverifiable "a student role
+    cannot reach the cycle" — the component takes no role input, and MTG-01g
+    :383-384 says a student surface keeps the control minus that one stop.
+17. No `expectedCt` value is rendered anywhere (§0g).
+18. Every Astryx prop used is present in `docs/swarm/astryx-api.md` (item 2).
+    **Note:** the `Tab` / `TabMenu` props tables at `astryx-api.md:2068-2075`
+    are literally the string `undefined`; the only admissible evidence for
+    `Tab`'s `value`/`label` is the example block at `:2010-2030`. Cite that
+    block, and cross-check anything else with
+    `npm run astryx -- component Tab --json`.
+19. Row line renders exactly what `formatWeekdayDate` /
+    `formatTimeRangeWithDuration` return — `"Thu, Oct 1 · 4:00–6:00 PM · 2h"` —
+    with no local re-formatting.
+20. **Item 27 source criterion** (`constitution.md:405-408`): a test asserts
+    the panel renders roster rows **from the injected `roster` prop**, and the
+    packet records that no loader on `main` fills it (§0c). This task's
+    user-visible surface is deliberately fixture-fed and closes **Partial**.
 
 ## §4. Evidence required
 
 - All six gates via the **`gate-run`** skill, exit codes reported, pasted
-  verbatim — not retyped, not summarized as "all green".
-- **`mutation-replay`** on criteria **3, 5 and 6** — the three that carry the
-  write. A passing test is not evidence until you have watched it go red.
-  Commit before mutating (item 26's fast-tier working rule), mutate in **your
-  own worktree** (item 23), restore, re-verify green.
-- **`layout-measurement`** for the ≥44px chip target at both viewports.
+  verbatim — not retyped, not summarized as "all green". **Baselines, measured
+  by the orchestrator on this branch point (`8b4cbcd5`, after `npm ci`):**
+
+  ```
+  --baseline-tests 2666 --baseline-scoped 52
+  ```
+
+  2666 tests across 109 files, all green; the scoped run is
+  `src/pages/meetings/coach` at 52 tests across 2 files. Use exactly these.
+- **`mutation-replay`** on criteria **3, 7 and 9** — the cycle order, the
+  five-field write, and the optimistic rollback. Those are the three that carry
+  the write, and a passing test is not evidence until you have watched it go
+  red. **Commit before mutating** (item 26's fast-tier working rule — T323's
+  `git checkout --` also reverted the uncommitted fix), mutate in **your own
+  worktree** (item 23), capture the red output and exit code, restore,
+  re-verify green.
+- **`layout-measurement` for the ≥44px chip target — authorized method.** That
+  skill needs a `--url` against a running dev server, and this component has no
+  route (§0a), so it cannot be pointed at `/meetings`. **You are authorized to
+  create a throwaway harness route in your own worktree** (item 23) purely to
+  measure, and you must **not commit it** — the diff you report contains only
+  Allowed Files. If that proves impractical, fall back to asserting the
+  computed `min-block-size`/token in a test and say plainly in your report that
+  browser measurement moved to GAM-452. Do not report a measurement you did not
+  take.
 - Report the **commit SHA** your work landed in (item 21). "Clean" is not
-  "committed".
+  "committed" — verify HEAD actually moved and the change is in the committed
+  blob.
 - `e2e-personas` is **out of reach for this task** and you should not attempt
   it: with no caller (§0a) there is no real path a coach can walk to this
   panel. Say so; do not fake it.
@@ -197,34 +346,62 @@ recordedBy?: string;                               // acting coach profiles.id
    caller. *Wrong if* a sibling ticket already codes against
    `SchedulePanelProps` in an unmerged branch, or if the freeze was meant to
    cover the props type by name rather than by consumer.
-2. **That injecting the roster is better than shipping without chips.** The
-   alternative reading is that §0c blocks the attendance half outright and this
-   task should ship month tabs + cancel only, with chips moving wholesale to
-   the issue's pre-approved `AttendanceChips.tsx` split. *Wrong if* a checker
-   grades an unreachable chip surface as MAJOR under item 27 rather than
-   Partial — the a11y and cycle logic would then have been built against a prop
-   nobody fills.
-3. **That `makeSetAttendanceStatus` alone is sufficient** and no roster-status
-   read is needed for a correct initial chip state. *Wrong if* the roster prop's
-   `status: null` (unmarked) must render as something other than a fourth
-   visual state — the cycle has four statuses and `null` is a fifth condition
-   this packet has not designed a chip appearance for.
-4. **That `expectedCt` satisfies "see who's expected."** It is a count; the
-   issue's wording implies names. *Wrong if* the owner meant a named roster on
-   scheduled sessions too — which §0c makes unbuildable either way, so the
-   consequence is a bigger deferral, not a different design.
-5. **That UXC-07's ≤72px cap applies to a row's collapsed height only**, not to
-   the expanded region. *Wrong if* the cap is meant to bound the expanded
-   session block as well, which would force the roster into its own scroll
-   container.
+   **Round 1 resolved this: DOES NOT HOLD.** The gate searched every remote
+   ref (60+) for a `SchedulePanelProps` consumer and found none, merged or
+   unmerged. Settled; do not re-open.
+2. **That injecting the roster is better than shipping without chips.**
+   **Round 1 resolved this: Partial is correct, do NOT split.** Item 27's own
+   scope paragraph (`constitution.md:394-398`) exempts *"work with no
+   user-visible surface"*, and this panel has no route and no caller, so item
+   27 barely engages — naming GAM-452 is already more than it requires.
+   Settled; build the chips here.
+3. **That the `(unset)` stop is safe to implement as a row delete.**
+   `makeRemoveAttendance` (`attendance.ts:544-562`) is the shipped un-mark
+   seam, so the mechanism is not in doubt — the design question is whether
+   cycling *past* Absent into a silent row deletion is what a coach expects
+   from a chip tap. *Wrong if* an accidental fifth tap destroys a real mark
+   with no undo and no confirm; MTG-01g mandates the stop but says nothing
+   about protecting it. **If you believe this needs a confirm, say so in your
+   report rather than adding one** — DES-11 governs destructive confirms and
+   inventing one here would contradict MTG-01g's cycle.
+4. **That disabling the chip when `recordedBy` is absent is the right failure
+   mode.** The alternative is rendering the chip enabled and surfacing the
+   error only on click. *Wrong if* GAM-452 legitimately mounts this panel
+   before auth resolves, in which case every chip would render disabled on
+   first paint and look broken rather than loading.
+5. **That the DES-17 `1`–`4` keys belong on the chip rather than on the roster
+   row.** MTG-01g says "on the focused row"; this packet puts them on the
+   focused chip because the chip is the focusable control. *Wrong if* the
+   intended interaction is a roving-tabindex list where the ROW holds focus
+   and the keys act on it — which is precisely how `LiveConsole.tsx` already
+   implements roll-call. **Read `LiveConsole.tsx`'s roving-tabindex roster
+   before choosing**, and match it if it fits.
 
-## §6. Follow-ups this task must file (item 20), before the PR opens
+## §6. Follow-ups (item 20)
 
-To `Backlog`, carrying `unreviewed`, via the `linear-task-writing` skill:
+**The ORCHESTRATOR files these, not the worker.** Workers may not write to
+Linear or `docs/swarm/**`. Filed to `Backlog` carrying `tier/unreviewed`, via
+the `linear-task-writing` skill, before the PR leaves draft:
 
-- **The roster gap (§0c)** — nothing on `main` can fill `SchedulePanel.roster`.
-  Name `makeLoadAttendanceForSessions` (`loaders/attendance.ts:356`) as the
-  existing read seam and GAM-471 as the related roster-source row.
-- **The overlap badge (§0d)** — blocked on GAM-450; reference, do not duplicate.
-- **The wrong-seam correction (§0e)** is recorded *here and in the PR body*,
-  not filed: it is resolved inside this task, not deferred.
+- **The roster gap (§0c)** — nothing on `main` can fill `SchedulePanel.roster`,
+  so the chips render only from an injected fixture. Name
+  `makeLoadAttendanceForSessions` (`loaders/attendance.ts:356`) as the existing
+  read seam, GAM-471 as the related roster-source row, and `formatDisplayName`
+  (`src/pages/outreach/Leaderboard.tsx:365`) as the item-6 name shortener.
+  **This is the row that makes GAM-448 `Partial` rather than `Passed`** under
+  item 27, together with GAM-452.
+- **The expected-attendee gap (§0g)** — MTG-03 defines expected attendees as
+  the active roster of the scoped teams as of the session date, and nothing
+  computes that; `expectedCt` is RSVP-derived and structurally `0` for
+  meetings. Relate to GAM-471.
+- **The overlap badge (§0d)** — blocked on GAM-450; reference it, do not
+  duplicate `buildOverlapIndex`.
+- **The `meetings-design` skill is narrower than the PRD (§0f)** — its
+  tap-to-cycle section teaches a four-stop cycle and calls the four a11y rules
+  exhaustive; MTG-01g says five stops, `Shift`-reverse, DES-17 keys, and
+  explicitly *"NOT exhaustive"*. Item 1 makes the skill the bug. Five sibling
+  tickets are still coding against it, so this is worth filing promptly.
+  `.claude/skills/**` is owner/orchestrator territory — file, do not edit here.
+- **The wrong-seam correction (§0e)** is **not** filed: it is resolved inside
+  this task. It is recorded in the run log and the PR body so the next reader
+  does not inherit the issue's version.

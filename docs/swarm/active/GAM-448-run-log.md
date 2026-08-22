@@ -121,3 +121,22 @@ the run died holding that subagent — that is the failure signature AGENTS.md
     explicitly non-exhaustive. Item 1 puts the PRD above the skill, and the
     skill's own preamble says to report this rather than follow it. Filed as a
     follow-up in §6 rather than edited here.
+- 01:36Z — **Packet revised (round 2 submission).** All 12 required edits
+  applied. Spot-checked the gate's own load-bearing citations myself before
+  accepting them (item 19c cuts both ways): `VOLT_Portal_PRD.md:370-384` does
+  contain the five-stop cycle, the "ADDITIVE and NOT exhaustive" sentence, the
+  DES-17 key requirement and the student-skips-excused ruling;
+  `VOLT_UX_Craft_PRD_v3.md:82` does say UXC-07 is not ruled on for these rows
+  and that ≥44px wins; `VOLT_Portal_PRD.md:403` does say meetings do not use
+  RSVP. The gate was right on every one.
+  Criteria went 13 → 20. New §0f (PRD outranks the skill) and §0g
+  (`expectedCt` must not render). §5 rewritten — the two doubts round 1 settled
+  are marked settled, three new ones replace them.
+- 01:36Z — **Baseline measured by the orchestrator on branch point `8b4cbcd5`
+  after `npm ci`:** full suite **2666 tests / 109 files, all green**; scoped
+  `src/pages/meetings/coach` **52 tests / 2 files**. Written into §4 so gates 5
+  and 6 have something real to compare against.
+- 01:37Z — **DISPATCHED `checker-premise` (round 2), `run_in_background: false`.**
+  Round 2 of 2 — item 19a caps the gate here; a third REVISE escalates to the
+  owner rather than looping. *If this line is the last one in this file, the
+  run died holding this subagent.*
