@@ -12,14 +12,14 @@ the run died holding that subagent — that is the failure signature AGENTS.md
 ## Deadline
 
 - 00:54Z — PR credential decoded: `iat 2026-08-22T00:53:38Z`, `exp
-  2026-08-22T01:53:38Z`. 58.8 minutes of `gh pr create` budget at minute 1.
+2026-08-22T01:53:38Z`. 58.8 minutes of `gh pr create` budget at minute 1.
   Draft PR must be open well before 01:53Z.
 
 ## Milestones
 
 - 00:53Z — **Claimed.** `tier/unreviewed` → `tier/heavy` applied FIRST (item
   28d), then `Todo` → `In Progress`, then read back: `GAM-448 In Progress
-  meetings-redesign,Improvement,heavy`. No `gate/human`, no `executor/*` label
+meetings-redesign,Improvement,heavy`. No `gate/human`, no `executor/*` label
   → missing route is legacy Claude-only (item 28b), so this runtime may claim.
 - 00:54Z — **Tier judged HEAVY** (item 26). Defence: the panel ships
   tap-to-cycle attendance chips that call `makeSetAttendanceStatus` /
@@ -80,8 +80,8 @@ the run died holding that subagent — that is the failure signature AGENTS.md
   touches none of them; item 25 forbids bumping on a topic that merely sounds
   sensitive.
 - 01:20Z — **DISPATCHED `checker-premise` (round 1), `run_in_background: false`.**
-  *If this line is the last one in this file, the run died holding this
-  subagent.*
+  _If this line is the last one in this file, the run died holding this
+  subagent._
 - 01:29Z — **`checker-premise` round 1 VERDICT: REVISE** (~107K tokens, 53 tool
   calls). Four BLOCKERs, seven MAJORs. The gate ran code rather than only
   reading it, and it found the packet's own bad ground:
@@ -104,7 +104,7 @@ the run died holding that subagent — that is the failure signature AGENTS.md
     `resolveAttendanceWriteMethod` must deliberately NOT be called.
   - MAJORs: four-states unbuildable from a single optional map (M1); criterion
     12 unverifiable AND backwards — MTG-01g:383-384 says a student surface
-    *does* get the cycle minus excused (M2); the packet's UXC-07 ≤72px claim is
+    _does_ get the cycle minus excused (M2); the packet's UXC-07 ≤72px claim is
     **false**, UXC-07 explicitly does not rule on these rows and says ≥44px
     wins (M3); DES-11 requires `AlertDialog`, not an inline confirm (M4); the
     row-line example is not producible from the prescribed formatter (M5);
@@ -138,8 +138,8 @@ the run died holding that subagent — that is the failure signature AGENTS.md
   and 6 have something real to compare against.
 - 01:37Z — **DISPATCHED `checker-premise` (round 2), `run_in_background: false`.**
   Round 2 of 2 — item 19a caps the gate here; a third REVISE escalates to the
-  owner rather than looping. *If this line is the last one in this file, the
-  run died holding this subagent.*
+  owner rather than looping. _If this line is the last one in this file, the
+  run died holding this subagent._
 - 01:44Z — **`checker-premise` round 2 VERDICT: DISPATCH** (~79K tokens, 41 tool
   calls). All 12 required edits verified APPLIED CORRECTLY against the real
   files — not merely mentioned. No BLOCKER, no MAJOR. Gate independently
@@ -168,8 +168,8 @@ the run died holding that subagent — that is the failure signature AGENTS.md
 - 01:51Z — **DISPATCHED `worker-implementer`, `run_in_background: false`.** No
   `model: "opus"` override — item 18's four triggers do not fire (verified by
   both gate rounds) and item 25 forbids bumping on a topic that merely sounds
-  sensitive. *If this line is the last one in this file, the run died holding
-  this subagent.*
+  sensitive. _If this line is the last one in this file, the run died holding
+  this subagent._
 - 02:46Z — **`worker-implementer` VERDICT: work delivered** (~398K tokens, 204
   tool calls, 53 min). Commit **`4bc99293`**, pushed; `git rev-parse HEAD` ==
   `git rev-parse origin/claude/gam-448-schedule-panel`. 6 files, +2269/-18.
@@ -201,18 +201,18 @@ the run died holding that subagent — that is the failure signature AGENTS.md
     packet asked for.
   - **`layout-measurement` fell back**, honestly reported: Playwright has no
     Chromium binary in this container and the skill forbids `playwright
-    install`. The ≥44px target is asserted on computed `minHeight`/`minWidth`
+install`. The ≥44px target is asserted on computed `minHeight`/`minWidth`
     instead; real browser measurement moves to GAM-452. Recorded as 5-of-6
     evidence with a reason, not as a measurement that did not happen.
-- 02:48Z — **DISPATCHED `checker-reviewer`, `run_in_background: false`.** *If
-  this line is the last one in this file, the run died holding this subagent.*
+- 02:48Z — **DISPATCHED `checker-reviewer`, `run_in_background: false`.** _If
+  this line is the last one in this file, the run died holding this subagent._
 - 03:05Z — **`checker-reviewer` VERDICT: FAIL — two MAJORs** (~143K tokens, 48
   tool calls). It reproduced both gate numbers exactly (2721/2666, 107/52) and
   ran **26 independent mutations, all 26 red** — the tests are not tautologies.
   Then it ran 7 more probing for gaps and **3 survived**. The headline finding
   is one no test caught and no reader would have:
   - **F1 (MAJOR) — `SessionRow.tsx:378`, `statusById[entry.studentId] ??
-    entry.status`.** `null` is this ticket's `(unset)` sentinel, and `??`
+entry.status`.** `null` is this ticket's `(unset)` sentinel, and `??`
     treats it as "no local value" and falls back to the SERVER value. The
     checker measured it with a probe against the real assembled component:
     after tapping to unset a student whose roster status is `absent`, the chip
@@ -236,8 +236,8 @@ the run died holding that subagent — that is the failure signature AGENTS.md
     `2` and `4` stayed green. F4-F6 NITs. F7 confirms **Partial** under item 27.
 - 03:06Z — **DISPATCHED `worker-implementer` (rework round, F1 + F3 only),
   `run_in_background: false`.** F2 is NOT being reworked — see the decision
-  line below. *If this line is the last one in this file, the run died holding
-  this subagent.*
+  line below. _If this line is the last one in this file, the run died holding
+  this subagent._
 - 03:16Z — **Rework VERDICT: F1 fixed and proven, F3 fixed.** Commit
   **`371be9ca`**, pushed, HEAD == origin. Verified by me in the committed blob:
   `readLocalStatus()` replaces the `??` at the render site (`:392`) and at both
@@ -285,7 +285,7 @@ the run died holding that subagent — that is the failure signature AGENTS.md
   it was harmless.
 - 03:31Z — **Issue moved `In Progress` → `In Review`** (never `Done` — item
   28e) with the close-out comment posted, and **read back**: `GAM-448 | state:
-  In Review`. Close-out names the six-gate block, the skipped gate and why,
+In Review`. Close-out names the six-gate block, the skipped gate and why,
   the four follow-ups, and the two decisions left to the owner.
 - 03:31Z — **Process miss, recorded rather than hidden:** AGENTS.md asks for a
   run-log comment at three transitions and I posted only the close-out — the
@@ -297,3 +297,43 @@ the run died holding that subagent — that is the failure signature AGENTS.md
 - 03:32Z — **RUN COMPLETE.** No subagent in flight; all four dispatches
   (premise ×2, worker ×2) were run with `run_in_background: false` and each
   verdict is recorded above its own dispatch line.
+
+## Completion run — 2026-08-22
+
+- 03:5xZ — **Merged `origin/main` @ `00a22ac`** (PR #235 / GAM-449) into the
+  branch, no conflicts. Main had moved past this PR's base `41c81a5` after its
+  CI ran, so the green checks did not describe the landing tree. Merging first
+  means the CI that gates the ready flag is CI against what actually merges.
+- 03:5xZ — **Owner decision on the deferred F2 / GAM-480: ACCEPTED.** The run
+  above escalated the native-`<button>` MAJOR rather than self-approving it,
+  which was the right call — item 11 routes DES-21 through a human gate. The
+  owner took that decision and accepted the native `<button>` as it stands. The
+  MAJOR is therefore **approved, not deferred**, and the PR leaves draft with
+  the finding disclosed rather than removed.
+
+  Two facts re-verified before publishing rather than quoted from the checker:
+  `git grep` for a bare `button` rule in `src/theme/*.css` and `astryx.css`
+  returns **zero matches**, so the UA-default-chrome cost is real; and the only
+  `<button>` occurrences in `src/**/*.tsx` on `main` are inside comments
+  describing Astryx `Button`'s output, so `AttendanceChips.tsx:247` is
+  genuinely the first raw `<button>` in this repo's JSX. Both are now stated in
+  the PR body so a sibling ticket does not cite this as settled precedent.
+
+- 03:5xZ — **`Partial` stands, for a different reason than before.** Approval
+  removes the unapproved-MAJOR ground, but item 27 required `Partial`
+  independently (F7): `SchedulePanel` has no caller, and GAM-478 records that
+  no loader on `main` can fill its roster. Approval changed the reason, not the
+  grade.
+- 03:5xZ — **Not done, deliberately, and the record above is wrong about one
+  of them.** The run logged `layout-measurement` as skipped because "Playwright
+  has no Chromium binary in this container". That premise is false in this
+  environment — Chromium at `/opt/pw-browsers` drove the GAM-447 height
+  measurement earlier tonight, so the ≥44px chip target could be measured for
+  real. The owner scoped this completion to GAM-448's publish only, so the
+  measurement was **not** run here; the correction is recorded so the skip is
+  not read later as an environment limitation that never existed.
+- 03:5xZ — **PR #234 body published from the artifact and the draft flag
+  cleared.** The implementing run could not do either: its App token expired at
+  01:53Z (`gh pr edit` / `gh pr ready` both 401) while `git push` kept working
+  off the long-lived extraheader, exactly the wall-3 failure the `pr-body`
+  skill exists to make harmless.

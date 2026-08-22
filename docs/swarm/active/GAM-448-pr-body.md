@@ -5,7 +5,7 @@ session expands in place — cancel a scheduled one, correct a completed one's
 attendance with tap-to-cycle chips — so fixing a past session no longer means
 hand-typing the live-console URL.
 
-**This closes `Partial`, not `Passed`.** See *Scope* and *Known gaps*.
+**This closes `Partial`, not `Passed`.** See _Scope_ and _Known gaps_.
 
 ## What changed
 
@@ -25,7 +25,7 @@ not inherit them:
    (`loaders/endMeeting.ts:496-499`) **with no insert path**, and since T508 an
    unmarked student normally has **no attendance row at all**
    (`types.ts:143`). Correcting an unmarked student through it updates zero
-   rows *and resolves successfully* — the optimistic chip would show the new
+   rows _and resolves successfully_ — the optimistic chip would show the new
    status and the database would keep nothing. Every write here goes through
    `makeSetAttendanceStatus` (`loaders/attendance.ts:506-528`), a real upsert.
 2. **The cycle has five stops, not four.** MTG-01g (`VOLT_Portal_PRD.md:382`)
@@ -39,7 +39,7 @@ not inherit them:
 4. **`expectedCt` must not render.** It counts RSVPs with `status === 'going'`
    (`coachModel.ts:324-326`), and **MTG-03 says meetings do not use RSVP**
    (`:403`) — so it is structurally `0` on every meeting session. Rendering
-   "0 expected" to a coach is item 26's *lie to a user about their own data*.
+   "0 expected" to a coach is item 26's _lie to a user about their own data_.
 5. **The issue's `"4–6 PM"` row-line example is not producible** from the
    formatters this repo requires importing; `formatTimeRangeWithDuration`
    returns `"4:00–6:00 PM · 2h"`. Built as the formatter actually behaves.
@@ -90,26 +90,26 @@ after `npm ci`, and re-measured independently by the checker.
 The checker then ran 7 more probing for gaps; 3 survived, and two of those
 became the rework below.
 
-| Mutation | Result |
-| -- | -- |
-| Swap `excused`/`absent` in the cycle | RED |
-| Drop the `(unset)` stop | RED (4 failed) |
-| Ignore `shiftKey` (forward-only) | RED (3 failed) |
-| `method: 'coach'` → `'qr'` in the write payload | RED |
-| Fabricate `recordedBy` | RED |
-| Remove optimistic rollback | RED |
-| Route `(unset)` through the status write | RED |
-| Remove MTG-12 defence-in-depth | RED |
-| Bucket months from the UTC instant | RED (7 failed) |
-| Ignore the injected roster | RED |
-| *…16 more, all red* | RED |
+| Mutation                                        | Result         |
+| ----------------------------------------------- | -------------- |
+| Swap `excused`/`absent` in the cycle            | RED            |
+| Drop the `(unset)` stop                         | RED (4 failed) |
+| Ignore `shiftKey` (forward-only)                | RED (3 failed) |
+| `method: 'coach'` → `'qr'` in the write payload | RED            |
+| Fabricate `recordedBy`                          | RED            |
+| Remove optimistic rollback                      | RED            |
+| Route `(unset)` through the status write        | RED            |
+| Remove MTG-12 defence-in-depth                  | RED            |
+| Bucket months from the UTC instant              | RED (7 failed) |
+| Ignore the injected roster                      | RED            |
+| _…16 more, all red_                             | RED            |
 
 **One MAJOR was found by the checker and fixed.** `SessionRow.tsx` read
 `statusById[id] ?? entry.status`, and `null` is this ticket's `(unset)`
-sentinel — so `??` fell back to the *server* value. Probed against the real
+sentinel — so `??` fell back to the _server_ value. Probed against the real
 assembled component, tapping to unset a student marked `absent` left the chip
 reading **"Ada L., absent"** while the row was deleted, and a second tap fired
-the destructive call *again*. The same failure class item 26 exists to catch,
+the destructive call _again_. The same failure class item 26 exists to catch,
 arriving through a different door, and invisible to every test because the
 cycle was asserted against `AttendanceChips` in isolation with a hand-fed prop.
 Fixed at `371be9ca` with a `readLocalStatus()` helper keyed on `in`; the probe
@@ -131,30 +131,43 @@ fixture, because **GAM-478** records that no loader on `main` can build one.
 Those two rows are what hold this at `Partial`; it becomes `Passed` when they
 land.
 
+The owner's approval of GAM-480 removes the _unapproved-MAJOR_ reason for
+`Partial`, but **not** `Partial` itself — item 27 required it independently
+(checker finding F7) because no user can reach this surface yet. Approval
+changed the grade's reason, not the grade.
+
 ## Follow-ups filed
 
-| Row | What |
-| -- | -- |
-| **GAM-478** | Nothing on `main` can fill `SchedulePanel.roster` — the wiring gap that makes this Partial |
+| Row         | What                                                                                                                                          |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **GAM-478** | Nothing on `main` can fill `SchedulePanel.roster` — the wiring gap that makes this Partial                                                    |
 | **GAM-479** | The `(unset)` stop deletes the whole attendance row, discarding `check_in_at` and `hours_override` — decide before GAM-452 makes it reachable |
-| **GAM-480** | The deferred MAJOR below |
-| **GAM-481** | The `meetings-design` skill is narrower than MTG-01g, and sibling tickets are still reading it |
+| **GAM-480** | The native-`<button>` MAJOR — escalated, and approved by the owner on 2026-08-22                                                              |
+| **GAM-481** | The `meetings-design` skill is narrower than MTG-01g, and sibling tickets are still reading it                                                |
 
 ## Known gaps, disclosed
 
-**One MAJOR ships unfixed, deliberately and unapproved: GAM-480.**
-`AttendanceChips.tsx` uses a native `<button>` rather than Astryx `Button`. The
-checker verified the worker's technical reason is true (`BaseProps` omits
-`title`; `Button.js:341` swaps native `disabled` for `aria-disabled` when a
-tooltip is present) but ruled the conclusion does not follow — the criterion
-only needed "disabled and no write", and the price is UA-default chrome on the
-first raw `<button>` in this repo's JSX. **The orchestrator did not
-self-approve it**: item 11 routes a DES-21 escalation through boss approval,
-which is a human gate this run does not hold, and reworking a control's
-disabled semantics under a wall clock with no time to re-verify the a11y
-contract is how a MINOR becomes a BLOCKER. Under the constitution's decision
-rules an unapproved MAJOR fails the task — hence `Partial`, with the finding
-named rather than buried.
+**One MAJOR ships unfixed, and it is now APPROVED rather than deferred:
+GAM-480.** `AttendanceChips.tsx` uses a native `<button>` rather than Astryx
+`Button`. The checker verified the worker's technical reason is true
+(`BaseProps` omits `title`; `Button.js:341` swaps native `disabled` for
+`aria-disabled` when a tooltip is present) but ruled the conclusion does not
+follow — the criterion only needed "disabled and no write", and the price is
+UA-default chrome on the first raw `<button>` in this repo's JSX.
+
+The implementing run correctly refused to self-approve it: item 11 routes a
+DES-21 escalation through boss approval, a human gate no agent run holds.
+**The owner took that decision on 2026-08-22 and accepted the native
+`<button>`**, which is what cleared this PR to leave draft. Recorded on
+GAM-480, which stays open as the row that owns the consequence.
+
+Two things a reviewer should still know, because approval settles the process
+question and not the engineering one. There is **no bare-button reset** in
+`theme.css` or `astryx.css` — verified, zero matches — so these chips render
+with UA-default browser chrome until someone adds one. And this is genuinely
+the first raw `<button>` in the repo's JSX: every other `<button>` on `main` is
+prose inside a comment describing what Astryx `Button` renders, which is worth
+knowing before it gets cited as precedent by a sibling ticket.
 
 Also open: the Overlap badge (blocked on **GAM-450**) and the expected-attendee
 count (**MTG-03**, folded into GAM-478) both degrade to their empty state.
