@@ -265,3 +265,13 @@ the run died holding that subagent — that is the failure signature AGENTS.md
   constitution's decision rules an unapproved MAJOR fails the task, so **this
   task does not close Passed** — it closes **Partial** (which item 27 already
   independently required, F7), with the MAJOR named rather than buried.
+- 03:22Z — **Item-20 follow-ups filed to `Backlog` with `tier/unreviewed`:**
+  **GAM-478** roster gap (holds this row at Partial with GAM-452) ·
+  **GAM-479** `(unset)` deletes the whole row, decide before GAM-452 wires it ·
+  **GAM-480** the deferred F2 native-`<button>` MAJOR, for owner decision ·
+  **GAM-481** the `meetings-design` skill is narrower than MTG-01g, and sibling
+  tickets are still reading it.
+  The overlap-badge gap (§0d) is NOT filed separately — GAM-450 already owns
+  `buildOverlapIndex` and filing a second row for it would duplicate an open
+  issue. The expected-attendee gap (§0g) is folded into GAM-478 rather than
+  filed alone, since both are the same missing roster source.
