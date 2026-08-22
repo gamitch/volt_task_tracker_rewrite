@@ -17,7 +17,11 @@
 // run in vitest's default node environment" posture for this directory.
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it, vi } from 'vitest';
-import { makeLoadCoachMeetingsData, makeLoadStudentMeetingsData } from './meetings';
+import {
+  makeLoadCoachMeetingsData,
+  makeLoadStudentMeetingsData,
+  selectSingleParticipationRow,
+} from './meetings';
 
 /** Same helper `outreach.test.ts` already established for this exact
  * purpose -- reused verbatim, not re-derived. */
@@ -372,5 +376,67 @@ describe('makeLoadStudentMeetingsData selected-child event boundary -- GAM-451',
     expect(data.history.map((row) => row.sessionId).sort()).toEqual(['a-session', 'all-session']);
     expect(data.history.map((row) => row.title)).not.toContain('Meeting team-b');
     expect(studentTeams.select).toHaveBeenCalledWith('team_id');
+  });
+
+  it('passes a sole metric-view percentage through unchanged', () => {
+    const metric = {
+      student_id: 'student-a',
+      team_id: 'team-a',
+      season_id: 'season-a',
+      expected_ct: 7,
+      present_ct: 4,
+      late_ct: 1,
+      excused_ct: 0,
+      participation_pct: 57.1,
+    };
+    expect(selectSingleParticipationRow([metric])).toBe(metric);
+  });
+
+  it('returns null when no metric-view row exists', () => {
+    expect(selectSingleParticipationRow([])).toBeNull();
+  });
+
+  it('preserves an inner null percentage from the sole metric-view row', () => {
+    expect(
+      selectSingleParticipationRow([
+        {
+          student_id: 'student-a',
+          team_id: 'team-a',
+          season_id: 'season-a',
+          expected_ct: 0,
+          present_ct: 0,
+          late_ct: 0,
+          excused_ct: 0,
+          participation_pct: null,
+        },
+      ])?.participation_pct,
+    ).toBeNull();
+  });
+
+  it('returns null for ambiguous multi-row metrics instead of inventing an aggregate percentage', () => {
+    expect(
+      selectSingleParticipationRow([
+        {
+          student_id: 'student-a',
+          team_id: 'team-a',
+          season_id: 'season-a',
+          expected_ct: 2,
+          present_ct: 2,
+          late_ct: 0,
+          excused_ct: 0,
+          participation_pct: 100,
+        },
+        {
+          student_id: 'student-a',
+          team_id: 'team-b',
+          season_id: 'season-a',
+          expected_ct: 3,
+          present_ct: 0,
+          late_ct: 0,
+          excused_ct: 0,
+          participation_pct: 0,
+        },
+      ]),
+    ).toBeNull();
   });
 });

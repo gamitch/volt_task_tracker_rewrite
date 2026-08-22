@@ -61,7 +61,9 @@ export function AttendanceCard({ participation, history }: AttendanceCardProps):
           <Text type="supporting" weight="bold">
             Participation: {percentage === null ? '—' : `${percentage}%`}
           </Text>
-          {percentage === null ? null : (
+          {percentage === null ? (
+            <ProgressBar isIndeterminate label="Participation unavailable" variant="neutral" />
+          ) : (
             <ProgressBar value={percentage} label="Participation" hasValueLabel />
           )}
         </VStack>

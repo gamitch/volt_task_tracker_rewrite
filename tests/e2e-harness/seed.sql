@@ -99,7 +99,8 @@ insert into event_sessions (id, event_id, session_date, starts_at, ends_at, stat
   -- An UPCOMING outreach session with no RSVP rows, so the student home has a
   -- real "Sign-up opportunities" entry to exercise.
   ('5e550000-0000-4000-8000-000000000008', 'e0e00000-0000-4000-8000-000000000002', (current_date + 10), now() + interval '10 days', now() + interval '10 days' + interval '4 hours', 'scheduled', ''),
-  ('5e550000-0000-4000-8000-000000000009', 'e0e00000-0000-4000-8000-000000000004', (current_date + 2), now() + interval '2 days', now() + interval '2 days' + interval '2 hours', 'scheduled', '');
+  ('5e550000-0000-4000-8000-000000000009', 'e0e00000-0000-4000-8000-000000000004', (current_date + 2), now() + interval '2 days', now() + interval '2 days' + interval '2 hours', 'scheduled', ''),
+  ('5e550000-0000-4000-8000-000000000010', 'e0e00000-0000-4000-8000-000000000004', (current_date - 5), now() - interval '5 days', now() - interval '5 days' + interval '2 hours', 'completed', 'Nina completed this FTC meeting.');
 
 update event_sessions set people_reached = 140 where id = '5e550000-0000-4000-8000-000000000006';
 
@@ -125,6 +126,11 @@ insert into attendance (session_id, student_id, status, check_in_at, check_out_a
 values ('5e550000-0000-4000-8000-000000000006', '57000000-0000-4000-8000-000000000001', 'present',
         now() - interval '30 days', now() - interval '30 days' + interval '4 hours', 'coach',
         'a0000000-0000-4000-8000-000000000001');
+
+insert into attendance (session_id, student_id, status, check_in_at, check_out_at, method, recorded_by)
+values ('5e550000-0000-4000-8000-000000000010', '57000000-0000-4000-8000-000000000004', 'late',
+        now() - interval '5 days', now() - interval '5 days' + interval '2 hours', 'coach',
+        'a0000000-0000-4000-8000-000000000002');
 
 /* ----------------------------------------------------------------- rsvps */
 insert into rsvps (session_id, student_id, status, responded_by) values

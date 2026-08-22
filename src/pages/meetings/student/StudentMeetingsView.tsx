@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Banner, Button, EmptyState, Skeleton, Text, VStack } from '@astryxdesign/core';
+import { Banner, Button, EmptyState, Heading, Skeleton, Text, VStack } from '@astryxdesign/core';
 import type { ResolveStudentIsActiveFn } from '../../../lib/supabase/loaders/students';
 import { loadLinkedStudents } from '../../../lib/supabase/loaders/checkin';
 import {
@@ -255,21 +255,24 @@ export function StudentMeetingsViewContainer({
   loadData,
   loadLinkedStudents,
 }: StudentMeetingsViewContainerProps): ReactNode {
-  if (explicitStudentId !== undefined)
-    return (
-      <StudentMeetingsView
-        studentId={explicitStudentId}
-        loadData={loadData}
-        resolveStudentIsActive={NOOP_RESOLVE_STUDENT_IS_ACTIVE}
-      />
-    );
   return (
-    <ResolvedStudentMeetingsView
-      viewer={viewer}
-      resolveStudentId={resolveStudentId}
-      resolveStudentIsActive={resolveStudentIsActive}
-      loadData={loadData}
-      loadChildren={loadLinkedStudents}
-    />
+    <VStack gap={6}>
+      <Heading level={1}>Meetings</Heading>
+      {explicitStudentId !== undefined ? (
+        <StudentMeetingsView
+          studentId={explicitStudentId}
+          loadData={loadData}
+          resolveStudentIsActive={NOOP_RESOLVE_STUDENT_IS_ACTIVE}
+        />
+      ) : (
+        <ResolvedStudentMeetingsView
+          viewer={viewer}
+          resolveStudentId={resolveStudentId}
+          resolveStudentIsActive={resolveStudentIsActive}
+          loadData={loadData}
+          loadChildren={loadLinkedStudents}
+        />
+      )}
+    </VStack>
   );
 }
