@@ -112,3 +112,41 @@ the wait; each verdict is written the moment it returns.
   is the last gate round the cap allows (item 19a); a third REVISE escalates to
   the owner. *If this line is the last one in this file, the run died holding
   this subagent.*
+
+- 2026-08-22T01:32Z — **`checker-premise` round 2 verdict: REVISE, narrowly** —
+  1 BLOCKER, 1 MAJOR, 9 foldable. It confirmed 14 of round 1's 18 findings
+  RESOLVED and caught one genuine defect I would have shipped:
+  * **BLOCKER — a cleared day stays highlighted.** `Calendar`'s
+    `effectiveValue = value !== undefined ? value : internalValue`
+    (`Calendar.tsx:250`) means a click sets an internal selection that
+    `value={undefined}` falls back to; the gate clicked 2026-08-12, re-rendered
+    with `undefined`, and measured `data-selected` still on the cell.
+    `value={null}` does not typecheck. Fix is T045's shipped `key={resetKey}`
+    remount, and criteria 6 and 14 now assert the grid — without the assertion
+    the defect ships green.
+  * **MAJOR — the season seam had no handoff.** GAM-452's live description names
+    no season window and does not list `MeetingsRail.tsx`, and optional props
+    raise no compile error, so it would never pass them and "season-bounded"
+    would silently become "session-span-bounded". §8 now requires the handoff be
+    recorded on GAM-452 while it is still Backlog.
+  * It also falsified one of my own supporting claims: "leaving one tabbable
+    cell in the entire grid" is the roving tabstop, not a consequence of
+    `dateConstraints` (measured `TABBABLE 1` with no constraints either).
+    Struck. And it recovered something I had dropped — styling
+    `astryx-calendar-day` via `data-today`/`data-selected` IS achievable and the
+    issue asks for it; only *has-meeting* marking is not. Reinstated in §5.
+  All 11 revisions applied. **No round 3** — item 19a caps the gate at two, and
+  the checker specified each remaining fix concretely rather than disputing the
+  design.
+
+- 2026-08-22T01:33Z — **Escalation posted on GAM-449** (comment
+  `#comment-f0732561`), before dispatch, so the DoR item-3 escalation is named
+  on the record rather than disclosed after the fact: the issue's amended "one
+  constraint" requires generic has-meeting day marking through hooks that two
+  gate rounds measured cannot express it, and the inverted-marking alternative
+  measured worse. Also disclosed there: neutral swatches (GAM-466 owns the
+  hues), Partial close linked to GAM-452, and the GAM-476/477 follow-ups.
+
+- 2026-08-22T01:34Z — **Dispatched `worker-implementer`** on the round-2 packet,
+  pinned default model (no item-18 trigger), `run_in_background: false`.
+  *If this line is the last one in this file, the run died holding this subagent.*

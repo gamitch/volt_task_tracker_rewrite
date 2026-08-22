@@ -38,9 +38,9 @@ If the task appears to require *editing* one, STOP and report it. Do not widen.
    `OverlapIndex`).
 4. `src/lib/meetings/format.ts` — import formatters, never re-derive them.
    `CHICAGO_TIME_ZONE` is exported at `:47`; use it, don't re-literal the string.
-5. `src/lib/meetings/coachModel.ts` — `buildCoachMeetingRows` (`:130`) and
-   `FIXTURE_EVENTS`/`FIXTURE_SESSIONS`/`FIXTURE_ATTENDANCE` (`:167`, `:219`,
-   `:303`) build real `CoachMeetingRow[]`. Prefer them over hand-rolled literals,
+5. `src/lib/meetings/coachModel.ts` — `FIXTURE_EVENTS` (`:130`),
+   `FIXTURE_SESSIONS` (`:167`), `FIXTURE_ATTENDANCE` (`:219`) and
+   `buildCoachMeetingRows` (`:303`) build real `CoachMeetingRow[]`. Prefer them over hand-rolled literals,
    **re-dated relative to your pinned clock** — the shipped fixtures are July
    2026, which is in the past.
 6. `src/pages/meetings/coach/SeriesCard.tsx` module doc items 2, 5(b), 6 and
@@ -52,7 +52,11 @@ If the task appears to require *editing* one, STOP and report it. Do not widen.
 8. `docs/swarm/astryx-api.md` `# Calendar` (~:2292) — the ONLY legal source of
    `Calendar` props (constitution item 2 / DES-19).
 9. Skills to invoke: **`meetings-design` (mandatory)**, `gate-run`,
-   `mutation-replay`.
+   `mutation-replay`. The issue also mandates `layout-measurement`; it is
+   **inapplicable here and deliberately skipped** — `MeetingsRail` is mounted on
+   no route (§9), so there is no URL for a browser to load. GAM-452 already
+   carries `layout-measurement` as mandatory and is the ticket that will have
+   one. §6 records the same reasoning for the 336px number.
 
 ## 3. Findings measured and gated — do not re-litigate, but DO report any you
    find false
@@ -78,8 +82,7 @@ Round 1 prescribed `dateConstraints` to disable non-meeting days so
 `data-disabled` would mark them by contrast. **The gate measured that and it is
 withdrawn.** For one Mon/Thu series in a single month, **33 of 42 rendered day
 cells** go `data-disabled` — each a genuine `disabled` button with
-`tabIndex="-1"`, leaving one tabbable cell in the entire grid. It also makes an
-empty day unclickable, which the issue never asks for, and it trips
+`tabIndex="-1"`. It also makes an empty day unclickable, which the issue never asks for, and it trips
 `astryx-api.md:2317`'s own "**Don't:** Disable large blocks of dates without
 context".
 
@@ -154,11 +157,31 @@ instant — bucket sessions by the stored `sessionDate` string.
 
 **3i. `Calendar`'s own `data-today` is browser-zone and may disagree with
 Chicago-today by one day.** `plainDateToday()` → `new Date()`
-(`plainDate.ts:58-60`), not overridable by any prop. Measured: with the clock at
+(`node_modules/@astryxdesign/core/src/utils/plainDate.ts:58`), not overridable by
+any prop. Measured: with the clock at
 `2026-08-22T01:00Z`, Chicago-today is `2026-08-21` while the grid marks
 `2026-08-22`. **No test may cross-assert the grid's `data-today` against the
 agenda's "Today" heading**, and the rail's own notion of today comes only from
 `todayIsoChicago()`.
+
+**3j. [BLOCKER, measured by the round-2 gate] `Calendar`'s day selection CANNOT
+be cleared through `value` — use T045's `key` remount.** `effectiveValue = value
+!== undefined ? value : internalValue` (`Calendar.tsx:250`), so a click sets an
+internal selection and re-rendering with `value={undefined}` falls straight back
+to it: the gate clicked 2026-08-12, re-rendered with `undefined`, and measured
+`data-selected` still on that cell. `value={null}` does not typecheck
+(`ISODateString` is a template-literal type). **The fix is already shipped in
+this repo:** `CalendarPage.tsx:724` renders `<Calendar key={calendarResetKey} …>`
+and `handleToday`/`handleShowWholeMonth` (`:603`, `:609`) bump that key to
+remount the calendar and drop the vendor's internal selection. Do the same.
+Without this, Clear and Today reset the agenda while leaving the grid highlighted
+on the wrong day — a defect that ships green unless the criteria assert the grid,
+which is why criteria 6 and 14 now do.
+
+**3k. `min`/`max`/`focusDate`/`value` are the template-literal type
+`ISODateString`, not `string`.** A plain `string` fails `npm run typecheck`,
+which §8 gates on. The in-repo answer is the `as ISODateString` cast at
+`CalendarPage.tsx:727`.
 
 ## 4. Acceptance criteria — each is a real assertion in `MeetingsRail.test.tsx`
 
@@ -173,12 +196,20 @@ and build fixtures relative to that instant. Precedent:
    `{ eventId, sessionId, monthKey }`, where `monthKey` is the session's Chicago
    `YYYY-MM` (in-repo authority: `SchedulePanel.tsx:23`). Assert the whole
    object. The component **emits only**.
-2. **Season-bounded nav.** Assert the `min`/`max` passed are the first/last day
-   of the window's first/last month, and that with `focusDate` in the first month
-   the "Previous month" button's native `disabled` property is `true`, and in the
-   last month "Next month" is. Cover both prop-supplied (`seasonStartsOn`/
-   `seasonEndsOn`) and rows-derived fallback.
-3. **Agenda ordering.** Days ascending from Chicago-today; within a day, items
+2. **Season-bounded nav.** `Calendar` reflects `min`/`max` into no DOM
+   attribute, so put the window derivation in **one exported function** (as §3g
+   does for the hash) and assert *it* returns the first/last day of the window's
+   first/last month — covering both prop-supplied (`seasonStartsOn`/
+   `seasonEndsOn`) and rows-derived fallback. Then assert the behavioural half
+   through the DOM: with `focusDate` in the first month the "Previous month"
+   button's native `disabled` **property** is `true`, and in the last month
+   "Next month" is (`aria-disabled` is `null` on these — assert the property).
+3. **Agenda ordering.** The default agenda is **the next 5 meeting days** from
+   Chicago-today (a meeting day is a Chicago calendar date with at least one
+   non-canceled session; 5 covers a fortnight of a two-day-a-week series without
+   the rail outgrowing the viewport). Pin the number as a named constant and
+   assert it — criterion 5's legend rule reads off exactly this window. Days
+   ascending from Chicago-today; within a day, items
    ascending by `startsAt`. Fixture supplies sessions deliberately out of order,
    and two series on one day.
 4. **[replaces round 1's marking criterion] No grid marking, and no color in the
@@ -190,12 +221,15 @@ and build fixtures relative to that instant. Precedent:
 5. **Legend.** Each row is a swatch carrying `data-series-palette-index` plus the
    series title as text. A series with a `scheduled` session remaining appears; a
    fully completed/canceled one does not — **unless** it has an item in the
-   currently visible agenda (see criterion 13), in which case it appears, so no
+   currently visible agenda (see criterion 6), in which case it appears, so no
    agenda dot is ever unlegended.
 6. **Day selection filters, and clears.** Clicking a calendar day narrows the
-   agenda to that day; a visible Clear control restores the next-few-days view.
-   Assert both directions, and assert whether Clear emits `onFocusChange(null)`
-   (it should — day selection and focus are the same in-memory concern).
+   agenda to that day; a visible Clear control restores the default view.
+   Assert both directions, and that Clear emits `onFocusChange(null)` (day
+   selection and focus are the same in-memory concern). **Also assert that after
+   Clear, no `button[data-date]` inside the grid carries `data-selected`** — per
+   §3j this only holds if you remount via `key`, and without the assertion the
+   defect ships green.
 7. **Overlap and canceled badges.** An agenda item whose `sessionId` is a key in
    `overlapIndex` with a non-empty array renders an overlap badge; one absent
    does not. A `status === 'canceled'` session renders a Canceled badge. Neutral
@@ -234,15 +268,23 @@ and build fixtures relative to that instant. Precedent:
 14. **[new] The "Today" control.** The issue requires "prev/next + 'Today'
     controls" and `Calendar` renders only the two arrows. Ship a Today control
     that returns `focusDate` to Chicago-today and clears any day selection
-    (precedent: `CalendarPage.tsx:604`'s `handleToday`). Assert it.
+    (precedent: `CalendarPage.tsx:603`'s `handleToday`, which bumps the reset
+    key). Assert both halves: the agenda returns to the default view, **and no
+    `button[data-date]` inside the grid carries `data-selected`** (§3j).
 
 ## 5. Astryx discipline (item 2 — a prop not in `docs/swarm/astryx-api.md` is
    presumed hallucinated → MAJOR)
 
 Every prop must be verifiable in that file. Read the Props tables; do not recall
 them. Styling escalation per DES-21: component prop → theme token → `xstyle` →
-custom CSS. `MeetingsRail.css` is the last rung, justified here only for the
-palette-index seam and rail layout; keep it small and put it in `@layer app`.
+custom CSS. `MeetingsRail.css` is the last rung; keep it small and put it in
+`@layer app`. It is justified for exactly three things: the palette-index seam
+(3f), rail layout (§6), and **the day-cell theming the issue explicitly asks
+for** — `astryx-calendar-day` with `data-today` / `data-selected`. That last part
+IS achievable and is not dropped: §3c withdraws only *has-meeting* marking, which
+those hooks cannot express. Styling today and the selected day through them is
+the documented use of the documented surface, and it recovers the visible half of
+the issue's "The one constraint".
 **Never introduce a hex literal for a series hue** (3f).
 
 ## 6. Rail geometry
@@ -280,7 +322,15 @@ criterion you can measure in jsdom; do not write a test that pretends to.
 - **Three things to report explicitly so the orchestrator can record them on the
   PR**: (a) the grid ships with no has-meeting marking (3c) and why; (b) every
   swatch ships neutral because GAM-466 owns the hues (3f); (c) the local hash and
-  `todayIsoChicago` copies, citing GAM-476 and GAM-477.
+  `todayIsoChicago` copies, citing GAM-476 and GAM-477; and **(d)** that
+  `MeetingsRail` now accepts `seasonStartsOn?`/`seasonEndsOn?` and, without them,
+  the window silently falls back to the rows' session span. (d) matters because
+  GAM-452's live description names no season window and does not list
+  `MeetingsRail.tsx` in its file table — optional props raise no compile error,
+  so GAM-452 as written will not pass them and "season-bounded" would quietly
+  become "session-span-bounded". The orchestrator records this on GAM-452 before
+  GAM-452 is dispatched; it is still `Backlog`, so it costs nothing now and is
+  unrecoverable later.
 - Anything in §3 you found to be false.
 
 ## 9. Closing status — this ticket closes **Partial**, not Passed
