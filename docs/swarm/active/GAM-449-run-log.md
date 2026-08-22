@@ -160,3 +160,22 @@ the wait; each verdict is written the moment it returns.
   reverted and re-verified. Reported none of the packet's §3 findings false.
   Orchestrator now replays a mutation and runs the gates itself — a worker
   cannot self-certify.
+
+- 2026-08-22T02:10Z — **Gates run independently by the orchestrator** on a clean
+  tree at `5f0f83a2`: all six exit 0 (tsc, vite build, format:check, eslint 0
+  errors / 382 standing warnings, full suite 110 files / 2691 tests, scoped
+  `src/pages/meetings/coach/` 3 files / 77 tests). No baseline was supplied, so
+  gates 5 and 6 report no regression comparison — stated, not implied.
+
+- 2026-08-22T02:10Z — **Mutations replayed by the orchestrator** in its own
+  worktree `/tmp/gam449-mut` (item 23), not the branch tree, each reverted with
+  a green re-verify. (A) dropping `monthKey` from the emitted payload → red,
+  exit 1, criterion 1. (B) removing `key={calendarResetKey}` → red, exit 1,
+  criteria 6 and 14 both fail on the surviving `data-selected` — this is the
+  one that matters, because it proves the round-2 BLOCKER fix is genuinely
+  guarded rather than merely present. (C) reintroducing round-1's withdrawn
+  `dateConstraints` → red, exit 1, criteria 4, 6 and 14. Revert → green, exit 0.
+  Diff inspected by hand: three files only, no forbidden path touched, no hex
+  literal for a series hue, no jargon in rendered copy, and every Astryx prop
+  used checked against `docs/swarm/astryx-api.md` (including `Banner`'s
+  `status`/`title`/`description`).
