@@ -41,3 +41,22 @@ wall 2, and it is written this way so the next reader does not have to guess.
   Body artifact written to `docs/swarm/active/GAM-450-pr-body.md` *before* the
   API call (`pr-body` skill: the run that is killed after writing loses
   nothing). `node .claude/skills/pr-body/scripts/check.mjs` exit 0.
+- **03:04Z — contract verified frozen; STANDARD holds.** `src/lib/meetings/types.ts:350-356`
+  defines `OverlapRef {sessionId, eventId}` and
+  `OverlapIndex = ReadonlyMap<string, readonly OverlapRef[]>`, added by GAM-444
+  and explicitly marked "TYPE ONLY -- `buildOverlapIndex` and its home
+  (`src/lib/meetings/overlap.ts`) belong to GAM-450". The escalation condition
+  recorded at claim time did NOT fire: I implement a frozen shape rather than
+  authoring one, so item 26's "export another session builds against" trigger
+  stays defused and the tier remains STANDARD. `MeetingsRail.tsx:205-218,665`
+  already consumes the type, so a live consumer exists to check against.
+- **03:05Z — measured correction to the issue's premise.** The issue frames the
+  UTC day-shift as an edge case ("a 11 PM Chicago session"). Measured in
+  `src/lib/meetings/coachModel.ts:169-174`, it is the ORDINARY case: a 6-8 PM
+  Chicago session is stored `startsAt 2026-07-22T23:00:00Z` /
+  `endsAt 2026-07-23T01:00:00Z` -- every evening meeting in this app already
+  ends on the next UTC date. Bucketing from an instant breaks the common path,
+  not a rare one. Packet says so in those terms.
+- **03:06Z — packet written**, `docs/swarm/active/GAM-450-worker-packet.md`,
+  with a five-entry Least-confident-decisions list (item 19d; not required at
+  STANDARD, included because the gate attacks it first and it is free).
