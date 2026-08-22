@@ -491,6 +491,30 @@ C. Drawer does NOT auto-close on nav-item selection: classified MINOR
    The checker records the observed behavior in evidence; it does not fail
    the task on it.
 
+   **Addendum 2026-08-22 — Ruling C's reasoning is superseded; its outcome
+   is not.** Constitution item 2 was amended that day (owner's ruling,
+   `auto-mode-decisions.md`, "George reopens constitution item 2"). Item 2b
+   now makes correcting `astryx-api.md` a legal move for **any** agent when
+   the addition cites installed source by path and line, agrees with the
+   DES-20 CLI cross-check, is marked as a dated annotation leaving vendor
+   text intact, lands in the same PR as its use, and is independently
+   re-verified by the checker. So "item 2 forbids using it today" is no
+   longer the state of the rules — `useAppShellMobile` is *undocumented*,
+   which 2b makes fixable, rather than *forbidden*.
+
+   **It is still not authorized.** Nobody has run that route on it: no
+   citation, no cross-check, no annotation, no re-verification. Ruling C
+   stands until someone does. This addendum changes what it would take to
+   close it, not whether it is closed.
+
+   **The auto-close follow-up is now a row: GAM-483.** Ruling C called it a
+   "follow-up candidate" and no row was ever created, so for a month the
+   deferral lived only in this entry and in `MobileNav.tsx`'s module doc —
+   item 20's failure shape exactly, committed by a ruling that predates item
+   20. Filed 2026-08-22 while amending item 2, because an addendum saying a
+   follow-up "stays open" against nothing in the queue would have repeated it. Recorded here because D004 is where a reader meets the old
+   reasoning, and an amendment nobody finds is an amendment nobody has.
+
 D. Ledger: T008 stays In Progress, attempt 1. Orchestrating session /
    foreman dispatches the amended packet verbatim from Rulings A–C; no
    further judgment calls are delegated. Checker remains
