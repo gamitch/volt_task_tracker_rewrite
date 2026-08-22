@@ -238,3 +238,30 @@ the run died holding that subagent — that is the failure signature AGENTS.md
   `run_in_background: false`.** F2 is NOT being reworked — see the decision
   line below. *If this line is the last one in this file, the run died holding
   this subagent.*
+- 03:16Z — **Rework VERDICT: F1 fixed and proven, F3 fixed.** Commit
+  **`371be9ca`**, pushed, HEAD == origin. Verified by me in the committed blob:
+  `readLocalStatus()` replaces the `??` at the render site (`:392`) and at both
+  rollback reads (`:253`, `:270`); **zero `?? entry.status` remain**. Only
+  `SessionRow.tsx` + its test changed; `AttendanceChips.tsx` untouched, so the
+  deferred F2 is exactly as the checker graded it.
+  The worker re-ran the checker's own probe on the fixed code:
+  `tap 1 → "Ada L., not recorded"` (1 remove, 0 status writes),
+  `tap 2 → "Ada L., present"` (1 remove, 1 status write). The cycle closes and
+  the destructive call no longer repeats. Mutation replay in its own worktree
+  reverted the render-site fix and the new loop test went RED with real output
+  (`expected 'Ada L., absent' to be 'Ada L., not recorded'`, exit 1), restored
+  green. Six gates exit 0; suite **2726 / baseline 2666**, scoped **112 /
+  baseline 52**.
+- 03:17Z — **ORCHESTRATOR DECISION on F2 (the native `<button>`), stated so a
+  wrong call is visible rather than silent.** I am **not** reworking it and I am
+  **not** self-approving it. Grounds: the checker verified both halves of the
+  worker's technical reason are TRUE, so this is a judgement call between two
+  defensible designs, not an error — and constitution item 11 routes a DES-21
+  escalation through boss approval, which is a human gate this run does not
+  hold. Reworking it under wall-clock pressure would mean changing a control's
+  disabled semantics and its test convention with no time to re-verify the
+  a11y contract, which is how a MINOR becomes a BLOCKER. It ships **disclosed**
+  in the PR body and filed as its own row for the owner's decision. Under the
+  constitution's decision rules an unapproved MAJOR fails the task, so **this
+  task does not close Passed** — it closes **Partial** (which item 27 already
+  independently required, F7), with the MAJOR named rather than buried.
