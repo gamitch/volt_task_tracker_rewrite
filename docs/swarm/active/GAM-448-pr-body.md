@@ -116,12 +116,41 @@ Fixed at `371be9ca` with a `readLocalStatus()` helper keyed on `in`; the probe
 now reads `not recorded` then `present`, and the new full-loop test was
 mutation-replayed red before being trusted.
 
-**`layout-measurement`: not run — 5 of 6, with the reason.** Playwright has no
-Chromium binary in this container and the skill forbids `playwright install`.
-The ≥44px target is asserted on computed `minHeight`/`minWidth` instead. Real
-browser measurement moves to GAM-452, when the component has a route to be
-measured on. `e2e-personas` likewise: with no caller there is no path a coach
-can walk to this panel.
+**`layout-measurement`: not run — 5 of 6.** The ≥44px chip target is asserted
+on computed `minHeight`/`minWidth`, not measured in a browser. Real measurement
+moves to GAM-452, when the component has a route to be measured on;
+`e2e-personas` likewise, since with no caller there is no path a coach can walk
+to this panel.
+
+**Correction to the original reason, kept rather than quietly dropped.** The
+implementing run recorded this skip as "Playwright has no Chromium binary in
+this container". **That premise is false in this environment** — Chromium is at
+`PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers` and drove GAM-447's height
+measurement a few hours earlier the same night. So this gate was skippable for
+scope reasons, not environment ones, and a later run should not inherit
+"Playwright does not work here" as a fact.
+
+### Post-merge gate run
+
+`main` moved to `00a22ac` (PR #235 / GAM-449) after the checker's run above, so
+it was merged in and the gates re-run against the tree that actually lands:
+
+```
+GATE RUN — 8749097 on claude/gam-448-schedule-panel — tree clean
+
+  1 tsc                               exit 0  PASS
+  2 vite build                        exit 0  PASS
+  3 format:check                      exit 0  PASS
+  4 eslint                            exit 0  PASS       0 errors, 382 warnings
+  5 vitest (full)                     exit 0  PASS       113 files / 2751 tests
+  6 vitest src/pages/meetings/coach/  exit 0  PASS       6 files / 137 tests
+
+VERDICT: PASS — all six gates exit 0
+```
+
+The counts rise above the checker's because GAM-449's `MeetingsRail` tests came
+in with the merge. Any commit after `8749097` on this branch is run-log and
+body prose only.
 
 ## Scope — item 27, Partial
 
