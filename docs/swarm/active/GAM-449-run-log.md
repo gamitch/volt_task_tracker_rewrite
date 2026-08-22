@@ -87,3 +87,28 @@ the wait; each verdict is written the moment it returns.
   * MAJOR-6/7/8 — no criterion exercised the frozen `focus` prop; the "Today"
     control the issue requires was dropped; tests need a pinned clock.
   Revising the packet now (round 2 of 2).
+
+- 2026-08-22T01:22Z — **Follow-ups filed before dispatch** (items 20/30, gate
+  MINOR-9/10): **GAM-476** (two components will hash the same event id
+  independently — one series could render two colors) and **GAM-477**
+  (`todayIsoChicago` duplication). Both `Backlog` + `tier/unreviewed`, written
+  through the `linear-task-writing` skill. Round 1's packet claimed
+  "(follow-up filed)" when none was — the gate caught that; it is true now.
+
+- 2026-08-22T01:24Z — **Packet round 2 written.** All 18 findings applied. The
+  three that changed the design: has-meeting grid marking is **withdrawn
+  entirely** in favour of T045's shipped resolution (Calendar navigates and
+  selects; marking lives in the legend and agenda); loading/error become
+  additive optional props per the merged GAM-447 precedent instead of a
+  disclosed gap; the season window becomes two additive optional props with a
+  rows-derived fallback, rather than the false claim that deriving from `rows`
+  was the only option. Two new criteria added: the frozen `focus` prop (nothing
+  exercised it, so a worker could have `void`ed it and passed) and the "Today"
+  control the issue requires. This ticket will close **Partial**, linked to
+  GAM-452 — `MeetingsRail` has zero importers repo-wide.
+
+- 2026-08-22T01:25Z — **Dispatched `checker-premise` round 2** (opus, scoped to
+  the revisions per item 19b, not a re-audit), `run_in_background: false`. This
+  is the last gate round the cap allows (item 19a); a third REVISE escalates to
+  the owner. *If this line is the last one in this file, the run died holding
+  this subagent.*
