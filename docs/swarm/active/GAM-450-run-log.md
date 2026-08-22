@@ -60,3 +60,10 @@ wall 2, and it is written this way so the next reader does not have to guess.
 - **03:06Z — packet written**, `docs/swarm/active/GAM-450-worker-packet.md`,
   with a five-entry Least-confident-decisions list (item 19d; not required at
   STANDARD, included because the gate attacks it first and it is free).
+- **03:07Z — DISPATCHED `checker-premise`** on the packet (item 19; scoped
+  light per 19b — no migration/RLS/metric SQL in scope). Dispatched with
+  `run_in_background: false`; this run is blocking on it now.
+  **If this line is the last one in this file, the run died holding this
+  subagent** — `AGENTS.md` wall 2, the failure that killed runs 31354278407,
+  31385764526, 31514339272, 31523233268 and 31527801235. The verdict line
+  below is the proof it did not happen here.
