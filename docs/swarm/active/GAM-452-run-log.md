@@ -229,3 +229,24 @@ did not land.
   `run_in_background: false`. *If this line is the last one in this file, the
   run died holding this subagent* — the MAJOR is unfixed and the branch still
   ships the ungated Edit affordance.
+- `03:15Z` — **`worker-implementer` attempt 3 VERDICT: rework delivered** (agent
+  `a6d715eb9456c189f`, ~125K tokens, 84 tool calls). Commit **`b01c4db6`**,
+  existence verified in the committed blob (`git grep canEditSession HEAD`),
+  tree clean, pushed.
+  - **The gate is mutation-proved, not asserted.** It committed the fix first
+    (the fast-tier lesson item 26 records), then removed the gate in its own
+    worktree: `AssertionError: expected <button …>Edit</button> to be falsy`,
+    real **exit 1**; restored, real **exit 0**. That is the evidence this
+    project has caught more defects with than any other technique.
+  - **`SchedulePanel.test.tsx` was not touched and its 11 tests passed
+    unmodified** — the constraint that proves the widening really was
+    default-preserving rather than merely described as such.
+  - Six gates green at `b01c4db6`, all exit 0, full suite 2790 tests.
+  - `CoachMeetingsView.test.tsx`: 26 → 27 tests, 119 → 124 expects.
+  - It also disclosed a mechanic it needed that the deleted original did not
+    (month-tab switching, because the fixture's completed session lands in a
+    different Chicago month) rather than quietly making the test pass.
+- `03:16Z` — **DISPATCHED `checker-reviewer` re-check** on `b01c4db6`,
+  scoped to MAJOR-1 and to whether the widening itself introduced anything,
+  `run_in_background: false`. *If this line is the last one in this file, the
+  run died holding this subagent* — the rework is pushed to PR #242 but ungraded.
