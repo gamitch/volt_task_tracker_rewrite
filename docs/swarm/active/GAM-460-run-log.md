@@ -120,3 +120,14 @@ subagent or step is named in the line above it.
 - **Opened PR #244 as a draft**: https://github.com/gamitch/volt_task_tracker_rewrite/pull/244
   (`Closes GAM-460` line 1, branch `claude/gam-460-graded-marks-ct-seriescard`).
   Well inside the credential deadline.
+- Posted an FYI comment on GAM-452 (the concurrent, in-progress ticket whose
+  own packet disclosed this exact gap and named GAM-460 as its resolution)
+  pointing at PR #244 and the file-disjointness between the two tickets.
+- Moved GAM-460 `In Progress → In Review` (item 28e — never `Done`; the
+  merge closes it). Posted the close-out run-log comment on the issue with
+  the gate block, mutation replay result, and PR link.
+- **Done for this session.** PR #244 is open as a draft on
+  `claude/gam-460-graded-marks-ct-seriescard`, commit `8a20b80a`, six gates
+  green, mutation replayed, GAM-460 is `In Review`. Nothing left in flight.
+  If a human wants it merged, clearing the draft flag is the only remaining
+  step; nothing here needs further orchestrator action.
