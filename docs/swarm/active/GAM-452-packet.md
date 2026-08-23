@@ -1,189 +1,250 @@
-# GAM-452 — worker packet (HEAVY)
+# GAM-452 — worker packet (HEAVY), revision 2
 
 **Issue:** GAM-452 — Assemble the redesigned meetings page.
 **Branch:** `claude/gam-452-assemble-meetings-page`
-**Tier:** HEAVY (write path + attendance figures on screen + deletion of a
-shipped surface). Packet → `checker-premise` → worker → `checker-reviewer`.
+**Tier:** HEAVY. Packet → `checker-premise` → worker → `checker-reviewer`.
 
-Read `.claude/skills/meetings-design/SKILL.md` **first**. It is the frozen
-contract six sibling tickets already coded against; where this packet and that
-skill disagree, the skill wins and you say so rather than following this file.
+Revision 2 folds in `checker-premise`'s round-1 REVISE (2 BLOCKER, 4 MAJOR,
+7 MINOR, 2 NIT). **Round 1's §2 stated a false fact about shipped code and its
+§3 asserted a seam that does not exist; both are corrected below.** Every line
+citation in this revision was re-verified after the gate corrected four of mine.
 
----
-
-## §0. What the issue got wrong — corrections measured against `main` today
-
-The issue body is from 2026-08-21. Four of its claims are now false. **These
-corrections are binding; do not implement the issue's version.**
-
-**0a. `listGuardianChildren` does not exist and must not be built.** The issue
-says "wire real loaders: … `listGuardianChildren`". GAM-446's own premise gate
-cut it: `src/lib/supabase/loaders/meetings.ts:216-220` records *"a second
-`listGuardianChildren` loader (`makeLoadLinkedStudents`/`loadLinkedStudents`,
-`loaders/checkin.ts`, already provides this shape — filed as GAM-472)"*.
-`grep -rn listGuardianChildren src/` returns exactly that comment and no
-definition. The parent child-switcher **is already wired** to the real
-`loadLinkedStudents` at `src/pages/meetings/student/StudentMeetingsView.tsx:4`
-and `:201`. **Action: none.** Do not add a loader; do not rename the existing
-one.
-
-**0b. `MeetingsList.tsx` has no `focusRequest` state.** The issue's file table
-claims the decomposition left one there. It did not — the file is 193 lines and
-holds only the role switch, the seam defaults and the back-compat re-exports.
-**Put the focus state in `CoachMeetingsView.tsx`, not the shell.** The rail and
-the cards are both coach-only; lifting focus into the role switch would thread
-coach state through the student branch that can never use it.
-
-**0c. The series palette does not exist yet.** `--color-series-1…8` is GAM-466,
-which has not merged (`grep -rn 'color-series-' src/theme/` → no matches).
-Per GAM-449's handoff, swatches render neutral and carry
-`data-series-palette-index` until it lands. **Do not invent hex values** — the
-skill calls that "a blocker to raise, not a gap to fill".
-
-**0d. `SeriesCardModel` has no `gradedMarksCt` field and you must not add one.**
-GAM-460 (Backlog, *related*, not a blocker) wants `graded_marks_ct` rendered
-beside `attendance_pct`. `CoachMeetingRow` carries `gradedMarksCt?: number`
-(`types.ts:149`) but `SeriesCardModel` (`types.ts:329-…`) deliberately does not.
-The type is frozen by GAM-444 and a sibling codes against it. Render the card
-from the frozen model, leave `gradedMarksCt` to GAM-460, and **disclose it** in
-your completion report as a known gap.
+Read `.claude/skills/meetings-design/SKILL.md` **first**. Where it and this
+packet disagree, the skill wins and you say so. One stale citation in it:
+`SKILL.md:155` says `ConsistencyStrip` is imported by `MeetingsList.tsx:602` —
+that file is now 193 lines. The bullet's point still stands; the line does not.
 
 ---
 
-## §1. The one piece of genuinely new logic — read this before estimating
+## §0. What the issue got wrong — measured against `main`
 
-`SeriesCardModel.scheduleChips` must come from `buildScheduleChips(rules)`
-(`src/lib/meetings/format.ts:328`), whose input is
-`ScheduleRule[] = { dow: Dow; startMinutes: number; endMinutes: number }`
+**0a. `listGuardianChildren` does not exist and must not be built.** GAM-446's
+own gate cut it (`src/lib/supabase/loaders/meetings.ts:216-220`:
+*"`loadLinkedStudents`, `loaders/checkin.ts`, already provides this shape —
+filed as GAM-472"*). The parent child-switcher **is already wired to the real
+loader** on the real user path: `student/StudentMeetingsView.tsx:4` (import),
+`:201` (default), `:274` (pass), `:126` (`useLoadState`), `:159`
+(`<ChildSwitcher>`). **Action: none.**
+
+**0b. `MeetingsList.tsx` has no `focusRequest` state** — 193 lines, role switch
++ seams + re-exports only. **Focus state goes in `CoachMeetingsView.tsx`.** The
+rail and cards are coach-only; PRD MTG-01d (`:343-346`) scopes this to rail↔card
+focus, and NAV-08's `/meetings/:sessionId` is recorded at PRD `:90` as never
+built.
+
+**0c. `--color-series-1…8` does not exist** (GAM-466 unmerged; `grep -rn
+"color-series-" src/` → three prose comments only). Swatches render neutral with
+`data-series-palette-index`. **Do not invent hex values.** Note
+`auto-mode-decisions.md:4348-4350` claims GAM-444 pre-declared these slots in
+`volt.ts` — **that decision record is stale and wrong**; trust the grep.
+
+**0d. Attendance % — ESCALATED TO THE OWNER, do not decide this yourself.**
+`v_event_attendance.attendance_pct` carries D014's inverted failure mode:
+since T508 an unmarked student has no attendance row, so forgetting to mark
+someone **inflates** the percentage — measured **100.0% for an event 60% of the
+roster skipped**. The mitigation is rendering `graded_marks_ct` beside it, and
+`types.ts:139-147` calls that *"mandatory whenever `attendancePct` is rendered"*.
+
+You cannot do it: `SeriesCardModel` (`types.ts:302`) is frozen without the field
+and `SeriesCard.tsx` belongs to merged GAM-447. GAM-460 owns the fix and sits in
+`Backlog`.
+
+**Interim, binding unless the orchestrator tells you the owner ruled
+otherwise:** the model builder sets **`attendancePct: null`**, so the card
+renders `—` (`SeriesCard.tsx:368`). Put a comment at that exact line of the
+builder naming GAM-460 and D014 as the reason, so the next reader does not
+"fix" it back to a passthrough. **Do not** pass the real number, and **do not**
+widen the frozen type.
+
+---
+
+## §1. The one piece of genuinely new logic
+
+`SeriesCardModel.scheduleChips` comes from `buildScheduleChips(rules)`
+(`format.ts:328`), input `ScheduleRule = { dow: Dow; startMinutes; endMinutes }`
 (`format.ts:241-248`).
 
-**`CoachMeetingRow` does not carry `ScheduleRule[]`, and nothing in the
-repository derives one.** Verified: `grep -n ScheduleRule src/lib/meetings/*.ts`
-finds only the type, its re-export and `buildScheduleChips` itself.
-`buildRecurrenceChips` (`format.ts:158`) is a *different* output shape
-(`"TUE (12)"`) and is not a substitute.
-
-So the model builder you write must derive the rules from
-`row.sessions[].{sessionDate, startsAt, endsAt}`:
+**No stored recurrence exists** — the gate proved this: `public.events`
+(`20260717000000_scheduling_attendance.sql:33-48`) has no recurrence column,
+and `ScheduleMeetingsDialog` materialises dates and discards the rule. So the
+rules must be derived from `row.sessions`.
 
 - **Bucket by the stored Chicago values, never by re-deriving from the UTC
-  instant** (skill: "A session stored at 11 PM Chicago is the *next day* in
-  UTC"). `sessionDate` is already a Chicago calendar date — take `dow` from it
-  via `parseDateOnly` (`format.ts:73`), which is the module's own noon-anchor
-  idiom.
-- `startMinutes`/`endMinutes` are minutes from Chicago midnight, so format
-  `startsAt`/`endsAt` **through an `Intl.DateTimeFormat` pinned to
-  `America/Chicago`** — `CHICAGO_TIME_ZONE` is exported at `format.ts:47`.
-- **Dedupe** to one rule per distinct `(dow, startMinutes, endMinutes)` triple,
-  preserving first-seen order. A 38-session Tue/Sun series yields two chips.
-- **Exclude canceled sessions** from rule derivation. A fully-canceled series
-  has no chips and is Finished (§2).
-- `buildScheduleChips` **throws** on an invalid rule (`validateScheduleRule`).
-  Do not feed it a rule where `endMinutes <= startMinutes` — a session ending at
-  Chicago midnight is `1440`, not `0`. Cover this with a test.
+  instant.** `sessionDate` is already a Chicago calendar date — take `dow` from
+  it via `parseDateOnly` (`format.ts:73`). The live trap is in the repo already:
+  fixture `2026-07-22T23:00:00.000Z` is 6 PM CDT on `sessionDate '2026-07-22'`
+  (`coachModel.ts:170-173`).
+- `startMinutes`/`endMinutes` are minutes from Chicago midnight — derive via an
+  `Intl.DateTimeFormat` pinned to `CHICAGO_TIME_ZONE` (`format.ts:47`).
+- **You are reimplementing `formatChicagoWallTime`** (`ScheduleMeetingsDialog.tsx:793-805`,
+  deliberately unexported per `:790`, used at `:1053-1064` and `:1164-1181`).
+  Declare the new copy as a disclosed reimplementation in your report; the
+  orchestrator files the unification follow-up.
+- **Dedupe** to one rule per distinct `(dow, startMinutes, endMinutes)`,
+  first-seen order. **Exclude canceled sessions.**
+- **Midnight-spanning rules must be DROPPED, never clamped or fabricated.**
+  `format.ts:217-220` says such a rule is unrepresentable; a 10 PM–1 AM session
+  derives `{startMinutes: 1320, endMinutes: 60}` and `validateScheduleRule`
+  (`:287-291`) throws a `RangeError` that `RouteErrorBoundary` turns into a
+  whole-page error. The schedule form blocks creating one (`computeEndTimeError`,
+  `ScheduleMeetingsDialog.tsx:579-588`) but `event_sessions` has **no**
+  `check (ends_at > starts_at)` (`20260717000000:53-63`), so the data can exist.
+  **Unit-test this case.**
+- A session ending at Chicago midnight is `endMinutes: 1440`, not `0`
+  (`format.ts:245-247`, `:308-309`).
 
-Put the builder in **`src/lib/meetings/coachModel.ts`** (it is the existing home
-of the pure `CoachMeetingRow` builders and already has a test file), export it,
-and unit-test it there. Call `paletteIndexForEventId`
-(`src/pages/meetings/coach/MeetingsRail.tsx:279`) for `paletteIndex` — **do not
-write a second hash** (GAM-476; a second hash gives a series one color on its
-card and a different one in the legend beside it).
+Put the builder in **`src/lib/meetings/coachModel.ts`**, export it, unit-test it
+there.
 
-`attendancePct` is `row.attendancePct ?? null` — **passthrough**. Never `?? 0`,
-never computed in TypeScript (constitution item 3, BLOCKER).
+**Palette — inject, do not import.** Give the builder a
+`paletteIndexFor: (eventId: string) => number` parameter and pass
+`paletteIndexForEventId` (`MeetingsRail.tsx:279`) at the `CoachMeetingsView`
+call site. Importing it directly would drag a page component — which does
+`import './MeetingsRail.css'` (`:208`) and pulls in `@astryxdesign/core` — into
+a pure model unit test. **Do not write a second hash** (GAM-476).
 
 ---
 
-## §2. Active / Finished
+## §2. Active / Finished — reuse the shipped predicate, do not rewrite it
 
-`TabList`. **Active = the series has ≥1 session with `status === 'scheduled'`.**
-A fully-canceled series is Finished (recorded ruling, and the skill agrees:
-"A series with no scheduled sessions remaining is Finished").
-
-This is **not** the same partition as the existing `partitionCoachMeetingRows`
-(`coachModel.ts`), which splits Upcoming/Past by date. Do not reuse it for the
-tabs; write the predicate explicitly and test the fully-canceled case.
+**Round 1 of this packet was wrong here.** `partitionCoachMeetingRows`
+(`coachModel.ts:415-427`) already partitions on
+`hasUpcomingSession = sessions.filter(s => s.status === 'scheduled').length > 0`
+(`:378`, `:392`) — **exactly** the Active/Finished rule, already unit-tested for
+the fully-canceled case at `coachModel.test.ts:250-264`. It is **not** a date
+split. **Reuse it**; rename the buckets at the call site. Writing a second
+predicate is the divergence class this repo has already paid for twice
+(`formatWeekdayDate` → GAM-443; two palette hashes → GAM-476).
 
 Header subtitle: `"N active series · M sessions in the next 7 days"` — plain
-counts, Chicago calendar days, computed once at render. **No countdown, no
-urgency copy** (constitution item 17, BLOCKER). Singular/plural handled.
+counts, Chicago calendar days, computed once at render, singular/plural handled.
+**No countdown, no urgency copy** (item 17, BLOCKER).
 
 ---
 
-## §3. Composition and the focus wiring
+## §3. Composition, focus wiring, and what is genuinely missing
 
-Inside `CoachMeetingsView`, replace the `CoachMeetingsSection` table rendering
-(currently `CoachMeetingsView.tsx:1605-1632`) with:
+Replace the `CoachMeetingsSection` call sites (`CoachMeetingsView.tsx:1607-1630`)
+with a card grid of `<SeriesCard>` (`SeriesCard.tsx:382`), `<MeetingsRail>`
+(`MeetingsRail.tsx:502`) beside it, and `<SchedulePanel>`
+(`SchedulePanel.tsx:306`) as the drill-out.
 
-- a card grid of `<SeriesCard>` (`coach/SeriesCard.tsx:382`), one per row in the
-  selected tab, fed from your new builder;
-- `<MeetingsRail>` (`coach/MeetingsRail.tsx:502`) beside it;
-- `<SchedulePanel>` (`coach/SchedulePanel.tsx:306`) as the drill-out for the
-  selected card.
+**3a. Do not hand-build the grid or the splitter.** PRD MTG-01a (`:311-313`) is
+binding: *"start from the installed Astryx `Card Grid` template … and adapt it —
+do not hand-build the grid."* PRD MTG-01d (`:357-359`) adds the `Grouped Table`
+template's resizable detail panel as the in-repo precedent for the rail split.
+Try `npx astryx template <name>` first. **If the template does not emit against
+the installed package, stop and report it** — that is a DES-21 escalation for
+the orchestrator, not something you route around. The documented fallback is
+Astryx `Grid`/`GridSpan` (`astryx-api.md:98-151`: *"Don't: write manual CSS grid
+… Don't: use HStack with wrapping for grids"*). **Never hand-rolled CSS grid.**
 
-**Focus, end to end** (`MeetingsFocusRequest = { eventId; sessionId?; monthKey? }`,
-frozen — do not reshape):
+**3b. Focus, end to end.** `MeetingsFocusRequest = { eventId; sessionId?;
+monthKey? }` — frozen, do not reshape. Rail `onFocusChange` → `focus` state →
+owning card `isSelected` → its `SchedulePanel` gets `focusRequest={focus}`. The
+panel **already** opens that month tab and expands that session
+(`SchedulePanel.tsx:363-378`, guarded on `focusRequest.eventId === eventId`), so
+**only the scroll is new work**.
 
-`MeetingsRail.onFocusChange(request)` → store in `focus` state →
-the owning `SeriesCard` gets `isSelected` → its `SchedulePanel` mounts with
-`focusRequest={focus}` → the panel already opens that `monthKey`'s tab and
-expands that `sessionId` (its `focusRequest` prop, `SchedulePanel.tsx:222-224`)
-→ **scroll it into view.** The panel does not scroll; that is yours. One click
-from the agenda item must reach an expanded, visible session.
+**Pair the scroll with real programmatic focus.** `StudentHome.tsx:1608-1615` is
+the precedent and states why: `scrollIntoView` alone does not move focus, which
+strands keyboard and screen-reader users. Item 15 makes a keyboard-path failure
+on a core flow a **BLOCKER**. jsdom has no `Element.prototype.scrollIntoView` —
+**stub it locally in your test file**; `src/test-setup.ts` forbids new global
+mocks and is not in Allowed Files.
 
-**Pass `seasonStartsOn`/`seasonEndsOn` to `MeetingsRail`.** They are optional,
-so omitting them compiles and silently degrades season-bounded calendar nav to
-session-span-bounded nav — GAM-449's handoff comment on the issue says so in as
-many words. `CalendarPage.tsx:570` is the in-repo precedent: `useActiveSeason()`
-returns a `SeasonRow` with `startsOn`/`endsOn`. **That hook throws outside a
-`<SeasonProvider>`**, so read it in `CoachMeetingsView` behind whatever the
-router already provides and pass the values down as props — and if no provider
-wraps `/meetings`, **stop and say so** rather than omitting the props silently.
+**3c. Season props — and the test harness they break.** `/meetings` **does**
+render inside `<SeasonProvider>` in production (`App.tsx:74` →
+`AppShell.tsx:158-168`; `/meetings` is absent from `CHROMELESS_PATTERNS`,
+`:137-142`). **But `CoachMeetingsView.test.tsx:73-85` renders `<MeetingsList>`
+with no provider, and `useActiveSeason()` throws outside one
+(`SeasonProvider.tsx:217`) — every test in that 1279-line file would throw on
+mount.** Wrap them with `<SeasonProvider loadActiveSeason={…}>` using the
+injected seam, following `CalendarPage.test.tsx:154`/`:168`. **This is
+authorised work under §6.** Pass `seasonStartsOn`/`seasonEndsOn` only when
+`status === 'ready'`; pass `undefined` for `loading`/`none`/`error` and accept
+the documented fallback (`computeNavWindow`, `MeetingsRail.tsx:334-341`).
+Omitting them silently degrades season-bounded nav to session-span-bounded nav —
+GAM-449's handoff comment exists to prevent exactly that.
 
-`SchedulePanel` needs `recordedBy` (the acting coach's `profiles.id`) or **every
-attendance chip renders disabled** rather than writing with a fabricated
-identity. Get it from `useAuth()`. Wire `onCancelSession`, `onEditSession` (to
-the existing `handleEditRequest`/`EditMeetingSessionDialog`) and the attendance
-write seams that already exist on this view.
+**3d. Attendance — round 1 asserted a seam that does not exist.** There is **no**
+attendance write seam on `MeetingsList`/`CoachMeetingsView`. The real ones are
+`setAttendanceStatus` (`src/lib/supabase/loaders/attendance.ts:588`) and
+`clearAttendanceStatus` (`:653`).
 
-Overlap badges come from `buildOverlapIndex` (`src/lib/meetings/overlap.ts:28`)
-— build the index once from every row's sessions and pass it to **both** the
-rail and the panel, and the per-series count to the card. **Three sites only.
-No page-level banner** — owner ruling; adding one is a defect.
+**And there is no roster producer at all.** `SchedulePanel` needs
+`roster?: ReadonlyMap<string, readonly SessionRosterEntry[]>` (`:208-209`);
+nothing in `src/lib/**` builds that shape, and `SessionRow.tsx:50` already
+recorded the gap. Loaders are Forbidden here.
+
+**Decision, taken at the planning layer so you do not discover it:** ship
+**without** `roster`. `SessionRow.tsx:368-375`'s `"No roster recorded"` empty
+state is the **intended** render. The tap-to-cycle chips are therefore **inert
+this ticket**, `recordedBy` is still passed from `useAuth()` so the wiring is
+real the moment a roster exists, and **item 27 makes this surface `Partial`, not
+`Passed`.** The orchestrator files the roster-loader ticket. Say all of this in
+your completion report.
+
+**3e. Overlap.** Build the index once and pass it to rail, panel and card.
+`overlap.ts:7-10` ships the exact call site — use it verbatim rather than
+re-deriving the adapter:
+`buildOverlapIndex(rows.flatMap((r) => r.sessions.map((s) => ({ ...s, eventId: r.eventId }))))`.
+**Three badge sites only. No page-level banner** — owner ruling; adding one is a
+defect, not a courtesy.
 
 ---
 
-## §4. Teardown
+## §4. Teardown — and the one thing that must survive it
 
-Delete the old table rendering and everything that becomes unreachable:
+### The link that must not die (BLOCKER, round 1 got this wrong)
+
+`CoachMeetingsView.tsx:938-944` is **T511's only entry point** to
+`/meetings/live/:sessionId` — the file's own comment at `:915-918` says
+`routePaths.meetingLiveSession` had zero call sites before it. `SessionRow.tsx`
+renders **no** such link and is Forbidden.
+
+**Render the Go-live link from `CoachMeetingsView` alongside each card/panel
+session, and re-point the existing assertions' DOM queries.**
+`CoachMeetingsView.test.tsx:1199-1245` (C1, C2, C3) **must stay green.** They
+are explicitly **NOT** covered by the "test deleted because the surface is gone"
+clause below. If you cannot keep them green without touching a Forbidden file,
+**stop and report** — do not delete them.
+
+### Delete
+
 `CoachMeetingsSection`, `buildCoachMeetingColumns`, `CoachMeetingExpanderButton`,
 `CoachMeetingRowActions`, `CoachMeetingDateCell`, `CoachMeetingTitleCell`,
 `CoachMeetingSessionRow`, `renderMeetingSessionDetailCell`,
-`sessionDetailAnchorId`, and their now-unused imports and helpers
-(`CoachMeetingsView.tsx:684-1261`).
+`sessionDetailAnchorId` — the gate confirmed **none is reachable outside
+`CoachMeetingsView.tsx`** (the `sessionDetailAnchorId` hits in
+`OutreachList.tsx:2415` are that file's own local copy).
 
-**Check every export before deleting it.** `MeetingsList.tsx:58-104` re-exports
-a large back-compat surface for 11 external importers, and
-`buildCoachMeetingTableRows`/`CoachMeetingTableRow` may be among them. `grep`
-for each name across `src/` before removal; if something outside
-`src/pages/meetings/**` still imports it, **leave it and disclose**, do not
-chase the edit into a file this packet does not allow.
+Also delete, both used only inside `CoachMeetingSessionRow` and both **outside**
+the range round 1 cited: `SESSION_STATUS_BADGE` (`:636`) and
+`formatPastAttendanceSummary` (`:642`). Then the newly-unused imports: `StatCell`
+(`:70`), `useIsNarrowViewport` (`:76`), `Table`/`TableColumn` (`:51`, `:57`) —
+and `routePaths` (`:64`) **only if** the Go-live link above did not end up
+needing it (it should).
 
-Migrate or retire the affected tests **deliberately**, and **count each removed
-or changed assertion** — the number goes in the completion report. A test
-deleted because the surface is gone is fine; a test deleted because it turned
-red is not.
+**Leave in place and disclose:** `buildCoachMeetingTableRows`
+(`coachModel.ts:433`) and `CoachMeetingTableRow` (`types.ts:281`) are in
+`MeetingsList.tsx`'s back-compat block (`:84`, `:66`). After teardown that
+re-export is their only importer. **Do not delete them** — that is a separate
+decision about a public surface.
+
+Migrate or retire affected tests **deliberately** and **count every removed or
+changed assertion**; the number goes in your report. A test deleted because the
+surface is gone is fine. A test deleted because it turned red is not.
 
 ---
 
-## §5. DES-12 at the page level (the one constraint)
+## §5. DES-12 at the page level
 
-Loading skeletons, error banner + retry, empty state, populated — **for the
-composed coach page as a whole**, not per component. `useLoadState`
-(`CoachMeetingsView.tsx:657`) already gives you the three branches; the empty
-state (`:1592-1604`) is PRD DES-15 verbatim and **its copy must not change**.
-The student branch already satisfies this (`student/StudentMeetingsView.tsx`)
-and is out of your Allowed Files.
+All four states for the composed **coach** page: loading skeletons, error banner
++ retry, empty, populated. `useLoadState` (`CoachMeetingsView.tsx:652-681`)
+gives you three branches. The empty state (`:1593-1605`) is **PRD DES-15
+verbatim — its copy must not change.** The student branch already satisfies this
+and is out of scope.
 
 ---
 
@@ -191,70 +252,71 @@ and is out of your Allowed Files.
 
 - `src/pages/meetings/coach/CoachMeetingsView.tsx` (+ `.test.tsx`)
 - `src/pages/meetings/MeetingsList.tsx` (+ `MeetingsList.test.tsx`)
-- `src/lib/meetings/coachModel.ts` (+ `coachModel.test.ts`) — the new builder
-- deletions of files under `src/pages/meetings/` that this teardown orphans
+- `src/lib/meetings/coachModel.ts` (+ `coachModel.test.ts`)
+- deletions of files under `src/pages/meetings/` orphaned by §4
 
 **Forbidden:** `SeriesCard.tsx`, `SchedulePanel.tsx`, `MeetingsRail.tsx`,
-`SessionRow.tsx`, `AttendanceChips.tsx`, everything under
-`src/pages/meetings/student/`, all loaders, `src/lib/meetings/types.ts`,
-`format.ts`, `overlap.ts`, and `.github/workflows/**`. If a sibling component's
-own test breaks, **disclose it and stop** — do not fix it from here.
+`SessionRow.tsx`, `AttendanceChips.tsx`, all of `src/pages/meetings/student/`,
+all loaders, `types.ts`, `format.ts`, `overlap.ts`, `src/test-setup.ts`,
+`docs/swarm/**`, `.claude/**`, and `.github/workflows/**` (you cannot push it —
+AGENTS.md wall 1). If a sibling's own test breaks, **disclose and stop**.
 
-Do not run `git add -A` (item 22). Do not mutate the shared tree for an
-experiment (item 23); the orchestrator replays mutations.
+Explicit pathspecs only, never `git add -A` (item 22). No mutation experiments
+in the shared tree (item 23).
 
 ---
 
 ## §7. Acceptance criteria
 
-1. Rail agenda item → **one click** → owning card selected, its `SchedulePanel`
-   open on the right month tab, the session expanded **and scrolled into view**.
-   Asserted in a test.
-2. `MeetingsRail` receives real `seasonStartsOn`/`seasonEndsOn`, or the packet's
-   §3 escalation is raised instead.
-3. Active/Finished tabs partition by "has ≥1 scheduled session", with a test for
-   the fully-canceled series.
-4. Subtitle renders `"N active series · M sessions in the next 7 days"` from
-   real counts.
-5. Schedule chips on a card match `buildScheduleChips` output for a Tue/Sun
-   series (`Tue 6–8 PM`, `Sun 3:30–6:30 PM`) — en dash, collapsed meridiem.
-6. `attendancePct === null` renders `—`, and a real `0` renders `0%`.
-7. Old table code is **grep-provably gone**; removed/changed assertions counted.
-8. A test asserts **no page-level overlap banner** exists.
-9. Page-level DES-12: all four states for the coach role.
-10. Six gates green (`/gate-run`), and the report states the commit SHA
-    (item 21).
+1. Rail agenda item → **one click** → owning card selected, panel open on the
+   right month tab, session expanded, **scrolled into view and focused**.
+   Asserted in a test with a **local** `scrollIntoView` stub.
+2. `MeetingsRail` receives real `seasonStartsOn`/`seasonEndsOn` when the season
+   is `ready`, `undefined` otherwise; `CoachMeetingsView.test.tsx` wrapped in
+   `<SeasonProvider loadActiveSeason={…}>` per `CalendarPage.test.tsx:154`.
+3. Active/Finished tabs **reuse `partitionCoachMeetingRows`**; the existing
+   fully-canceled test still passes.
+4. Subtitle renders real counts. **Pin the clock with `vi.useFakeTimers`** —
+   fixtures are absolute July 2026, so "next 7 days" is 0 under a real clock.
+   `CoachMeetingsView.test.tsx` already uses fake timers.
+5. Schedule chips match `buildScheduleChips` for a two-weekday series with an
+   en dash and collapsed meridiem. **Hand-build the row in `coachModel.test.ts`
+   — no repo fixture is Tue/Sun** (`coachModel.ts:167-216` is Wed + Sat).
+6. `attendancePct` renders `—` per §0d, and the builder comment names GAM-460.
+7. Old table code grep-provably gone **except** the §4 Go-live link and the two
+   disclosed back-compat exports; removed/changed assertion count reported.
+8. A test asserts no **overlap-specific** page-level banner copy. Do **not**
+   assert on `Banner` absence — the page legitimately renders feedback and
+   DES-12 error banners (`:1582-1590`).
+9. Page-level DES-12, all four states, coach role.
+10. Six gates green via `/gate-run`; report the **commit SHA** (item 21).
 
-**Report, do not self-certify** (constitution: no worker marks its own work
-complete). Give the SHA, the assertion count, and every disclosure.
+**Report, do not self-certify.** Give the SHA, the assertion count, every
+disclosure, and anything you were told to stop on.
 
 ---
 
 ## §8. Least confident decisions (item 19d)
 
-1. **Deriving `ScheduleRule[]` from sessions (§1) is invented here.** No
-   sibling ticket froze it and no precedent exists. It would be wrong if
-   `buildScheduleChips` was never intended to be fed from sessions at all — if
-   MTG-01a expects the rules to come from the *schedule form's* stored
-   recurrence rather than being reverse-engineered from materialised rows. If
-   `events` carries a recurrence column I did not find, this whole section is
-   the wrong approach.
-2. **Focus state in `CoachMeetingsView`, not `MeetingsList` (§0b),** contradicts
-   the issue's own file table. Wrong if some other consumer — a route, a deep
-   link, the student view — is expected to set focus, in which case the shell is
-   the right home after all.
-3. **`useActiveSeason()` is reachable from `/meetings` (§3).** I verified the
-   hook exists and throws outside its provider; I did **not** verify that
-   `/meetings` renders inside `<SeasonProvider>`. If it does not, criterion 2 is
-   unsatisfiable as written and the rail silently degrades — which is exactly
-   the failure GAM-449 wrote its handoff comment to prevent.
-4. **Active = "≥1 scheduled session" (§2)** treats a series whose only remaining
-   sessions are in the past but still `status: 'scheduled'` as Active. That may
-   read as wrong on screen (a series that ended in June sitting under "Active"
-   because nobody marked it complete). The date-based alternative disagrees with
-   the recorded ruling, so I followed the ruling — but this is the call I would
-   most like challenged.
-5. **The teardown list in §4 is derived from a function-name outline, not from
-   an import graph.** If any of those names is reachable from outside
-   `src/pages/meetings/**` through `MeetingsList.tsx`'s back-compat re-exports,
-   deleting it breaks a module this packet never names.
+1. **§0d's em-dash interim may be the wrong half of the trade.** Rendering `—`
+   where real data exists conflates "withheld pending D014's mitigation" with
+   the metric view's own "no completed sessions yet" — item 3's conflation,
+   pointed the other way. It is wrong if the owner rules that a disclosed bare
+   percentage is better than a value that looks like missing data.
+2. **§4's "render the Go-live link from `CoachMeetingsView`" is my choice among
+   three the gate offered**, and it is the one that keeps every file boundary
+   intact. It is wrong if the link only makes sense on a session row, in which
+   case the honest move is escalating to widen `SessionRow.tsx`.
+3. **§3a assumes the Astryx `Card Grid` / `Grouped Table` templates actually
+   emit** against the installed package. Neither I nor the gate could verify it
+   (`node_modules` was absent for the gate). If they do not, §3a's fallback is a
+   guess about what the PRD would want.
+4. **§3d ships a user-visible control that does nothing.** Inert chips over a
+   "No roster recorded" empty state is defensible under item 27 and indefensible
+   under DES-12 if a coach reads the empty state as "nobody came". It is wrong
+   if the right call was to not mount the panel's roster region at all.
+5. **§1 drops midnight-spanning sessions from chip derivation.** Silent
+   omission. It is wrong if such a series exists in real data, because then a
+   card shows fewer chips than the series actually meets — a quiet lie rather
+   than a loud crash. I chose the quiet failure because the loud one takes the
+   whole page down via `RouteErrorBoundary`.

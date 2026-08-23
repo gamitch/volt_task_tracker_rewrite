@@ -85,3 +85,15 @@ did not land.
   than silently overwriting it: the `pr-body` skill flags exactly this ("three
   runs in one session wrote timestamps that disagreed with their own commit
   times"), and I reproduced it.
+- `01:44Z` — **Packet revision 2 written**, all 12 required revisions folded in,
+  every citation re-verified. The two BLOCKERs are resolved at the planning
+  layer rather than pushed to the worker: §4 now carves T511's Go-live link out
+  of the teardown and pins C1/C2/C3 as must-stay-green, and §3d takes the
+  decision that the SchedulePanel ships **without** a roster — chips inert,
+  surface `Partial` under item 27, loader ticket to be filed. §2's false claim
+  about `partitionCoachMeetingRows` is replaced by "reuse it, do not rewrite
+  it". New §8 declares five fresh least-confident decisions.
+- `01:44Z` — **DISPATCHED `checker-premise` round 2** (the item-19a cap; a third
+  REVISE escalates to the owner rather than looping), `run_in_background: false`.
+  *If this line is the last one in this file, the run died holding this
+  subagent* — round 2 never returned a verdict and no worker was dispatched.
