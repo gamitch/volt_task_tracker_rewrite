@@ -68,3 +68,13 @@ did not land.
     and my packet told the worker to write a second copy of it.
   - Four of my own line citations were wrong (`types.ts:302` not `:329`, etc.).
     Item 19c, demonstrated on me.
+- `01:58Z` — **Escalated MAJOR 6 (D014) to the owner on the issue.** Verified
+  the gate's finding myself first rather than taking it on trust: the migration
+  at `20260821000000_meetings_event_attendance_view.sql:162-163` says the risk
+  is *"owned by the consuming ticket"*, and GAM-452 is that ticket — it is the
+  first work to put `attendance_pct` on screen at event grain. Every route to
+  the mitigation is out of scope (frozen `SeriesCardModel`, merged sibling's
+  `SeriesCard.tsx`, and GAM-460 sits in `Backlog` which item 28a forbids me to
+  promote). Three options put to the owner; **absent a ruling this run takes
+  the em-dash interim**, which is the only one that puts nothing false in front
+  of a coach. The run continues on everything else — this is not a stop.
