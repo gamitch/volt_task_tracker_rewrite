@@ -281,3 +281,24 @@ did not land.
     forbidden-files list (`:26-33`, which names `.claude/settings.json`), used
     to justify that the run log is *not* forbidden. Benign, and no directive in
     it was acted on.
+- `03:30Z` — **Five follow-up rows filed** (item 20 + item 30, via the
+  `linear-task-writing` skill), all to `Backlog` carrying `unreviewed` — a row
+  created directly in `Todo` is never dispatched, and promotion is the owner's
+  signal. **GAM-491** roster loader (the row that gates this ticket's
+  `Partial`), **GAM-492** the status-axis test hole, **GAM-493** the
+  `Grouped Table` record defect, **GAM-494** the h1→h3 heading skip,
+  **GAM-495** the drifted eslint baseline.
+- `03:31Z` — **Packet §10 written.** §9b's false `Grouped Table` claim is
+  corrected in place rather than edited away (item 30c — deleting the error
+  deletes the evidence that the check happened). Consequence disclosed: the
+  shipped rail is non-resizable where `PRD:357-359` asked for resizable, and my
+  claim that the PRD was defective is withdrawn.
+- `03:33Z` — **Six gates re-run by me at final HEAD `207ecb53`**, not taken from
+  the worker or the checker: all exit 0, 114 files / 2790 tests, scoped 15 files
+  / 475 tests, eslint 0 errors.
+- `03:33Z` — **PR credential confirmed dead, as predicted at minute 1.**
+  `gh pr view` returns `HTTP 401: Bad credentials`; `git push` continues to work
+  on the long-lived PAT in the extraheader. **PR #242 therefore stays a draft
+  and this run cannot clear the flag** — the body says so in its first
+  paragraph rather than burying it. Opening at minute 2 is what made the
+  difference between a draft that needs one click and no PR at all.
