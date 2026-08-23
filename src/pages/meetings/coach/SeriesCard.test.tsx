@@ -69,6 +69,9 @@ function baseModel(overrides: Partial<SeriesCardModel> = {}): SeriesCardModel {
     sessionsCompleted: 3,
     sessionsTotal: 12,
     attendancePct: 87,
+    // GAM-460 -- distinct from sessionsCompleted/sessionsTotal/attendancePct
+    // above so no assertion can pass by number coincidence.
+    gradedMarksCt: 26,
     nextSessionLabel: 'Tue, Aug 26 · 6–8 PM',
     paletteIndex: 2,
     ...overrides,
@@ -204,12 +207,29 @@ describe('attendancePct rendering (DATA-01 -- never computed, never fabricated)'
     expect(container.textContent).toContain('96.5%');
   });
 
-  it('splits into three nodes -- label, prominent value, supporting caption -- not one flat sentence', () => {
-    renderCard({ model: baseModel({ attendancePct: 87, sessionsCompleted: 3 }) });
-    const [label, value, caption] = attendanceBlockTexts();
+  it('splits into four nodes -- label, prominent value, supporting caption, graded-marks caption -- not one flat sentence', () => {
+    renderCard({
+      model: baseModel({ attendancePct: 87, sessionsCompleted: 3, gradedMarksCt: 26 }),
+    });
+    const [label, value, caption, gradedMarksCaption] = attendanceBlockTexts();
     expect(label).toBe('Attendance');
     expect(value).toBe('87%');
     expect(caption).toBe('across 3 held');
+    expect(gradedMarksCaption).toBe('26 marks graded');
+  });
+
+  it('renders gradedMarksCt even when attendancePct is null -- the D014 mitigation is unconditional, not gated on a non-null percentage', () => {
+    renderCard({ model: baseModel({ attendancePct: null, gradedMarksCt: 26 }) });
+    expect(container.textContent).toContain('—');
+    expect(container.textContent).toContain('26 marks graded');
+  });
+
+  it('D014/GAM-460 regression: renders both attendancePct and gradedMarksCt together for the measured 100%-inflated example (60% of roster unmarked)', () => {
+    renderCard({
+      model: baseModel({ sessionsCompleted: 20, attendancePct: 100, gradedMarksCt: 40 }),
+    });
+    expect(container.textContent).toContain('100%');
+    expect(container.textContent).toContain('40 marks graded');
   });
 });
 
