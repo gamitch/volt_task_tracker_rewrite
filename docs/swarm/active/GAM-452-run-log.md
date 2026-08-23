@@ -28,3 +28,7 @@ did not land.
 - `01:22Z` — **PR credential deadline read, not guessed** (AGENTS.md wall 3):
   `iat 2026-08-23T01:21:09Z`, `exp 2026-08-23T02:21:09Z`. The PR must be opened
   as a draft well before `02:21Z`; `git push` survives past it.
+- `01:25Z` — **Draft PR #242 opened** at ~minute 5, ~56 minutes of credential
+  to spare. `docs/swarm/active/GAM-452-pr-body.md` written *before* the API
+  call (pr-body skill) and validated: `OK declaration closes GAM-452`.
+  <https://github.com/gamitch/volt_task_tracker_rewrite/pull/242>
