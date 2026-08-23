@@ -54,3 +54,12 @@ Append-only. One line per milestone. Pushed immediately after each append.
   sentinel can escape the loader boundary the invariant at `attendance.ts:224-231`
   says it never does. The new roster loader must map it to `null` itself; the
   upstream gap is an item 20 follow-up the orchestrator files.
+- **11:54Z — DISPATCHED `worker-implementer`** on the GAM-491 packet, with
+  `run_in_background: false`; this orchestrator is blocking on it. Model: the
+  agent's pinned default (sonnet) — **no `model: "opus"` override**, because none
+  of item 18's four triggers applies (no file under `supabase/migrations/`, no RLS
+  or `security definer` helper, no metric-view SQL, no auth/session/role or
+  permission logic). Item 25's second obligation is the reason that is written
+  down rather than assumed: a topic sounding sensitive is not a tier trigger.
+  **If this line is the last one in this file, the run died holding this
+  subagent.**
