@@ -198,3 +198,34 @@ did not land.
   this is 2) for the MAJOR-1 rework only, `run_in_background: false`. *If this
   line is the last one in this file, the run died holding this subagent* — the
   MAJOR is unfixed and the branch still ships the ungated Edit affordance.
+- `02:56Z` — **`worker-implementer` attempt 2 VERDICT: STOPPED AT THE WALL, no
+  code changed** (agent `ac05485eb1801eba5`, ~47K tokens, 16 tool calls). This
+  is the correct outcome, not a failure: it checked the prop shape *before*
+  writing, hit the contingency the dispatch named, and reported instead of
+  routing around it or fabricating a passing test.
+  - The wall, measured: `SchedulePanel.onEditSession` is a **single**
+    `(sessionId: string) => void` for the whole panel (`SchedulePanel.tsx:225`),
+    forwarded **identically to every row** inside the component's own
+    `.map()` (`:416`), and `SessionRow.tsx:438` gates on the truthiness of that
+    one reference. So the Edit button renders for **all** sessions in a series
+    or **none**. Per-session gating is unreachable from `CoachMeetingsView`
+    without editing a Forbidden file.
+  - It explicitly considered and rejected the tempting non-fix — wrapping the
+    callback to no-op on non-reconcilable sessions — because the button would
+    still be visibly present, which is the exact defect the checker's probes
+    caught.
+- `02:57Z` — **Orchestrator decision: widen Allowed Files, do not defer the
+  MAJOR.** The constitution lets a MAJOR ship only with boss-approved deferral;
+  I am choosing the fix instead, because the fix is small and its blast radius
+  is measurable. `SchedulePanel.tsx` gets **one additive, optional prop**
+  (`canEditSession?`), defaulting to always-true so every existing caller and
+  every GAM-448 test behaves exactly as it does today. That is the same
+  "additive and optional" shape GAM-448's own module doc states for every other
+  prop on that component, and the issue's own scope grants a fix-forward route
+  into sibling internals with disclosure. Recorded here so a wrong call is
+  visible and correctable rather than silent (item 26).
+- `02:57Z` — **DISPATCHED `worker-implementer` attempt 3** (the loop limit is 3;
+  a further failure escalates to `boss-arbiter`, it does not loop),
+  `run_in_background: false`. *If this line is the last one in this file, the
+  run died holding this subagent* — the MAJOR is unfixed and the branch still
+  ships the ungated Edit affordance.
