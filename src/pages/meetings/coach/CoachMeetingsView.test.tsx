@@ -37,6 +37,12 @@ import type { ResolveStudentIsActiveFn } from '../../../lib/supabase/loaders/stu
 import { chicagoWallTimeToUtcIso } from '../ScheduleMeetingsDialog';
 import type { CreateMeetingsPayload } from '../ScheduleMeetingsDialog';
 import type { SaveMeetingSessionPayload } from '../EditMeetingSessionDialog';
+// GAM-491 -- criteria 10-12 mount `<CoachMeetingsView>` directly, NOT through
+// `<MeetingsList>`: `MeetingsList.tsx` (Forbidden File, worker packet §7c)
+// does not thread a `loadSessionRoster` prop through, so it is the wrong
+// mount point for these three assertions.
+import { CoachMeetingsView, type CoachMeetingsViewProps } from './CoachMeetingsView';
+import type { LoadSessionRosterFn } from '../../../lib/supabase/loaders/sessionRoster';
 
 // ---------------------------------------------------------------------------
 // jsdom gaps, scoped to THIS test file's own jsdom globals only (not
@@ -1468,5 +1474,199 @@ describe('GAM-452 -- composition, focus wiring, subtitle, overlap', () => {
     for (const text of overlapLeafTexts) {
       expect(text === 'Overlap' || /^\d+ overlap$/.test(text)).toBe(true);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GAM-491 -- session roster wiring, criteria 10-12. Mounted directly via
+// `<CoachMeetingsView>` (NOT `<MeetingsList>` -- see the import comment
+// above): `MeetingsList.tsx` is a Forbidden File for this ticket and does
+// not thread a `loadSessionRoster` prop through, so it is the wrong mount
+// point for these three assertions. Criteria 1-9 (the loader's own read
+// behavior, including §3's central `'unmarked'` finding) live in
+// `../../../lib/supabase/loaders/sessionRoster.test.ts`.
+// ---------------------------------------------------------------------------
+
+/** Two series, each with one `completed` session (for the roster region --
+ * `SessionRow.tsx`'s own roster loading/error/empty/populated states only
+ * render for that status, `renderExpandedBody`, and only once that row's own
+ * Expand/Collapse toggle has been clicked, `toggleSessionExpand`) PLUS one
+ * `scheduled` session, so `partitionCoachMeetingRows` places both series in
+ * the default-visible "Active" tab (`hasUpcomingSession`,
+ * `coachModel.ts:404`) -- a `completed`-only row would land in "Finished"
+ * instead and `selectCard` would never find its heading. */
+const ROSTER_WIRING_ROWS: CoachMeetingsData = {
+  rows: [
+    {
+      eventId: 'event-roster-a',
+      title: 'Roster Alpha',
+      locationName: 'Robotics Lab',
+      teamScopeLabel: 'All teams',
+      sessions: [
+        {
+          sessionId: 'sess-roster-a1',
+          sessionDate: '2026-08-05',
+          startsAt: '2026-08-05T18:00:00.000Z',
+          endsAt: '2026-08-05T20:00:00.000Z',
+          status: 'completed',
+          durationHours: 2,
+          expectedCt: 3,
+          attendanceSummary: { presentCt: 1, lateCt: 0, excusedCt: 0, absentCt: 0 },
+          attendeeNames: [],
+        },
+        {
+          sessionId: 'sess-roster-a2',
+          sessionDate: '2026-09-05',
+          startsAt: '2026-09-05T18:00:00.000Z',
+          endsAt: '2026-09-05T20:00:00.000Z',
+          status: 'scheduled',
+          durationHours: 2,
+          expectedCt: 3,
+          attendanceSummary: null,
+          attendeeNames: [],
+        },
+      ],
+    },
+    {
+      eventId: 'event-roster-b',
+      title: 'Roster Beta',
+      locationName: 'Robotics Lab',
+      teamScopeLabel: 'All teams',
+      sessions: [
+        {
+          sessionId: 'sess-roster-b1',
+          sessionDate: '2026-08-06',
+          startsAt: '2026-08-06T18:00:00.000Z',
+          endsAt: '2026-08-06T20:00:00.000Z',
+          status: 'completed',
+          durationHours: 2,
+          expectedCt: 2,
+          attendanceSummary: { presentCt: 1, lateCt: 0, excusedCt: 0, absentCt: 0 },
+          attendeeNames: [],
+        },
+        {
+          sessionId: 'sess-roster-b2',
+          sessionDate: '2026-09-06',
+          startsAt: '2026-09-06T18:00:00.000Z',
+          endsAt: '2026-09-06T20:00:00.000Z',
+          status: 'scheduled',
+          durationHours: 2,
+          expectedCt: 2,
+          attendanceSummary: null,
+          attendeeNames: [],
+        },
+      ],
+    },
+  ],
+  teams: [],
+};
+
+/** `renderAsUser`'s own wrap (`MemoryRouter` / `AuthProvider` /
+ * `SeasonProvider` / `LoginAs`), mounting `<CoachMeetingsView>` itself
+ * instead of `<MeetingsList>` -- required so `loadSessionRoster` (this
+ * ticket's own new prop, not threaded by the Forbidden `MeetingsList.tsx`)
+ * can be injected directly. Every other prop gets a harmless stub; `loadData`
+ * defaults to `ROSTER_WIRING_ROWS` above, overridable per test. */
+function renderCoachViewDirect(overrides: Partial<CoachMeetingsViewProps> = {}): void {
+  act(() => {
+    root.render(
+      <MemoryRouter>
+        <AuthProvider>
+          <SeasonProvider loadActiveSeason={async () => null}>
+            <LoginAs user={COACH_USER}>
+              <CoachMeetingsView
+                loadData={() => Promise.resolve(ROSTER_WIRING_ROWS)}
+                onCancelSession={async () => {}}
+                onCreateMeetings={async () => {}}
+                onSaveMeetingSeries={async () => {}}
+                onSaveMeetingSession={async () => {}}
+                {...overrides}
+              />
+            </LoginAs>
+          </SeasonProvider>
+        </AuthProvider>
+      </MemoryRouter>,
+    );
+  });
+}
+
+describe('GAM-491 -- session roster wiring', () => {
+  // Pinned so `SchedulePanel.tsx`'s own `resolveDefaultMonthKey` picks the
+  // August 2026 tab (where `ROSTER_WIRING_ROWS`'s own `completed` sessions
+  // live) deterministically, regardless of the real wall-clock date the
+  // suite happens to run on -- same "pin `Date`, restore in the shared
+  // `afterEach`" convention this file's own `EDIT_FIXTURE_NOW`/`NOW` blocks
+  // above already use (`vi.useRealTimers()` in the top-level `afterEach`
+  // covers this block too).
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-08-23T12:00:00.000Z') });
+  });
+
+  it('criterion 10: <SchedulePanel> receives roster/isRosterLoading/rosterError sourced from the REAL loadSessionRoster by default, not a fixture', async () => {
+    // No `loadSessionRoster` override -- exercises
+    // `CoachMeetingsViewProps.loadSessionRoster`'s own real default
+    // (`loadSessionRosterDefault`, the `sessionRoster.ts` singleton).
+    renderCoachViewDirect();
+    await flushMicrotasks();
+
+    selectCard('Roster Alpha');
+    await flushMicrotasks();
+    toggleSessionExpand('2026-08-05');
+    await flushMicrotasks();
+
+    // `vite.config.ts` pins both Supabase env vars blank for this whole
+    // suite, so the REAL `getSupabaseClient()` throws
+    // `SupabaseNotConfiguredError` (`client.ts`) the instant the real
+    // loader is actually called -- its own fixed DES-16 message reaching
+    // the DOM is only possible through a genuine call to the real seam
+    // (constitution item 27: the criterion is the connection, not the
+    // render -- a fixture could never produce this exact sentence).
+    expect(container.textContent).toContain("Supabase isn't configured yet");
+    // Reached through `SessionRow.tsx`'s own DES-12 error Banner, proving
+    // the rejection lands on `rosterError`/the panel's error state (also
+    // exercised end-to-end by criterion 12 below with a controlled fixture).
+    expect(container.textContent).toContain("Couldn't load attendance");
+  });
+
+  it('criterion 11: expanding a series triggers exactly one loadSessionRoster(eventId) call; a different series loads that one; an unexpanded row loads nothing', async () => {
+    const loadSessionRoster: LoadSessionRosterFn = vi.fn(async () => new Map());
+    renderCoachViewDirect({ loadSessionRoster });
+    await flushMicrotasks();
+
+    // Nothing expanded yet -- no card selected, so no `eventId` is focused.
+    expect(loadSessionRoster).not.toHaveBeenCalled();
+
+    selectCard('Roster Alpha');
+    await flushMicrotasks();
+    expect(loadSessionRoster).toHaveBeenCalledTimes(1);
+    expect(loadSessionRoster).toHaveBeenLastCalledWith('event-roster-a');
+
+    // A different series -- loads that one (a fresh call, not a cache hit).
+    selectCard('Roster Beta');
+    await flushMicrotasks();
+    expect(loadSessionRoster).toHaveBeenCalledTimes(2);
+    expect(loadSessionRoster).toHaveBeenLastCalledWith('event-roster-b');
+  });
+
+  it('criterion 12: a rejected load puts a message on rosterError, renders via the panel’s DES-12 error state, and never throws into the render tree', async () => {
+    const loadSessionRoster: LoadSessionRosterFn = () =>
+      Promise.reject(new Error('roster load boom'));
+    renderCoachViewDirect({ loadSessionRoster });
+    await flushMicrotasks();
+
+    expect(() => selectCard('Roster Alpha')).not.toThrow();
+    await flushMicrotasks();
+    expect(() => toggleSessionExpand('2026-08-05')).not.toThrow();
+    await flushMicrotasks();
+
+    // `isSupabaseLoaderError` is false for a bare `Error` -- the fixed
+    // fallback sentence is what reaches `rosterError` (never the raw
+    // "roster load boom" stack/message, module doc §7c's "never leak a raw
+    // stack" instruction).
+    expect(container.textContent).toContain(
+      "Couldn't load the roster for this session. Try again.",
+    );
+    expect(container.textContent).toContain("Couldn't load attendance");
+    expect(container.textContent).not.toContain('roster load boom');
   });
 });

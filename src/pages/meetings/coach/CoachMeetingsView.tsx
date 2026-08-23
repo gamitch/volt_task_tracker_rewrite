@@ -187,6 +187,21 @@
  *    `LiveConsole.tsx:987`'s own `user.role === 'coach' || 'admin'`
  *    resolution, simplified since that disjunction is this component's own
  *    mount precondition, not something it re-derives).
+ *
+ * -----------------------------------------------------------------------
+ * 14. GAM-491 -- the roster read side `SchedulePanel.tsx`'s own module doc
+ *    §0c/`SessionRow.tsx`'s own module doc §3 both flag as an unfed DES-12
+ *    channel: with no `roster`/`isRosterLoading`/`rosterError` passed down,
+ *    every completed session's expanded body fell to `SessionRow.tsx`'s own
+ *    `EmptyState` ("No roster recorded"), so no coach could mark anyone
+ *    present. This file now loads `../../../lib/supabase/loaders/
+ *    sessionRoster.ts`'s `loadSessionRoster(eventId)` whenever the focused
+ *    `eventId` changes (never on mount for an unexpanded row) and threads
+ *    the three DES-12 channels straight into `<SchedulePanel>`, mirroring
+ *    `onSetAttendanceStatus`/`onClearAttendance`'s own additive-optional,
+ *    real-default injection convention. Never reloaded on a chip write --
+ *    that optimistic update lives entirely in `SessionRow.tsx`'s own local
+ *    `statusById` and a reload would fight it.
  */
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
@@ -247,9 +262,20 @@ import type {
 } from '../../../lib/meetings/types';
 import { buildSeriesCardModels, partitionCoachMeetingRows } from '../../../lib/meetings/coachModel';
 import { buildOverlapIndex } from '../../../lib/meetings/overlap';
+// GAM-491 -- the roster read side `SchedulePanel.tsx`'s own module doc §0c
+// names as a follow-up: this file's own `loadSessionRoster` singleton is the
+// real query, aliased so the destructured prop below can share its name (the
+// same "additive-optional, real default" convention `onSetAttendanceStatus`/
+// `onClearAttendance` already use at `:390-391`, just with an import alias
+// since this seam's prop name and its default's real export name are
+// identical, unlike those two).
+import {
+  loadSessionRoster as loadSessionRosterDefault,
+  type LoadSessionRosterFn,
+} from '../../../lib/supabase/loaders/sessionRoster';
 import { SeriesCard } from './SeriesCard';
 import { MeetingsRail, paletteIndexForEventId } from './MeetingsRail';
-import { SchedulePanel } from './SchedulePanel';
+import { SchedulePanel, type SessionRosterEntry } from './SchedulePanel';
 
 // ---------------------------------------------------------------------------
 // Generic DES-12 load-state hook -- unchanged from before this ticket.
@@ -355,6 +381,13 @@ export interface CoachMeetingsViewProps {
    * follows. */
   onSetAttendanceStatus?: typeof setAttendanceStatus;
   onClearAttendance?: typeof clearAttendanceStatus;
+  /** GAM-491 -- additive, optional; defaults to the real
+   * `loadSessionRoster` (`../../../lib/supabase/loaders/sessionRoster.ts`).
+   * Injectable for tests, same convention as the two seams above.
+   * `MeetingsList.tsx` (Forbidden File, worker packet §7c) does not thread
+   * this through, so it stays optional -- that existing caller keeps
+   * compiling unchanged and still gets the real loader. */
+  loadSessionRoster?: LoadSessionRosterFn;
 }
 
 /** T605 -- which session (if any) `<EditMeetingSessionDialog>` is currently
@@ -389,6 +422,7 @@ export function CoachMeetingsView({
   onSaveMeetingSession,
   onSetAttendanceStatus = setAttendanceStatus,
   onClearAttendance = clearAttendanceStatus,
+  loadSessionRoster = loadSessionRosterDefault,
 }: CoachMeetingsViewProps): ReactNode {
   const { user } = useAuth();
   const activeSeason = useActiveSeason();
@@ -408,6 +442,18 @@ export function CoachMeetingsView({
   // pair, keyed by `eventId`. A plain `Map` (not React state): it only ever
   // needs to be read inside an effect after a render, never to trigger one.
   const panelRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  // GAM-491 -- the roster read side for the currently-focused series' own
+  // `<SchedulePanel roster/isRosterLoading/rosterError>` (module doc §0c
+  // follow-up, this ticket's own scope). At most one series is expanded at
+  // a time (`isSelected` below is `focus !== null && focus.eventId ===
+  // row.eventId`), so one set of state suffices -- keyed by `sessionId`
+  // across every session of the focused event, matching
+  // `SchedulePanelProps.roster`'s own frozen shape.
+  const [roster, setRoster] = useState<ReadonlyMap<string, readonly SessionRosterEntry[]>>(
+    new Map(),
+  );
+  const [isRosterLoading, setIsRosterLoading] = useState(false);
+  const [rosterError, setRosterError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (loadState.status === 'success') {
@@ -415,6 +461,43 @@ export function CoachMeetingsView({
       setTeams(loadState.data.teams);
     }
   }, [loadState]);
+
+  // GAM-491 -- loads only when the focused `eventId` changes (never on mount
+  // for unexpanded rows, never re-fires for the same series staying open).
+  // Stale-response guard (`mounted`, `StudentMeetingsView.tsx:26-37`'s own
+  // `useLoadState` precedent, restated locally since this seam's shape --
+  // one `Map`, not a generic `LoadState<T>` -- does not fit that hook
+  // unchanged) so a slow response for a series the coach has since navigated
+  // away from can never clobber a newer one. Deliberately NOT re-run on
+  // `rows` changing -- a chip write's own optimistic update lives entirely
+  // in `SessionRow.tsx`'s local `statusById` and must not be fought by a
+  // roster reload (worker packet §7c).
+  useEffect(() => {
+    const eventId = focus?.eventId;
+    if (eventId === undefined) return;
+    let mounted = true;
+    setIsRosterLoading(true);
+    setRosterError(undefined);
+    loadSessionRoster(eventId).then(
+      (nextRoster) => {
+        if (!mounted) return;
+        setRoster(nextRoster);
+        setIsRosterLoading(false);
+      },
+      (error: unknown) => {
+        if (!mounted) return;
+        setRosterError(
+          isSupabaseLoaderError(error)
+            ? error.message
+            : "Couldn't load the roster for this session. Try again.",
+        );
+        setIsRosterLoading(false);
+      },
+    );
+    return () => {
+      mounted = false;
+    };
+  }, [focus?.eventId, loadSessionRoster]);
 
   const { upcoming: active, past: finished } = useMemo(
     () => partitionCoachMeetingRows(rows),
@@ -766,6 +849,17 @@ export function CoachMeetingsView({
                                   onSetAttendanceStatus={onSetAttendanceStatus}
                                   onClearAttendance={onClearAttendance}
                                   recordedBy={user?.id}
+                                  // GAM-491 -- the roster read side, sourced
+                                  // from this card's own focused-event load
+                                  // above. Every card renders the same
+                                  // `roster`/`isRosterLoading`/`rosterError`
+                                  // triple; only the currently-selected card
+                                  // ever mounts a `<SchedulePanel>` at all
+                                  // (`isSelected &&` above), so there is no
+                                  // cross-card leakage to guard against.
+                                  roster={roster}
+                                  isRosterLoading={isRosterLoading}
+                                  rosterError={rosterError}
                                   onEditSession={(sessionId) => {
                                     const session = row.sessions.find(
                                       (s) => s.sessionId === sessionId,
