@@ -208,7 +208,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createLoader, runMutation, type LoaderQueryResult } from '../loader';
 import { getSupabaseClient } from '../client';
-import { makeLoadAttendanceForSessions } from './attendance';
+import { makeLoadAttendanceForSessions, UNMARKED_DB_STATUS } from './attendance';
 import type {
   AttendanceRecordState,
   AttendanceStatus,
@@ -407,6 +407,37 @@ export function makeOnEndMeeting(
     getClient,
   );
 
+  /**
+   * GAM-479 companion to `markAbsences` above, and the ONE place in this file
+   * that names the sentinel.
+   *
+   * `markAbsences` uses `ignoreDuplicates: true` so it never overwrites a mark
+   * the coach already made. A coach-CLEARED row is not such a mark -- it is a
+   * real `attendance` row carrying `status = 'unmarked'`, invisible to every
+   * read in this directory, so `EndMeetingDialog.tsx` puts that student in
+   * `markAbsentStudentIds` exactly as it would a student with no row at all.
+   * Without this sweep the upsert above would hit the hidden row, skip it on
+   * the conflict, and leave the student cleared instead of absent -- silently
+   * changing T508's end-of-meeting behaviour for anyone who used the chip's
+   * `(unset)` stop.
+   *
+   * `update` (not upsert) naming only `status` and `recorded_by` leaves
+   * `check_in_at`, `check_out_at` and `hours_override` untouched, so promoting
+   * a cleared row to `absent` still preserves what the clear preserved.
+   * `recorded_by: null` matches the insert path above -- this is the
+   * end-of-meeting sweep's own mark, not the clearing coach's.
+   */
+  const markClearedAbsences = runMutation<MarkAbsencesArgs, void>(
+    (client, args) =>
+      client
+        .from('attendance')
+        .update({ status: 'absent', recorded_by: null })
+        .eq('session_id', args.sessionId)
+        .in('student_id', [...args.studentIds])
+        .eq('status', UNMARKED_DB_STATUS),
+    getClient,
+  );
+
   const checkoutStudents = runMutation<CheckoutStudentsArgs, void>(
     (client, args) =>
       client
@@ -433,6 +464,14 @@ export function makeOnEndMeeting(
     // is still a write request the owner's ruling says must not happen.
     if (payload.markAbsentStudentIds.length > 0) {
       await markAbsences({
+        sessionId: payload.sessionId,
+        studentIds: payload.markAbsentStudentIds,
+      });
+      // GAM-479 -- see `markClearedAbsences`. Runs after, never instead: the
+      // upsert handles students with no row, this handles students whose row
+      // exists but is cleared. A no-op (zero rows matched) when nobody in the
+      // batch was cleared.
+      await markClearedAbsences({
         sessionId: payload.sessionId,
         studentIds: payload.markAbsentStudentIds,
       });

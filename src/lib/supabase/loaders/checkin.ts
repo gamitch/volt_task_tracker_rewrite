@@ -198,6 +198,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createLoader, type LoaderQueryResult } from '../loader';
 import { getSupabaseClient } from '../client';
+import { excludeUnmarked } from './attendance';
 import type { GetAccessTokenFn } from '../../../pages/checkin/CheckinResult';
 import {
   buildConsistencyStripData,
@@ -318,7 +319,7 @@ async function queryAttendanceForStudent(
     .from('attendance')
     .select('session_id, student_id, status')
     .eq('student_id', studentId);
-  return { data: (result.data as AttendanceDbRow[] | null) ?? null, error: result.error };
+  return { data: excludeUnmarked(result.data as AttendanceDbRow[] | null), error: result.error };
 }
 
 /** T120 (Trap #4 above): no `.limit(1)` -- fetches EVERY matching row (a

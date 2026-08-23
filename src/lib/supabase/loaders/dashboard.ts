@@ -42,9 +42,13 @@
  * change" inference, and the sort/slice/format -- this file supplies only
  * the raw rows.
  *
- * Hard-delete limitation (D-7/T119, disclosed again here per Trap #3):
- * `attendance.ts`'s own `makeRemoveAttendance` (read-only reference) and
- * the event-edit checklist's own RSVP-uncheck path both perform a plain,
+ * Hard-delete limitation (D-7/T119, disclosed again here per Trap #3).
+ * NARROWED 2026-08-22 by GAM-479: the ATTENDANCE half of this no longer
+ * applies. `makeRemoveAttendance` is gone; un-marking a student now writes
+ * the `'unmarked'` sentinel status and the row survives, so an attendance
+ * removal is no longer historyless at the table level (this file still does
+ * not surface it -- see below). What REMAINS true is the RSVP half: the
+ * event-edit checklist's own RSVP-uncheck path is still a plain,
  * unconditional DELETE with no history left behind. This file does not
  * attempt to recover that history (no tracking table, per the worker
  * packet's explicit instruction) -- a coach-driven removal is therefore
@@ -104,6 +108,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createLoader, type LoaderQueryResult } from '../loader';
 import { getSupabaseClient } from '../client';
+import { excludeUnmarked } from './attendance';
 
 // ---------------------------------------------------------------------------
 // Season-wide secondary stat tiles.
@@ -556,7 +561,10 @@ async function queryFeedAttendance(
     .from('attendance')
     .select('id, session_id, student_id, status, recorded_by, updated_at, created_at')
     .in('session_id', sessionIds as string[]);
-  return { data: (result.data as FeedAttendanceDbRow[] | null) ?? null, error: result.error };
+  return {
+    data: excludeUnmarked(result.data as FeedAttendanceDbRow[] | null),
+    error: result.error,
+  };
 }
 
 async function queryFeedStudents(

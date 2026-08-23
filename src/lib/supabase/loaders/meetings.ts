@@ -227,6 +227,7 @@ import {
   type LoaderQueryResult,
 } from '../loader';
 import { getSupabaseClient } from '../client';
+import { excludeUnmarked } from './attendance';
 import type {
   AttendanceStatus,
   CancelMeetingSessionFn,
@@ -503,7 +504,9 @@ async function queryAttendance(
   client: SupabaseClient,
 ): Promise<LoaderQueryResult<AttendanceDbRow[]>> {
   const result = await client.from('attendance').select('session_id, student_id, status');
-  return { data: (result.data as AttendanceDbRow[] | null) ?? null, error: result.error };
+  // GAM-479 -- a coach-cleared row must look exactly like no row at all above
+  // this boundary. Same for every `excludeUnmarked` call in this directory.
+  return { data: excludeUnmarked(result.data as AttendanceDbRow[] | null), error: result.error };
 }
 
 /** T122 (module doc above, item b) -- coach view, full table, same
@@ -546,7 +549,7 @@ async function queryAttendanceForStudent(
     .from('attendance')
     .select('session_id, student_id, status')
     .eq('student_id', studentId);
-  return { data: (result.data as AttendanceDbRow[] | null) ?? null, error: result.error };
+  return { data: excludeUnmarked(result.data as AttendanceDbRow[] | null), error: result.error };
 }
 
 /** Active memberships are the selected student's presentation boundary. */
@@ -667,6 +670,14 @@ async function queryAttendanceExistsForSessions(
   client: SupabaseClient,
   sessionIds: readonly string[],
 ): Promise<LoaderQueryResult<AttendanceExistsDbRow[]>> {
+  // GAM-479 -- the ONE attendance read in this directory that deliberately
+  // does NOT call `excludeUnmarked`. It decides cancel-vs-delete for a session
+  // being removed, and `attendance.session_id` is `on delete restrict`
+  // (`20260717000000_scheduling_attendance.sql:84`), so a coach-cleared row
+  // still blocks the delete. Filtering here would route such a session to
+  // `removeOneSession` and lean on its 23503 repair path instead of picking
+  // `cancel` outright. It selects no `status` column, so the filter would not
+  // even typecheck -- that is a coincidence, not the reason.
   const result = await client
     .from('attendance')
     .select('session_id')

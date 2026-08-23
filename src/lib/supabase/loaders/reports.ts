@@ -157,6 +157,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createLoader, type LoaderQueryResult } from '../loader';
 import { getSupabaseClient } from '../client';
+import { excludeUnmarked } from './attendance';
 import type {
   AttendanceStatus as SharedAttendanceStatus,
   EventSessionStatus as SharedEventSessionStatus,
@@ -657,7 +658,10 @@ async function queryEventsAttendance(
     .from('attendance')
     .select('session_id, student_id, status, check_in_at, check_out_at, hours_override')
     .in('session_id', sessionIds as string[]);
-  return { data: (result.data as EventsAttendanceDbRow[] | null) ?? null, error: result.error };
+  return {
+    data: excludeUnmarked(result.data as EventsAttendanceDbRow[] | null),
+    error: result.error,
+  };
 }
 
 /** Module doc #6: only ever called with a non-empty `sessionIds`. */

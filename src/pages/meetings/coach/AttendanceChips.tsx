@@ -37,24 +37,24 @@
  * 2. `(unset)` is a real stop, not a confirm-guarded edge case (packet §2).
  *
  *    Reaching `(unset)` calls the injected `onUnset` (which `SessionRow.tsx`
- *    wires to `makeRemoveAttendance`, `../../../lib/supabase/loaders/
- *    attendance.ts:544-562`) with **no confirm dialog**. DES-11's confirm set
- *    (`VOLT_Portal_PRD.md:219`) does not name an attendance un-mark, T119 /
- *    PRD v2 D-7 already ruled the un-mark an unconditional DELETE for every
- *    write method, and a confirm inside this loop would make criterion 3's
- *    full-cycle walk untestable. The `aria-live` region below announces the
- *    un-mark the same way it announces every other stop -- no special case.
+ *    wires to `makeClearAttendanceStatus`) with **no confirm dialog**.
+ *    DES-11's confirm set (`VOLT_Portal_PRD.md:219`) does not name an
+ *    attendance un-mark, T119 / PRD v2 D-7 already ruled the un-mark
+ *    unconditional for every write method, and a confirm inside this loop
+ *    would make criterion 3's full-cycle walk untestable. The `aria-live`
+ *    region below announces the un-mark the same way it announces every
+ *    other stop -- no special case.
  *
- *    **⚠ Disclosed asymmetry (packet §2, required disclosure):**
- *    `makeRemoveAttendance` deletes the ENTIRE `attendance` row, which
- *    carries `check_in_at`, `check_out_at`, `hours_override`, `method` and
- *    `recorded_by` (`attendance.ts:247,255-267`) -- so the fifth tap in this
- *    cycle discards a QR check-in timestamp and a coach-set hours override,
- *    the exact values `makeSetAttendanceStatus` (`attendance.ts:506-528`)
- *    goes out of its way to preserve on every OTHER stop. That asymmetry is
- *    real, undocumented anywhere else, and NOT a reason to invent a confirm
- *    here (nothing calls this component in the real app yet -- GAM-448
- *    packet §0a); it is filed as a follow-up instead (packet §6).
+ *    **The asymmetry this doc used to disclose is GONE (GAM-479).** It read:
+ *    the fifth tap deleted the whole row, discarding `check_in_at`,
+ *    `check_out_at` and `hours_override` -- the exact values
+ *    `makeSetAttendanceStatus` goes out of its way to preserve on every
+ *    OTHER stop. That is no longer true. `(unset)` now writes the
+ *    `'unmarked'` sentinel status through a payload that names none of those
+ *    columns
+ *    (`supabase/migrations/20260822000000_attendance_unmarked_sentinel.sql`),
+ *    so every stop in this cycle -- including the fifth -- is
+ *    non-destructive. There is no row DELETE anywhere behind this control.
  *
  * -----------------------------------------------------------------------
  * 3. DES-17 direct-set keys `1`-`4` live on the ROW, not here (packet §2,

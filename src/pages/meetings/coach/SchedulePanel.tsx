@@ -42,8 +42,11 @@
  *   (`../../../lib/supabase/loaders/attendance.ts:506-528`)** -- a real
  *   upsert on `onConflict: 'session_id,student_id'` that deliberately omits
  *   `hours_override` so an existing coach-set override survives a status
- *   change -- and the `(unset)` cycle stop goes through `makeRemoveAttendance`
- *   (`attendance.ts:544-562`). The `endMeeting.ts:489` factory is imported
+ *   change -- and, since GAM-479, the `(unset)` cycle stop goes through
+ *   `makeClearAttendanceStatus`, which upserts the `UNMARKED_DB_STATUS`
+ *   sentinel with the same `hours_override`/`check_in_at`-omitting payload
+ *   rather than deleting the row. `makeRemoveAttendance` no longer exists at
+ *   all -- GAM-479 retired it with its last caller. The `endMeeting.ts:489` factory is imported
  *   nowhere in this file, `SessionRow.tsx` or `AttendanceChips.tsx`
  *   (criterion 14).
  *
@@ -86,10 +89,12 @@
  *
  *   MTG-01g (`docs/swarm/VOLT_Portal_PRD.md:382`) is verbatim: "Cycle order
  *   is Present -> Late -> Excused -> Absent -> (unset), `Shift`-activation
- *   reverses." `(unset)` removes the attendance row via the injected
- *   `onRemoveAttendance`; it is a real stop, not an edge case, and is
+ *   reverses." `(unset)` clears the mark via the injected
+ *   `onClearAttendance`; it is a real stop, not an edge case, and is
  *   deliberately un-confirmed (`AttendanceChips.tsx`'s own module doc has the
- *   full reasoning and the disclosed asymmetry). The four MTG-01g a11y rules
+ *   full reasoning). GAM-479 removed the asymmetry that doc used to disclose:
+ *   the stop no longer deletes the row, so it no longer destroys a QR
+ *   `check_in_at` or a coach-set `hours_override`. The four MTG-01g a11y rules
  *   (real `<button>`, name = student + status, `aria-live` announcement,
  *   >=44px target) are explicitly "ADDITIVE and are NOT exhaustive" --
  *   DES-17's direct-set roll-call keys `1`-`4` and forward/reverse cycling
@@ -153,7 +158,7 @@ import type {
 } from '../../../lib/meetings/types';
 import type {
   AttendanceStatus,
-  RemoveAttendanceFn,
+  ClearAttendanceStatusFn,
   SetAttendanceStatusFn,
 } from '../../../lib/supabase/loaders/attendance';
 import { SessionRow } from './SessionRow';
@@ -197,8 +202,9 @@ export interface SchedulePanelProps {
    * Absent goes through (module doc item 1) -- never the `endMeeting.ts:489`
    * factory the original issue named. */
   onSetAttendanceStatus?: SetAttendanceStatusFn;
-  /** The `(unset)` cycle stop's write seam (module doc item 1/4). */
-  onRemoveAttendance?: RemoveAttendanceFn;
+  /** The `(unset)` cycle stop's write seam (module doc item 1/4) -- a
+   * sentinel status write since GAM-479, not a delete. */
+  onClearAttendance?: ClearAttendanceStatusFn;
   /** Fixture-fed roster, keyed by `sessionId` (module doc item 2). */
   roster?: ReadonlyMap<string, readonly SessionRosterEntry[]>;
   /** DES-12 loading channel for the roster region. */
@@ -304,7 +310,7 @@ export function SchedulePanel({
   onMonthChange,
   onCancelSession,
   onSetAttendanceStatus,
-  onRemoveAttendance,
+  onClearAttendance,
   roster,
   isRosterLoading,
   rosterError,
@@ -402,7 +408,7 @@ export function SchedulePanel({
               onToggleExpand={() => toggleExpand(session.sessionId)}
               onCancelSession={onCancelSession}
               onSetAttendanceStatus={onSetAttendanceStatus}
-              onRemoveAttendance={onRemoveAttendance}
+              onClearAttendance={onClearAttendance}
               roster={roster?.get(session.sessionId)}
               isRosterLoading={isRosterLoading}
               rosterError={rosterError}

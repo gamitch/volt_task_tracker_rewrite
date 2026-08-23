@@ -6,7 +6,7 @@
  *   expander: a confirmed cancel for `scheduled`, tap-to-cycle attendance
  *   chips for `completed`, a plain sentence for `canceled`. See
  *   `SchedulePanel.tsx`'s own module doc for the write-seam correction
- *   (`makeSetAttendanceStatus`/`makeRemoveAttendance`, never the
+ *   (`makeSetAttendanceStatus`/`makeClearAttendanceStatus`, never the
  *   `endMeeting.ts:489` factory the original issue named -- criterion 14
  *   reads this file literally, so that name is not spelled out here even in
  *   a comment) and the `expectedCt` omission -- both apply here too.
@@ -91,9 +91,21 @@
  *    deliberately NOT called, per the owner ruling
  *    `LiveConsole.tsx:1080-1093` already implements and documents (a coach
  *    tap is always a coach write; that function exists for a different
- *    caller). `onRemoveAttendance` is `RemoveAttendanceFn`
- *    (`attendance.ts:544`) -- called with exactly `{ sessionId, studentId }`
- *    (criterion 8), never as a disguised status write.
+ *    caller).
+ *
+ *    `onClearAttendance` is `ClearAttendanceStatusFn` -- GAM-479's
+ *    replacement for the `RemoveAttendanceFn` this prop used to take. The
+ *    `(unset)` stop is no longer a row DELETE: it upserts the
+ *    `UNMARKED_DB_STATUS` sentinel through the same non-destructive shape
+ *    `onSetAttendanceStatus` uses, so a QR `check_in_at` and a coach-set
+ *    `hours_override` survive the clear instead of being destroyed with no
+ *    audit trail. Criterion 8's "never a disguised status write" still holds
+ *    in the sense that mattered -- this seam cannot write one of the four
+ *    real statuses -- and the payload is exactly
+ *    `{ sessionId, studentId, method: 'coach', recordedBy }`.
+ *    `makeRemoveAttendance` no longer exists anywhere -- GAM-479 retired it
+ *    once its last caller (`AttendancePanel.tsx`'s checkbox) moved to the
+ *    same clear seam. There is no attendance row DELETE left in this app.
  *
  *    **Optimistic update with rollback, LAST WRITE WINS** (2026-08-02
  *    ruling, `LiveConsole.tsx:1042-1060`'s own citation) -- `statusById`
@@ -128,7 +140,7 @@ import type {
 import { formatTimeRangeWithDuration, formatWeekdayDate } from '../../../lib/meetings/format';
 import type {
   AttendanceStatus,
-  RemoveAttendanceFn,
+  ClearAttendanceStatusFn,
   SetAttendanceStatusFn,
 } from '../../../lib/supabase/loaders/attendance';
 import { AttendanceChips } from './AttendanceChips';
@@ -198,7 +210,7 @@ export interface SessionRowProps {
   onToggleExpand: () => void;
   onCancelSession?: CancelMeetingSessionFn;
   onSetAttendanceStatus?: SetAttendanceStatusFn;
-  onRemoveAttendance?: RemoveAttendanceFn;
+  onClearAttendance?: ClearAttendanceStatusFn;
   roster?: readonly SessionRosterEntry[];
   isRosterLoading?: boolean;
   rosterError?: string;
@@ -214,7 +226,7 @@ export function SessionRow({
   onToggleExpand,
   onCancelSession,
   onSetAttendanceStatus,
-  onRemoveAttendance,
+  onClearAttendance,
   roster,
   isRosterLoading = false,
   rosterError,
@@ -264,12 +276,22 @@ export function SessionRow({
     });
   }
 
+  /** GAM-479 -- the `(unset)` stop. Structurally identical to
+   * `handleSetStatus` above, including the optimistic-then-rollback shape,
+   * because it is now the same KIND of operation: a status write, not a
+   * delete. `method: 'coach'` is the same literal `handleSetStatus` sends,
+   * for the same reason (module doc item 5). */
   function handleUnset(studentId: string): void {
     if (recordedBy === undefined) return; // criterion 10 defence in depth
-    if (!onRemoveAttendance) return;
+    if (!onClearAttendance) return;
     const previous = readLocalStatus(statusById, studentId, null);
     setStatusById((prev) => ({ ...prev, [studentId]: null }));
-    onRemoveAttendance({ sessionId: session.sessionId, studentId }).catch(() => {
+    onClearAttendance({
+      sessionId: session.sessionId,
+      studentId,
+      method: 'coach',
+      recordedBy,
+    }).catch(() => {
       setStatusById((prev) => ({ ...prev, [studentId]: previous }));
       setWriteErrorMessage("That attendance change couldn't be saved. Please try again.");
     });

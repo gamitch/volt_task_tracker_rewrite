@@ -343,9 +343,13 @@ interface MutationRecordingSetup {
   fromSpy: ReturnType<typeof vi.fn>;
   markCalls: { upsertArgs: [unknown, unknown][] };
   checkoutCalls: { updateArgs: unknown[]; chainCalls: [string, unknown[]][] };
+  /** GAM-479's `markClearedAbsences` sweep -- its own recorder so the
+   * checkout criteria keep counting only checkout writes. */
+  clearedCalls: { updateArgs: unknown[]; chainCalls: [string, unknown[]][] };
   flipCalls: { updateArgs: unknown[]; chainCalls: [string, unknown[]][] };
   markDeferred: Deferred<MutationResult>;
   checkoutDeferred: Deferred<MutationResult>;
+  clearedDeferred: Deferred<MutationResult>;
   flipDeferred: Deferred<MutationResult>;
 }
 
@@ -360,7 +364,8 @@ interface MutationRecordingSetup {
  * established for this directory).
  *
  * `.from('attendance')` dispatches on the METHOD called (`upsert` -> mark
- * absences, `update` -> checkout), not on call order -- this also makes the
+ * absences, `update` -> checkout or, since GAM-479, the cleared-row sweep --
+ * told apart by which column the patch names), not on call order -- this also makes the
  * criterion-5 concurrent-mutation proof step (running the old
  * `Promise.all`-based implementation against this same client) route each
  * call to the correct recorder regardless of dispatch order.
@@ -368,10 +373,12 @@ interface MutationRecordingSetup {
 function makeMutationRecordingClient(): MutationRecordingSetup {
   const markDeferred = makeDeferred<MutationResult>();
   const checkoutDeferred = makeDeferred<MutationResult>();
+  const clearedDeferred = makeDeferred<MutationResult>();
   const flipDeferred = makeDeferred<MutationResult>();
 
   const markCalls: MutationRecordingSetup['markCalls'] = { upsertArgs: [] };
   const checkoutCalls: MutationRecordingSetup['checkoutCalls'] = { updateArgs: [], chainCalls: [] };
+  const clearedCalls: MutationRecordingSetup['clearedCalls'] = { updateArgs: [], chainCalls: [] };
   const flipCalls: MutationRecordingSetup['flipCalls'] = { updateArgs: [], chainCalls: [] };
 
   function makeThenableChain(
@@ -404,10 +411,17 @@ function makeMutationRecordingClient(): MutationRecordingSetup {
             ) => markDeferred.promise.then(onFulfilled, onRejected),
           };
         },
+        // GAM-479 -- two distinct `attendance.update` writes now exist.
+        // `markClearedAbsences` names `status`; `checkoutStudents` names
+        // `check_out_at`. Routing by patch shape keeps each criterion's
+        // counts about its own write.
         update: (patch: unknown) => {
-          checkoutCalls.updateArgs.push(patch);
-          return makeThenableChain(checkoutDeferred, (method, args) =>
-            checkoutCalls.chainCalls.push([method, args]),
+          const isClearedSweep = typeof patch === 'object' && patch !== null && 'status' in patch;
+          const target = isClearedSweep ? clearedCalls : checkoutCalls;
+          const deferred = isClearedSweep ? clearedDeferred : checkoutDeferred;
+          target.updateArgs.push(patch);
+          return makeThenableChain(deferred, (method, args) =>
+            target.chainCalls.push([method, args]),
           );
         },
       };
@@ -430,9 +444,11 @@ function makeMutationRecordingClient(): MutationRecordingSetup {
     fromSpy,
     markCalls,
     checkoutCalls,
+    clearedCalls,
     flipCalls,
     markDeferred,
     checkoutDeferred,
+    clearedDeferred,
     flipDeferred,
   };
 }
@@ -440,6 +456,7 @@ function makeMutationRecordingClient(): MutationRecordingSetup {
 function resolveAllMutations(setup: MutationRecordingSetup): void {
   setup.markDeferred.resolve({ data: null, error: null });
   setup.checkoutDeferred.resolve({ data: null, error: null });
+  setup.clearedDeferred.resolve({ data: null, error: null });
   setup.flipDeferred.resolve({ data: null, error: null });
 }
 
@@ -455,19 +472,30 @@ const SAMPLE_PAYLOAD: EndMeetingPayload = {
 };
 
 describe('makeOnEndMeeting', () => {
-  it('criterion 5 (CORRECTED, BLOCKER 2): the three writes are truly sequenced (await-gated), not dispatched concurrently', async () => {
+  it('criterion 5 (CORRECTED, BLOCKER 2; GAM-479: now FOUR writes): the writes are truly sequenced (await-gated), not dispatched concurrently', async () => {
     const setup = makeMutationRecordingClient();
     const onEndMeeting = makeOnEndMeeting(() => setup.client);
 
     const resultPromise = onEndMeeting(SAMPLE_PAYLOAD);
 
-    // Only the mark-absences call has been issued so far -- checkout's and
-    // the flip's underlying client.from(...) calls have NOT happened yet.
+    // Only the mark-absences call has been issued so far -- the cleared-row
+    // sweep, checkout and the flip have NOT happened yet.
     expect(setup.markCalls.upsertArgs).toHaveLength(1);
+    expect(setup.clearedCalls.updateArgs).toHaveLength(0);
     expect(setup.checkoutCalls.updateArgs).toHaveLength(0);
     expect(setup.flipCalls.updateArgs).toHaveLength(0);
 
     setup.markDeferred.resolve({ data: null, error: null });
+    await flushMicrotasks();
+
+    // GAM-479 -- the sweep is gated behind the upsert and gates checkout in
+    // turn. It must never run before the upsert: the upsert is what creates
+    // rows for students with none, and the sweep only promotes rows that
+    // already exist and are cleared.
+    expect(setup.clearedCalls.updateArgs).toHaveLength(1);
+    expect(setup.checkoutCalls.updateArgs).toHaveLength(0);
+
+    setup.clearedDeferred.resolve({ data: null, error: null });
     await flushMicrotasks();
 
     expect(setup.checkoutCalls.updateArgs).toHaveLength(1);
@@ -480,6 +508,42 @@ describe('makeOnEndMeeting', () => {
 
     setup.flipDeferred.resolve({ data: null, error: null });
     await expect(resultPromise).resolves.toBeUndefined();
+  });
+
+  it('GAM-479 criterion: the cleared-row sweep is scoped to session + the marked students AND to status = unmarked, so it can never touch a real mark', async () => {
+    const setup = makeMutationRecordingClient();
+    resolveAllMutations(setup);
+    const onEndMeeting = makeOnEndMeeting(() => setup.client);
+
+    await onEndMeeting(SAMPLE_PAYLOAD);
+
+    expect(setup.clearedCalls.updateArgs).toHaveLength(1);
+    expect(setup.clearedCalls.updateArgs[0]).toEqual({ status: 'absent', recorded_by: null });
+    const eqArgs = chainArgsFor(setup.clearedCalls.chainCalls, 'eq');
+    expect(eqArgs).toContainEqual(['session_id', 'session-real-mtg']);
+    // The predicate that makes this safe. Without it the sweep would
+    // overwrite every student in `markAbsentStudentIds`, including ones the
+    // coach had genuinely marked present.
+    expect(eqArgs).toContainEqual(['status', 'unmarked']);
+    expect(chainArgsFor(setup.clearedCalls.chainCalls, 'in')).toContainEqual([
+      'student_id',
+      ['student-mark-a'],
+    ]);
+  });
+
+  it('GAM-479 criterion: with markAbsentStudentIds empty, the cleared-row sweep is not issued either', async () => {
+    const setup = makeMutationRecordingClient();
+    resolveAllMutations(setup);
+    const onEndMeeting = makeOnEndMeeting(() => setup.client);
+
+    await onEndMeeting({
+      sessionId: 'session-opt-out-3',
+      endsAt: '2026-08-05T04:00:00.000Z',
+      markAbsentStudentIds: [],
+      checkoutStudentIds: ['student-checkout-z'],
+    });
+
+    expect(setup.clearedCalls.updateArgs).toHaveLength(0);
   });
 
   it('criterion 6: mark-absences upsert shape -- one absent/coach/null row per marked student, plus onConflict + ignoreDuplicates:true', async () => {
@@ -585,6 +649,7 @@ describe('makeOnEndMeeting', () => {
   it('criterion 9 (CORRECTED, MAJOR 3): rejection satisfies isSupabaseLoaderError, with the injected detail surfacing only via .cause -- never asserts the top-level .message', async () => {
     const setup = makeMutationRecordingClient();
     setup.markDeferred.resolve({ data: null, error: null });
+    setup.clearedDeferred.resolve({ data: null, error: null });
     setup.checkoutDeferred.resolve({ data: null, error: null });
     setup.flipDeferred.resolve({
       data: null,
@@ -643,7 +708,10 @@ describe('makeOnEndMeeting', () => {
 // ---------------------------------------------------------------------------
 
 interface SemanticAttendanceRow {
-  status: AttendanceStatus;
+  /** GAM-479: widened past `AttendanceStatus` so a test can seed a
+   * coach-CLEARED row -- `'unmarked'` is a real stored value that is
+   * deliberately not a member of the application-level union. */
+  status: AttendanceStatus | 'unmarked';
   method: string;
   recordedBy: string | null;
   checkOutAt: string | null;
@@ -702,13 +770,28 @@ function makeSemanticAttendanceClient(): {
           }
           return Promise.resolve({ data: null, error: null });
         },
-        update: (patch: { check_out_at: string }) => {
+        /**
+         * Serves BOTH real `update` shapes this loader issues: `checkoutStudents`'
+         * `{ check_out_at }` and, since GAM-479, `markClearedAbsences`'
+         * `{ status, recorded_by }`. It applies only the columns the patch
+         * actually names, and it HONOURS `.eq('status', ...)` as a real WHERE
+         * predicate rather than a passthrough -- without that the sweep would
+         * appear to overwrite every student in the batch, which is precisely
+         * the behaviour these tests exist to rule out.
+         */
+        update: (patch: {
+          check_out_at?: string;
+          status?: string;
+          recorded_by?: string | null;
+        }) => {
           let sessionId: string | undefined;
           let studentIds: string[] = [];
           let requireCheckOutNull = false;
+          let requireStatus: string | undefined;
           const chain: Record<string, unknown> = {};
           chain.eq = (column: string, value: string) => {
             if (column === 'session_id') sessionId = value;
+            if (column === 'status') requireStatus = value;
             return chain;
           };
           chain.in = (column: string, values: string[]) => {
@@ -728,7 +811,10 @@ function makeSemanticAttendanceClient(): {
               const row = attendance.get(k);
               if (!row) continue;
               if (requireCheckOutNull && row.checkOutAt !== null) continue; // guard blocks overwrite
-              row.checkOutAt = patch.check_out_at;
+              if (requireStatus !== undefined && row.status !== requireStatus) continue;
+              if (patch.check_out_at !== undefined) row.checkOutAt = patch.check_out_at;
+              if (patch.status !== undefined) row.status = patch.status as AttendanceStatus;
+              if (patch.recorded_by !== undefined) row.recordedBy = patch.recorded_by;
             }
             return Promise.resolve({ data: null, error: null } as MutationResult).then(
               onFulfilled,

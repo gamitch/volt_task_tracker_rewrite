@@ -382,6 +382,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createLoader, runMutation, type LoaderQueryResult } from '../loader';
 import { getSupabaseClient } from '../client';
+import { excludeUnmarked } from './attendance';
 import type {
   LoadOutreachDataFn,
   OutreachAttendanceRow,
@@ -869,7 +870,7 @@ async function queryAttendanceForSessionsPage(
     .in('session_id', [...args.sessionIds])
     .order('id', { ascending: true })
     .range(args.from, args.from + OUTREACH_ATTENDANCE_PAGE_SIZE - 1);
-  return { data: (result.data as AttendanceDbRow[] | null) ?? null, error: result.error };
+  return { data: excludeUnmarked(result.data as AttendanceDbRow[] | null), error: result.error };
 }
 
 async function queryAllStudents(

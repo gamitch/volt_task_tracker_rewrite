@@ -534,6 +534,10 @@ async function runWeeklyDigest(
       ? await adminClient
           .from('attendance')
           .select('student_id, session_id, status')
+          // GAM-479: skip coach-cleared rows -- `'unmarked'` is a storage
+          // state, and the digest must treat a cleared mark as no mark, the
+          // same way every loader in `src/lib/supabase/loaders/**` does.
+          .neq('status', 'unmarked')
           .in('student_id', activeStudentIds)
           .in('session_id', lastWeekSessionIds)
       : { data: [] as unknown[] };
