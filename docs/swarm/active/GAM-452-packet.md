@@ -428,3 +428,28 @@ absent for **both** gate rounds. No gate has been able to run `npm ci`, the
 vitest suite, or `astryx template --list` against this packet. **You are the
 first to execute anything here.** A template that fails to emit is a
 stop-and-report, not a route-around.
+
+---
+
+## §10. CORRECTION to §9b, recorded 2026-08-23 rather than silently amended
+
+**§9b is wrong. Astryx *does* ship a `Grouped Table` template.** Run with
+`node_modules` installed for the first time on this ticket:
+
+```
+$ npx astryx template --list
+  Grouped Table
+    Grouped data table with collapsible status sections, PowerSearch, and a
+    resizable detail panel.
+```
+
+§9b told the worker the opposite, on the strength of a premise gate that could
+not run the CLI — the exact limitation §9j itself disclosed. The worker complied
+correctly and composed the rail split from `Grid`/`GridSpan`, so **the shipped
+rail is non-resizable where `PRD:357-359` asked for a resizable detail panel**,
+and my claim that `PRD:357-359` is a PRD defect is withdrawn.
+
+Left in place rather than edited away, per item 30c: deleting the error would
+delete the evidence that the check happened. Filed as **GAM-493**, which also
+carries the four in-repo comments making the same false claim — including
+`CoachHome.tsx:21`'s *"does not exist anywhere, CLI or installed"*.
