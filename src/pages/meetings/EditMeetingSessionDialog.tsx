@@ -19,12 +19,14 @@
  *
  * -----------------------------------------------------------------------
  * 2. Reuse, not reinvention -- `isMeetingSessionReconcilable`
- *    (`./ScheduleMeetingsDialog`, exported at that file's own `:562`) is
+ *    (`./ScheduleMeetingsDialog`, exported at that file's own `:668`) is
  *    IMPORTED here (packet §6.2), not reimplemented: the future-forward rule
  *    itself must be shared between the series dialog and this surface so
- *    they can never silently disagree about "already happened." `MeetingsList.tsx`
- *    itself is the caller that applies this gate to decide whether the Edit
- *    affordance renders at all; this file does not need to call it again.
+ *    they can never silently disagree about "already happened." GAM-452
+ *    made `CoachMeetingsView.tsx` the real caller that applies this gate
+ *    (via `SchedulePanel`'s `canEditSession` prop) to decide whether the
+ *    Edit affordance renders at all; this file does not need to call it
+ *    again.
  *
  * -----------------------------------------------------------------------
  * 3. Wall-time <-> UTC conversion -- reimplemented locally, a deliberate,

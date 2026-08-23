@@ -8,10 +8,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildCoachMeetingRows,
+  buildSeriesCardModels,
   defaultLoadCoachMeetingsData,
   partitionCoachMeetingRows,
   summarizeCoachMeetingRow,
 } from './coachModel';
+import type { CoachMeetingRow } from './types';
 
 // T122 (module doc #10a): a single reusable multi-session fixture event used
 // by several tests below -- three sessions on the SAME weekday (one
@@ -261,5 +263,212 @@ describe('partitionCoachMeetingRows (T122 module doc #10c)', () => {
     const { upcoming, past } = partitionCoachMeetingRows(rows);
     expect(upcoming).toEqual([]);
     expect(past.map((r) => r.eventId)).toEqual(['e1']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GAM-452 §1/§9e -- `buildSeriesCardModels`. Every UTC instant below is
+// hand-computed against a real Chicago wall-clock time (verified against
+// `Intl.DateTimeFormat` directly, not guessed) -- packet criterion 5 requires
+// a hand-built Tue/Sun row since no repo fixture has one (`coachModel.ts`'s
+// own `FIXTURE_SESSIONS` is Wed/Sat only).
+// ---------------------------------------------------------------------------
+describe('buildSeriesCardModels (GAM-452 §1, criteria 5/6/11/12)', () => {
+  const BASE_EVENT: CoachMeetingRow = {
+    eventId: 'event-a',
+    title: 'Robotics Build',
+    locationName: 'Robotics Lab',
+    teamScopeLabel: 'Ravens',
+    sessions: [],
+  };
+
+  function session(
+    overrides: Partial<CoachMeetingRow['sessions'][number]> &
+      Pick<
+        CoachMeetingRow['sessions'][number],
+        'sessionId' | 'sessionDate' | 'startsAt' | 'endsAt' | 'status'
+      >,
+  ): CoachMeetingRow['sessions'][number] {
+    return {
+      durationHours: 2,
+      expectedCt: 0,
+      attendanceSummary: null,
+      attendeeNames: [],
+      ...overrides,
+    };
+  }
+
+  const identityPalette = (eventId: string): number => eventId.length;
+
+  it('criterion 5: two-weekday series (Tue/Sun) produces chips with en dash and collapsed meridiem, first-seen order', () => {
+    const row: CoachMeetingRow = {
+      ...BASE_EVENT,
+      sessions: [
+        // Sun, Aug 23 2026, 3:30-6:30 PM Chicago.
+        session({
+          sessionId: 's-sun',
+          sessionDate: '2026-08-23',
+          startsAt: '2026-08-23T20:30:00.000Z',
+          endsAt: '2026-08-23T23:30:00.000Z',
+          status: 'scheduled',
+        }),
+        // Tue, Aug 25 2026, 6-8 PM Chicago.
+        session({
+          sessionId: 's-tue',
+          sessionDate: '2026-08-25',
+          startsAt: '2026-08-25T23:00:00.000Z',
+          endsAt: '2026-08-26T01:00:00.000Z',
+          status: 'scheduled',
+        }),
+      ],
+    };
+    const [model] = buildSeriesCardModels([row], identityPalette);
+    expect(model.scheduleChips).toEqual(['Sun 3:30–6:30 PM', 'Tue 6–8 PM']);
+  });
+
+  it('criterion 11: a 10 PM-1 AM (midnight-spanning) session yields no chip and throws nothing', () => {
+    const row: CoachMeetingRow = {
+      ...BASE_EVENT,
+      sessions: [
+        // Mon, Aug 24 2026, 10 PM-1 AM Chicago -- unrepresentable by
+        // `ScheduleRule` (format.ts:217-220); must be dropped, not thrown.
+        session({
+          sessionId: 's-spanning',
+          sessionDate: '2026-08-24',
+          startsAt: '2026-08-25T03:00:00.000Z',
+          endsAt: '2026-08-25T06:00:00.000Z',
+          status: 'scheduled',
+        }),
+      ],
+    };
+    expect(() => buildSeriesCardModels([row], identityPalette)).not.toThrow();
+    const [model] = buildSeriesCardModels([row], identityPalette);
+    expect(model.scheduleChips).toEqual([]);
+    // The "next session" line falls back to the date alone rather than
+    // fabricate a time range it cannot honestly produce.
+    expect(model.nextSessionLabel).toBe('Next: Mon, Aug 24');
+  });
+
+  it('excludes canceled sessions from schedule-chip derivation entirely', () => {
+    const row: CoachMeetingRow = {
+      ...BASE_EVENT,
+      sessions: [
+        session({
+          sessionId: 's-canceled',
+          sessionDate: '2026-08-25',
+          startsAt: '2026-08-25T23:00:00.000Z',
+          endsAt: '2026-08-26T01:00:00.000Z',
+          status: 'canceled',
+        }),
+      ],
+    };
+    const [model] = buildSeriesCardModels([row], identityPalette);
+    expect(model.scheduleChips).toEqual([]);
+  });
+
+  it('dedupes to one chip per distinct (dow, startMinutes, endMinutes), first-seen order', () => {
+    const row: CoachMeetingRow = {
+      ...BASE_EVENT,
+      sessions: [
+        session({
+          sessionId: 's-tue-1',
+          sessionDate: '2026-08-25',
+          startsAt: '2026-08-25T23:00:00.000Z',
+          endsAt: '2026-08-26T01:00:00.000Z',
+          status: 'completed',
+        }),
+        session({
+          sessionId: 's-tue-2',
+          sessionDate: '2026-09-01', // Also a Tuesday, same 6-8 PM slot.
+          startsAt: '2026-09-01T23:00:00.000Z',
+          endsAt: '2026-09-02T01:00:00.000Z',
+          status: 'scheduled',
+        }),
+        session({
+          sessionId: 's-sun',
+          sessionDate: '2026-08-23',
+          startsAt: '2026-08-23T20:30:00.000Z',
+          endsAt: '2026-08-23T23:30:00.000Z',
+          status: 'scheduled',
+        }),
+      ],
+    };
+    const [model] = buildSeriesCardModels([row], identityPalette);
+    expect(model.scheduleChips).toEqual(['Tue 6–8 PM', 'Sun 3:30–6:30 PM']);
+  });
+
+  it('criterion 6: attendancePct is a true passthrough -- never `?? 0`, real value/undefined/null all handled honestly', () => {
+    const withReal: CoachMeetingRow = { ...BASE_EVENT, eventId: 'e-real', attendancePct: 87.5 };
+    const withUndefined: CoachMeetingRow = { ...BASE_EVENT, eventId: 'e-undef' };
+    const withNull: CoachMeetingRow = { ...BASE_EVENT, eventId: 'e-null', attendancePct: null };
+    const [real, undef, nullVal] = buildSeriesCardModels(
+      [withReal, withUndefined, withNull],
+      identityPalette,
+    );
+    expect(real.attendancePct).toBe(87.5);
+    expect(undef.attendancePct).toBeNull();
+    expect(nullVal.attendancePct).toBeNull();
+  });
+
+  it("criterion 12: nextSessionLabel/sessionsCompleted/sessionsTotal/teamScopeLabel match MTG-01a's literal example shape", () => {
+    const row: CoachMeetingRow = {
+      ...BASE_EVENT,
+      teamScopeLabel: 'Ravens',
+      sessions: [
+        session({
+          sessionId: 's-completed',
+          sessionDate: '2026-07-15',
+          startsAt: '2026-07-15T23:00:00.000Z',
+          endsAt: '2026-07-16T01:00:00.000Z',
+          status: 'completed',
+        }),
+        session({
+          sessionId: 's-canceled',
+          sessionDate: '2026-07-08',
+          startsAt: '2026-07-08T23:00:00.000Z',
+          endsAt: '2026-07-09T01:00:00.000Z',
+          status: 'canceled',
+        }),
+        // Tue, Aug 25 2026, 6-8 PM Chicago -- the nearest upcoming session.
+        session({
+          sessionId: 's-scheduled',
+          sessionDate: '2026-08-25',
+          startsAt: '2026-08-25T23:00:00.000Z',
+          endsAt: '2026-08-26T01:00:00.000Z',
+          status: 'scheduled',
+        }),
+      ],
+    };
+    const [model] = buildSeriesCardModels([row], identityPalette);
+    // PRD:306-308's own literal worked example shape: "Next: Tue, Aug 26 · 6–8 PM".
+    expect(model.nextSessionLabel).toBe('Next: Tue, Aug 25 · 6–8 PM');
+    expect(model.sessionsCompleted).toBe(1);
+    // Total excludes the canceled session (completed + scheduled = 2).
+    expect(model.sessionsTotal).toBe(2);
+    expect(model.teamScopeLabel).toBe('Ravens');
+  });
+
+  it('a row with no scheduled session yields nextSessionLabel: null (the finished state)', () => {
+    const row: CoachMeetingRow = {
+      ...BASE_EVENT,
+      sessions: [
+        session({
+          sessionId: 's-completed',
+          sessionDate: '2026-07-15',
+          startsAt: '2026-07-15T23:00:00.000Z',
+          endsAt: '2026-07-16T01:00:00.000Z',
+          status: 'completed',
+        }),
+      ],
+    };
+    const [model] = buildSeriesCardModels([row], identityPalette);
+    expect(model.nextSessionLabel).toBeNull();
+  });
+
+  it('injects the palette index rather than hashing it internally (GAM-476: no second hash)', () => {
+    const row: CoachMeetingRow = { ...BASE_EVENT, eventId: 'event-xyz' };
+    const paletteIndexFor = (eventId: string): number => (eventId === 'event-xyz' ? 42 : -1);
+    const [model] = buildSeriesCardModels([row], paletteIndexFor);
+    expect(model.paletteIndex).toBe(42);
   });
 });
