@@ -28,21 +28,21 @@ did not land.
 - `01:22Z` — **PR credential deadline read, not guessed** (AGENTS.md wall 3):
   `iat 2026-08-23T01:21:09Z`, `exp 2026-08-23T02:21:09Z`. The PR must be opened
   as a draft well before `02:21Z`; `git push` survives past it.
-- `01:25Z` — **Draft PR #242 opened** at ~minute 5, ~56 minutes of credential
+- `01:23Z` — **Draft PR #242 opened** at minute 2, ~58 minutes of credential
   to spare. `docs/swarm/active/GAM-452-pr-body.md` written *before* the API
   call (pr-body skill) and validated: `OK declaration closes GAM-452`.
   <https://github.com/gamitch/volt_task_tracker_rewrite/pull/242>
-- `01:38Z` — **Packet written**: `docs/swarm/active/GAM-452-packet.md`. Four of
+- `01:26Z` — **Packet written**: `docs/swarm/active/GAM-452-packet.md`. Four of
   the issue's own claims measured false against `main` and corrected in §0
   (`listGuardianChildren` does not exist and was deliberately cut by GAM-446's
   gate; `MeetingsList.tsx` carries no `focusRequest` state; `--color-series-*`
   is unmerged; `SeriesCardModel` has no `gradedMarksCt` and must not gain one).
   §8 carries the five least-confident decisions item 19d requires.
-- `01:39Z` — **DISPATCHED `checker-premise`** on the packet (round 1 of the
+- `01:26Z` — **DISPATCHED `checker-premise`** on the packet (round 1 of the
   item-19a two-round cap), `run_in_background: false`. *If this line is the
   last one in this file, the run died holding this subagent* — the gate never
   returned a verdict and no worker was ever dispatched.
-- `01:52Z` — **`checker-premise` VERDICT: REVISE** (round 1 of 2; agent
+- `01:38Z` — **`checker-premise` VERDICT: REVISE** (round 1 of 2; agent
   `adadfe5bdb165882f`, ~170K tokens, 85 tool calls). 2 BLOCKER, 4 MAJOR,
   7 MINOR, 2 NIT. It attacked §8's least-confident list first as its charter
   requires, and the two findings that matter were **not** on that list:
@@ -68,7 +68,7 @@ did not land.
     and my packet told the worker to write a second copy of it.
   - Four of my own line citations were wrong (`types.ts:302` not `:329`, etc.).
     Item 19c, demonstrated on me.
-- `01:58Z` — **Escalated MAJOR 6 (D014) to the owner on the issue.** Verified
+- `01:39Z` — **Escalated MAJOR 6 (D014) to the owner on the issue.** Verified
   the gate's finding myself first rather than taking it on trust: the migration
   at `20260821000000_meetings_event_attendance_view.sql:162-163` says the risk
   is *"owned by the consuming ticket"*, and GAM-452 is that ticket — it is the
@@ -78,3 +78,10 @@ did not land.
   promote). Three options put to the owner; **absent a ruling this run takes
   the em-dash interim**, which is the only one that puts nothing false in front
   of a coach. The run continues on everything else — this is not a stop.
+- `01:40Z` — **Timestamp correction.** The five entries above originally
+  carried times up to 19 minutes ahead of the real clock — I was estimating
+  rather than reading `date`. They are now set from `git log`'s own commit
+  times for the commit each entry shipped in. Recording the correction rather
+  than silently overwriting it: the `pr-body` skill flags exactly this ("three
+  runs in one session wrote timestamps that disagreed with their own commit
+  times"), and I reproduced it.
