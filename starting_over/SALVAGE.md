@@ -20,30 +20,34 @@ Everything not listed here is presumed **not** carried.
 The single most valuable asset. Port the **final** state of
 `supabase/migrations/` (27 files) into **one baseline migration**:
 
-- **12 tables in the baseline**: profiles, teams, seasons, students,
+- **11 tables in the baseline**: profiles, teams, seasons, students,
   guardian_links, invites, events, event_sessions, rsvps, attendance,
-  notification_prefs, student_teams — with the rebuild's two deliberate
-  changes: drop `students.team_id` (ROS-3: junction only, and ship its
-  writer), and store recurrence rules on series (SCH-2). The other three
-  tables from the old schema (`audit_log`, `calendar_feeds`, `email_log`)
+  student_teams — with the rebuild's two deliberate changes: drop
+  `students.team_id` (ROS-3: junction only, and ship its writer), and store
+  recurrence rules on series (SCH-2). The other four tables from the old
+  schema (`audit_log`, `calendar_feeds`, `email_log`, `notification_prefs`)
   serve features v1 cuts or rulings retired (D-9), so they stay out of the
   baseline and return additively with their features (H-5) — no table ships
-  without a writer (C-4).
+  without a writer (C-4). Their companion artifacts (the feeds `self_all`
+  policies, the one-active-feed partial index, the email-dedupe key) travel
+  with them, not with the baseline.
 - **RLS**: the three security-definer helpers (`auth_role()`, `is_staff()`,
-  `my_student_ids()`), the uniform `staff_all` policy shape, `own_or_linked_read`,
-  self-scoped prefs/feeds. Decide view security once (SEC-4): every view
+  `my_student_ids()`), the uniform `staff_all` policy shape, and
+  `own_or_linked_read`. Decide view security once (SEC-4): every view
   `security_invoker` or documented owner-bypass + `revoke all from anon`.
 - **Views — final forms only**: `v_student_hours` (20260804 form:
-  outreach-only, override-wins, clamped), `v_student_participation`
+  override-wins, clamped, and **keep its `type='outreach'` clause — it
+  implements George's D-2a ruling**, not an accident), `v_student_participation`
   (20260822 form: explicit marks, unmarked excluded, NULL not 0),
   `v_team_*`, `v_season_kpis`, goal projection, leaderboard (with privacy
-  gate). Rename the lying `expected_ct` column to `marked_ct` — the rebuild
-  is the one chance. Recompute session attendance rate against the expected
-  roster (MET-6).
-- **Keepers**: the `unmarked` sentinel (20260822), one-active-season and
-  one-active-feed partial indexes, `leaderboard_privacy_enabled`, the
-  invite-acceptance trigger design (but live-verify it this time), the
-  anon-revoke discipline (20260803000001's lesson).
+  gate). Two deliberate changes: rename the lying `expected_ct` column to
+  `marked_ct` — the rebuild is the one chance — and recompute session
+  attendance rate against the expected roster (MET-6).
+- **Keepers**: the `unmarked` sentinel (20260822), the one-active-season
+  partial index, `leaderboard_privacy_enabled`, the invite-acceptance
+  trigger design (but live-verify it this time), the anon-revoke discipline
+  (20260803000001's lesson). (The one-active-feed index belongs to
+  `calendar_feeds` and returns with it.)
 - **Leave behind**: the audit trigger machinery (D-9), comment-only
   migrations, the two dueling attendance-rate conventions, process prose in
   SQL comments.
@@ -78,8 +82,16 @@ The single most valuable asset. Port the **final** state of
 - **ETL + runbook**: `scripts/migrate.ts`, `docs/migration/mapping.md`,
   `docs/migration/RUNBOOK.md`. Proven against live data on 2026-08-02
   (20 students, 4 teams, 16 events, 117 sessions, 254 RSVPs, 79 attendance
-  rows = 341.75 hours, matching the signed-off dry run). Re-run against the
-  fresh project per PRD §12 Q1; run the account-preserving teardown first.
+  rows = 341.75 hours, matching the signed-off dry run). **It must be
+  adapted before the re-run**: `scripts/migrate/transform.ts` writes
+  `students.team_id`, which the new baseline drops — it must emit a
+  `student_teams` row per resolved membership instead — and it must
+  backfill a stored recurrence rule per imported series (SCH-2's sanctioned
+  one-time derivation). Then re-prove with a dry run whose problem sections
+  all read "(none)" per RUNBOOK §3, from a **fresh export** (RUNBOOK §2 —
+  the old app is still live, so rebuild-time figures may differ from the
+  2026-08 reference numbers). The account-preserving teardown (§5) applies
+  to the old mixed-state project at decommission time, after cutover.
 - Known cleanups to fold into the re-run: any false `absent` rows T508 wrote
   before 2026-08-05, and the mixed test-data state in the current project.
 - Still owed by George: ~20 student/guardian email addresses (the T064

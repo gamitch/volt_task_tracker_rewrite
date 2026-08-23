@@ -2,8 +2,8 @@
 
 The last constitution grew to 1,223 lines and was right about almost
 everything while the app shipped broken. This one is deliberately small. It
-keeps the rules that were paid for in real defects (each cites its tuition in
-`LESSONS.md`) and drops the machinery. If a rule here stops earning its keep,
+keeps the rules that were paid for in real defects — each cites the failure
+that paid for it — and drops the machinery. If a rule here stops earning its keep,
 George deletes it.
 
 **Spirit, in George's own words:** *"This is a volunteer group, not a
@@ -66,8 +66,8 @@ sentence. (P-5)
 - **C-6 · A backlog row exists only if a user hits it or it blocks launch.**
   Review observations get fixed in the moment or dropped — not filed.
   Follow-up chains cap at one link: a follow-up of a follow-up means stop
-  and fix it now. *(Tuition: 496 issues in 21 days; 2 filed per merge; the
-  backlog never converged.)*
+  and fix it now. *(Tuition: 496 issues by the 2026-08-23 survey; two filed
+  per merge; the backlog never converged.)*
 - **C-7 · Run the check before writing the claim.** Any statement about
   schema, policies, data, or component capability that will direct work is
   verified by executing something — a query, a scratch cluster, a browser —

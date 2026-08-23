@@ -5,7 +5,7 @@ This PRD starts the project over. It replaces `VOLT_Portal_PRD.md` (v1.5),
 `VOLT_Portal_PRD_v2.md`, and `VOLT_UX_Craft_PRD_v3.md`. It keeps everything
 those documents learned — the domain rules, the owner rulings, the design
 language — and discards their scope and their process. Companion documents:
-`DECISIONS.md` (binding rulings, cited here as P-x/D-x/S-x), `LESSONS.md`
+`DECISIONS.md` (binding rulings, cited here as P-x/D-x/S-x/PR-x), `LESSONS.md`
 (why the first rewrite failed), `CONSTITUTION.md` (how the rebuild works),
 `SALVAGE.md` (what to carry over, by file path).
 
@@ -122,20 +122,24 @@ not re-derive it.
   sentinel rows are excluded. When the denominator is empty the value is
   **NULL, rendered as an em-dash, never 0%** (D-15, D-16).
 - **MET-2 · Volunteer hours** = Σ over present/late marks on **completed**
-  sessions of events with `counts_volunteer_hours = true`, of:
-  `hours_override` if set, else the check-in/out interval clamped to the
-  session window, else the scheduled session length.
-- **MET-2a · The flags are set by event type, never by name** (D-2), and only
-  an admin can override them: `meeting` defaults to participation-only,
-  `outreach` to hours-only, `competition` to neither (opt-in per SCH-1). This
-  makes the metrics purely flag-driven — one deliberate change from the
-  ported hours view, which also hard-filtered `type='outreach'` and so made
-  the competition opt-in a dead letter. Dropping that clause changes nothing
-  for existing data (no opted-in competitions exist) and makes SCH-1's
-  opt-in real. George ratifies this in §12 Q14.
+  sessions of `type='outreach'` events with `counts_volunteer_hours = true`,
+  of: `hours_override` if set, else the check-in/out interval clamped to the
+  session window, else the scheduled session length. The `type='outreach'`
+  condition is George's 2026-08-03 ruling (D-2a), not an implementation
+  detail: competition hours never enter the total regardless of any flag.
+- **MET-2a · The flags exclude, they never opt in.** Hours count by event
+  **type**, never name (D-2/D-2a). The `counts_*` flags' only role is to let
+  an admin *exclude* a specific event from its own type's metric (an
+  outreach event that shouldn't count, a meeting that shouldn't affect
+  participation) — never to opt a different type in. PRD v1's
+  competition-opt-in design (CMP-02) predates D-2a and is retired; §12 Q14
+  confirms.
 - **MET-3 · Goal** = `student.goal_hours_override ?? season.default_goal_hours`
-  (currently 90h). **Planned hours** (future `going` RSVPs × scheduled
-  duration) display separately and are never summed into confirmed (D-12).
+  (90h — the old tracker's season goal, carried by the ETL; the abandoned
+  project's active test season and its schema column default both read 100
+  and are not authoritative). **Planned hours** (future `going` RSVPs ×
+  scheduled duration) display separately and are never summed into
+  confirmed (D-12).
 - **MET-4 · Team rollups** double-count dual-membership students; personal
   totals count once (D-4). Team participation is an attendance-weighted
   aggregate, not an average of averages.
@@ -172,14 +176,18 @@ not re-derive it.
 
 ### Scheduling
 
-- **SCH-1** · Event types: `meeting | outreach | competition`, with
-  `counts_participation` / `counts_volunteer_hours` flags so competitions
-  count toward neither by default but can be opted in.
+- **SCH-1** · Event types: `meeting | outreach | competition`. Competitions
+  count toward neither metric (D-2a). The `counts_participation` /
+  `counts_volunteer_hours` flags are exclusion switches within a type per
+  MET-2a, not opt-ins across types.
 - **SCH-2** · **Recurrence is stored, not reverse-derived.** A series stores
   its rule (weekdays + start/end minutes + date range); sessions materialize
   from it; schedule chips, next-session lines, and the edit form all read the
   rule. (The old app derived chips from materialized sessions — four copies
-  of wall-time conversion and silently wrong chips.)
+  of wall-time conversion and silently wrong chips.) Migrated series get
+  their rule derived once by the ETL at import — a sanctioned one-time
+  reverse-derivation; a series with no derivable rule renders a defined
+  dates-only fallback.
 - **SCH-3** · Timezone: UTC instants in the database; `session_date` is a
   Chicago calendar date; all display America/Chicago; date-only parsing at
   noon UTC to dodge DST (S-7). DST-window unit tests are required, and the
@@ -232,15 +240,22 @@ persona test, accepted by George **on the deployed app** before the next
 starts. No parallel waves. Acceptance criteria are the persona tests in §11.
 
 - **M0 · Deployed skeleton (week 1).** Fresh Supabase project. One squashed
-  baseline migration: the 12-table baseline schema, RLS helpers + policies,
+  baseline migration: the 11-table baseline schema, RLS helpers + policies,
   and the final metric views, ported per `SALVAGE.md` §2. Generated DB
   types. Auth + role guards + route error boundary. Deployed to the real
   domain with CI (typecheck, build, lint, unit, **and the persona e2e
-  suite, green on a clean checkout**). Real data seeded by the proven ETL.
-  The baseline is the sanctioned C-4 exception: the ETL is its writer, and
-  no UI ships against a table before its writer's milestone lands.
+  suite — at M0 that's sign-in, zero-data, and role-guard specs — green on
+  a clean checkout**). Real data seeded by the **adapted** ETL: the proven
+  script must first be updated for the new baseline (it wrote
+  `students.team_id`, which no longer exists — it now emits `student_teams`
+  rows per membership, and backfills a stored recurrence rule per imported
+  series), then re-proven with a clean dry run per RUNBOOK §3. The baseline
+  is the sanctioned C-4 exception for the tables the ETL actually writes;
+  no UI ships against any table before its writer's milestone lands.
   *Accepted when: George signs in as admin on the production URL and sees
-  the real roster (20 students, 4 teams, 341.75 hours intact).*
+  the real roster, matching the fresh export's signed-off dry-run report
+  exactly (20 students / 4 teams / 341.75 hours are the 2026-08 reference
+  figures; a fresh export from the still-live old app may differ).*
 - **M1 · Run a meeting.** Roster CRUD (with membership writer), season
   settings, meeting series creation from a stored recurrence rule,
   roll-call console with tap-to-cycle marking writing real rows, end-meeting
@@ -291,7 +306,7 @@ Carried from the audited route map, minus what §4 cuts:
 | `/calendar` | all | Combined view, real data only (M5) |
 | `/roster` | staff | Students, teams, memberships, invites |
 | `/reports` | staff | Participation + hours tables, CSV |
-| `/settings` | per-role | Profile, notification prefs; admin: season settings |
+| `/settings` | per-role | Profile; admin: season settings (notification prefs return with email post-launch) |
 
 Meetings UX: the series-card model is settled (S-3) and its design contract
 (`.claude/skills/meetings-design/SKILL.md`) carries forward: schedule-chip
@@ -313,6 +328,9 @@ the questions a coach actually asks weekly, and nothing else until asked:
    hours)
 5. How are hours spread across teams? (hours-by-team)
 6. Participation health (team participation %, students below 70%)
+7. Who's leading? (the leaderboard, embedded on the dashboard per your
+   earlier ruling — proportional bars + % of goal, S-5, anonymization per
+   P-3)
 
 Every figure comes from a SQL view (PR-1), rendered once — the old app
 computed the goal figure in two different layers on one screen. KPI strip:
@@ -371,7 +389,7 @@ Each of these is a defect class from the first rewrite turned into a rule:
 - **NFR-9 · Performance:** initial route chunk ≤ 300KB gzip; dashboard
   interactive < 2s on a phone.
 - **NFR-10 · Durable rate limiting** for code entry (a small table, not
-  per-isolate memory) — 5/min per session.
+  per-isolate memory) — 5/min per user (MTG-06).
 - **NFR-11 · Testing pyramid inverted from last time:** persona e2e flows
   (real Postgres, real migrations, real browser) are the primary acceptance
   layer and run in CI; unit tests cover pure domain logic (metrics,
@@ -390,7 +408,12 @@ design language carry either way.
 
 The four persona smoke tests survived every churn of the old project and are
 the rebuild's release gate, run against the **deployed** app in both color
-modes, verified by reading rows back from the database:
+modes, verified by reading rows back from the database. The suite grows one
+flow per milestone (M0 ships sign-in + zero-data + role-guard specs only),
+the ported harness config gains mobile-viewport and dark-mode projects
+(today it defines a single desktop-light project), and the
+both-color-modes-against-production run is the launch gate — distinct from
+the CI harness run, which uses local stand-ins for auth and Edge Functions:
 
 - **P-COACH:** signs in on a phone, starts roll-call for tonight's meeting
   in ≤ 2 taps from the dashboard, marks three students, ends the meeting;
@@ -415,13 +438,17 @@ Sheets with ISO dates.
 
 ## 12. Decisions needed from George
 
-Proposed defaults so work can start; each needs a yes/no:
+Answers unblock the build. Thirteen are yes/nos with proposed defaults;
+Q2 is a genuine choice with no default:
 
-1. **Data**: fresh Supabase project, re-run the proven ETL, then teardown
-   the old project's mixed state. *(Default: yes — RUNBOOK.md §4–§5 are the
-   playbook, teardown first per §5's account-preserving SQL; §8 records the
-   proven first run. Note §5's durable manifest-teardown branch is unmerged
-   and unverified — check before relying on it.)*
+1. **Data**: fresh Supabase project, seeded by re-running the (adapted —
+   see M0) ETL from a fresh export of the still-live old app; the current
+   half-built project is decommissioned after cutover, not before.
+   *(Default: yes — the fresh-project path is RUNBOOK.md §2 fresh export →
+   §3 dry run → §4 real run; §5's account-preserving teardown applies only
+   to the old mixed-state project at decommission time, and its durable
+   manifest-teardown branch is unmerged and unverified — check before
+   relying on it. §8 records the proven first run.)*
 2. **Design system**: keep Astryx (its real constraints are now documented)
    or switch to a mainstream system, keeping the volt tokens. *(Default:
    George's call — the friction was real but so is the sunk fluency; no
@@ -430,7 +457,8 @@ Proposed defaults so work can start; each needs a yes/no:
    invites are real. Students get accounts; FLL kids do not (counts only).
    *(Default: yes.)*
 4. **Confirmed hours** are attendance-backed only; RSVPs never accrue hours.
-   *(Default: yes — GAM-431's finding.)*
+   *(Default: yes — GAM-431's finding, and the natural completion of D-12's
+   planned-vs-confirmed separation.)*
 5. **Attendance %** computes against the expected roster with a pending
    state until fully marked (MET-6). *(Default: yes.)*
 6. **QR/kiosk** waits until M4, after the coach loop works. *(Default:
@@ -441,8 +469,9 @@ Proposed defaults so work can start; each needs a yes/no:
    and self check-off ship inside M2 (the outreach loop needs them); parent
    home, child switcher, and calendar land in M5. Multi-child parents get a
    child switcher. *(Default: yes.)*
-9. **KPI strip**: dashboard-only, not persistent across pages. *(Default:
-   yes.)*
+9. **KPI strip**: dashboard-only, not persistent across pages. This narrows
+   S-4's "persistent KPI strip" element — a yes here amends that ruling.
+   *(Default: yes — it dominated small viewports last time.)*
 10. **Dashboard widgets**: the §8 six-question shortlist and nothing more.
     *(Default: yes; George names any widget he actually misses.)*
 11. **Series palette hues**: delegate the eight hues to the design system's
@@ -453,11 +482,12 @@ Proposed defaults so work can start; each needs a yes/no:
     label; carry nothing forward except what this PRD already encodes.
     *(Default: yes — the ~30 domain-rule findings are already folded into
     §5/§10.)*
-14. **Flag-driven metrics** (MET-2a): the hours view keys on
-    `counts_volunteer_hours` alone, dropping the ported SQL's extra
-    `type='outreach'` filter, so your CMP opt-in design actually works;
-    type still sets the defaults per D-2 and meetings still never count.
-    *(Default: yes.)*
+14. **Competition hours stay out, permanently** (MET-2a): your 2026-08-03
+    ruling (D-2a) — competition hours never count toward the volunteer
+    goal, even flagged — stands, and PRD v1's competition-opt-in design
+    (CMP-02) is formally retired rather than carried as a dead letter.
+    *(Default: yes — reaffirms your recorded ruling; answer "no" only if
+    you want opt-in competitions back, which reverses D-2a.)*
 
 ## 13. Changelog
 

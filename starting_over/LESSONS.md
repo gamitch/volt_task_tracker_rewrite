@@ -34,9 +34,9 @@ doc called this out in July as "THE SINGLE MOST IMPORTANT ENGINEERING FACT"
   Supabase write happens here."
 - All three role dashboards and the calendar rendered fabricated students and
   events on production routes for months (T155/T176/T181/T324).
-- Six fully built, fully tested components were **never mounted anywhere** —
-  including StudentMeetingView with a nearly 1,000-line test file, 44
-  passing tests, and zero production render sites.
+- Six fully built components — five of them fully tested — were **never
+  mounted anywhere**, including StudentMeetingView with a nearly 1,000-line
+  test file, 44 passing tests, and zero production render sites.
 
 An external evidence-based UX audit (2026-08-01) returned ship-recommendation
 **hold**, summarized in one line: *"The core attendance loop has no working
@@ -88,13 +88,22 @@ conflicts — and in doing so guaranteed the failure between the tiles:
 ### 4. The process outran the product and never converged
 
 - **The backlog grew faster than it closed, to the end**: 496 Linear issues
-  in 21 days; final week 98 created vs 52 completed; 131 open at the end,
-  73% never triaged by the owner. Roughly a third of the open backlog is
-  about the multi-agent machinery itself, zero product value.
+  at the 2026-08-23 survey (301 of them bulk-imported on 08-09 from the
+  earlier file ledger); final week 98 created vs 52 completed; one day saw
+  the backlog grow 27→37 while five tasks merged — two new rows per merge;
+  131 open at the end, 73% never triaged by the owner. Roughly a third of
+  the open backlog is about the multi-agent machinery itself, zero product
+  value.
 - **Cost per change**: one four-file task (GAM-304) took 6 dispatch runs,
   ~12 hours wall clock, ~$90 notional — ~$36 of it delivering nothing. One
   assembly ticket (GAM-452) burned ~1.1M subagent tokens and still closed
-  Partial.
+  Partial. The full packet → premise-gate → worker → checker chain charged
+  the same price for two-line fixes until George himself asked for "a
+  faster path."
+- **Multi-machine parallelism cost more than it bought**: two different
+  tasks were both numbered T196, append-only shared docs manufactured merge
+  conflicts between machines, and every record-keeping duty multiplied by
+  the number of machines running.
 - **Documentation became the product**: 19MB across ~680 files in
   `docs/swarm/` — a 725KB task ledger, a 915KB verification log, a 1,223-line
   constitution (~350 lines just to classify a task's process tier), and a
@@ -132,8 +141,11 @@ undeployed app is unbounded work; deployment pressure is what forces the
 6. **The proven ETL.** The real migration ran against the live project on
    2026-08-02: 20 students, 4 teams, 16 events, 117 sessions, 341.75 hours,
    matching the signed-off dry run exactly.
-7. **Durable run records in git.** Committing state as work proceeds made
-   failures cheap to resume instead of catastrophic.
+7. **Durable state in git.** Committing and pushing the work itself early
+   and often — plus PR bodies and tracker comments — made failures cheap to
+   resume instead of catastrophic. (The practice carries forward; the
+   dispatch-era run-log *files* under `docs/swarm/active/` are machinery the
+   rebuild drops, per the constitution's no-process-logs rule.)
 8. **A lean dependency list.** Nine runtime deps; the stack itself (Vite,
    React, TypeScript, Supabase) builds fast and was never the problem.
 

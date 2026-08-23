@@ -7,7 +7,8 @@ reach — several reversed shipped work — and they are **binding for the
 rebuild unless George explicitly re-opens them**. Where a ruling was quoted
 verbatim in the record, the quote is preserved.
 
-Format: **ID — ruling** (date · original record).
+Format: **ID — ruling** (date where the source records one · original
+record).
 
 ## Identity & privacy
 
@@ -45,6 +46,14 @@ Format: **ID — ruling** (date · original record).
   "P3 FLL Team Meetings" despite the word Meetings, because students run
   those as community service. Retyping events by title was proposed once and
   was wrong. (2026-08-02 · T322 ruling, AUDIT-TRIAGE.md)
+- **D-2a — Volunteer hours = `type='outreach'` ONLY.** Competition hours
+  never enter the volunteer total, *regardless of how the
+  `counts_volunteer_hours` flag is ever set* — "the team competing for
+  itself is not service performed for the community." The hours view's
+  `type='outreach'` filter implements this ruling and is deliberate; the
+  earlier PRD-v1 design that let an admin opt a competition into hours
+  predates it and is retired. (2026-08-03 · auto-mode-decisions.md:1872-1911;
+  migration 20260804000000 header)
 - **D-3 — One combined season for all teams.** Verbatim: "One season for all
   and reporting will handle the team metrics." Exactly one active season,
   enforced by partial unique index. (2026-07-20 · PRD v2 D-2)
