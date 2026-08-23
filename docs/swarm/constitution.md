@@ -9,11 +9,11 @@ A private, role-aware portal for VOLT (FRC Team 11195) that separates meeting at
 - The app must build successfully.
 - Existing tests must pass unless the boss explicitly approves a test update.
 - No worker may mark its own work complete.
-- Every task must be checked by a separate checker agent.
-- Every checker must inspect the actual artifact, not just the worker's summary.
+- Every task receives the verification required by its tier. FAST is verified by the orchestrator through deterministic evidence—named mutation replay and the repository gates. STANDARD is verified by the orchestrator or its required checker, as item 26 assigns. HEAVY receives independent premise and acceptance verdicts.
+- Every checker must inspect the actual committed artifact and execute the required evidence, not merely read the packet or accept the worker’s summary.
 - Protected source text must remain verbatim unless explicitly approved.
 - Accessibility, security, data integrity, and usability outrank cosmetic preferences.
-- No agent is above verification, including the boss.
+- No agent is above verification, including the boss and orchestrator.
 
 ## Authority Boundaries
 
@@ -168,16 +168,24 @@ If a worker believes the standard is wrong, impossible, contradictory, or harmfu
     The override goes on the dispatch call, not in the agent definition —
     there is one worker prompt, not two. Record the tier used in the ledger row.
 
-19. **Planning artifacts are checked before dispatch.** No PRD, packet set, or
-    task packet reaches a worker until `checker-premise` has returned
-    **DISPATCH** on it. The planning layer is otherwise unverified: every other
-    artifact in this process is checked by someone who did not write it, and
-    plans were the sole exception. A REVISE verdict is not advisory — the
-    author revises and re-submits. Record the verdict alongside the plan.
-    Rationale: a real PRD in this project reached the approval gate carrying
-    two false defect claims, one physically impossible prescription, one "fix"
-    that would have stripped accessible names off six screens, and a silent
-    reversal of a passed task's green test.
+19. **Planning artifacts receive independent premise review before dispatch
+    when their tier or scope requires it.** Every HEAVY task packet must receive
+    a `checker-premise` verdict of **DISPATCH** before reaching a worker. A FAST
+    task has no worker packet and therefore no premise dispatch. A STANDARD task
+    uses an orchestrator-authored, repository-verified compact packet and does
+    not require a separate premise checker unless the orchestrator escalates it
+    or measurement reveals a HEAVY trigger.
+
+    A PRD or multi-task packet set still requires `DISPATCH` before any worker
+    packet derived from it may dispatch. Tiering an individual derived packet
+    as STANDARD does not bypass errors inherited from an unchecked parent plan.
+
+    A required `REVISE` verdict is not advisory: the author revises and
+    resubmits. Record every required verdict alongside the planning artifact.
+    The independent premise layer exists because a real PRD in this project
+    reached approval carrying two false defect claims, one physically impossible
+    prescription, one proposed fix that would have stripped accessible names
+    from six screens, and a silent reversal of passed work.
 
     **19a. The gate is capped at two rounds.** A third REVISE escalates to the
     human owner instead of looping. Measured on wave 5's first packets: round 1
@@ -186,11 +194,14 @@ If a worker believes the standard is wrong, impossible, contradictory, or harmfu
     is break-even-to-positive and a third is net negative. A plan still failing
     after two rounds has something wrong with the plan, not the wording.
 
-    **19b. Scope the gate by risk.** Full premise check for novel patterns and
-    for anything touching migrations, RLS, or metric SQL. Light check or skip
-    for packets that roll out an already-verified pattern to a new surface
-    (e.g. applying a proven table migration to a second list page). The gate
-    exists to catch unverified premises, not to re-audit settled ones.
+    **19b. Scope the required premise review by risk, without author self-waiver.**
+    Use a full premise review for novel patterns and anything touching migrations,
+    RLS, security-definer helpers, authentication or permissions, metric SQL,
+    destructive writes, authoritative persisted-data reporting, active frozen
+    contracts, or other unconditional HEAVY triggers in item 26. A light review may
+    be used when the task rolls out a previously verified pattern through an
+    already-settled seam. Every HEAVY packet still requires an independent
+    `DISPATCH` verdict; “light” changes the review’s scope, not whether it occurs.
 
     **19c. Verify your own citations before submitting.** Roughly half of
     round 1's findings were the author's own unverified line numbers and
@@ -218,23 +229,47 @@ If a worker believes the standard is wrong, impossible, contradictory, or harmfu
 
 ## Definition of Ready (dispatch gate)
 
-A plan may be dispatched to workers only when:
+A worker packet may be dispatched only when:
 
-1. `checker-premise` returned DISPATCH (item 19).
-2. Every factual claim it relies on was verified against the real repository.
-3. Every prescription is feasible, or its escalation is named and pre-approved.
-4. Every acceptance criterion is measurable with fixtures that exist today.
-5. Any reversal of previously-passed work is explicit and authorized.
+1. the task’s FAST, STANDARD, or HEAVY tier has been measured, stated, and
+   defended;
+2. every required premise review has returned `DISPATCH`;
+3. any parent PRD or multi-task packet set has returned `DISPATCH` before its
+   derived worker packets dispatch;
+4. every factual claim and current line citation relied upon by the packet has
+   been verified against the real repository;
+5. every prescription is feasible, or its escalation is named and pre-approved;
+6. every acceptance criterion is measurable with fixtures and environments
+   that exist today;
+7. every worker has explicit allowed files and a non-overlapping worktree;
+8. any parallel-worker split satisfies item 26’s tier-specific split rules; and
+9. any reversal of previously passed work is explicit and authorized.
+
+FAST has no worker dispatch and therefore does not pass through this
+worker-packet gate. Its evidence obligations are defined directly by item 26.
 
 ## Definition of Done
 
 A task is done only when:
 
-1. The worker produces the requested change.
-2. The checker validates the actual artifact.
-3. The checker records evidence.
-4. The foreman updates the task ledger.
-5. The boss or foreman accepts the checked result.
+1. the orchestrator or dispatched worker has produced the requested change;
+2. the verification actor required by item 26 has inspected the actual committed
+   artifact;
+3. the required tests, mutations, repository gates, and specialized checks have
+   been executed with their exit codes or authorized `SKIPPED` results recorded;
+4. the final diff, allowed-file boundary, and integration records have been
+   checked;
+5. every deliberate deferral has a linked follow-up issue under item 20;
+6. the PR contains the required Linear declaration and is ready for human
+   review;
+7. the issue has been moved to `In Review`, never self-certified as `Done`; and
+8. the orchestrator has accepted only evidence produced by the tier’s designated
+   verifier.
+
+For FAST, the designated verifier is the orchestrator using deterministic
+evidence. For STANDARD, it is the orchestrator unless item 26 requires a
+separate checker. For HEAVY, it is the independent acceptance checker. A worker
+never verifies or accepts the worker’s own result.
 
 ## Evidence Requirements
 
@@ -405,54 +440,366 @@ After the third failure, the task must be escalated to boss-arbiter.
     (item 18's four triggers). T157 was bumped sonnet→opus on "minors' family
     linkage" reasoning that this item retires.
 
-26. **Three process tiers, triggered by risk — not by topic, ticket size, or
-    habit.** The full chain (packet → `checker-premise` → worker →
-    `checker-reviewer`) is the *heavy* tier and must not be the default. Choose
-    by asking one question: **can a mistake here corrupt data, or lie to a user
-    about their own data?** Authorized by the human owner 2026-08-02, verbatim:
-    *"For small fixes like items T321 and T323 is there a faster path we can
-    take to get those done? the Boss->Checker->Foreman->Worker->Checker path
-    seems to eat up alot of time for a few line bug fix"*.
+26. **Three process tiers, triggered by measured risk—not by topic, ticket size,
+    file count, or habit.** The full chain of packet, independent premise
+    review, worker, and independent acceptance review is the HEAVY tier. It must
+    be used when its triggers apply, but it must not become the default for work
+    whose risk does not justify it.
 
-    **FAST — the orchestrator implements directly. No packet, no worker, no
-    checker.** Permitted only when **all** hold: no write path or destructive
-    operation; no schema, RLS, migration, or auth/role logic; no change to a
-    signature another module imports; roughly ≤20 lines of production change;
-    and a named mutation exists that turns a test red. **Verification is not
-    reduced** — the mutation is run and its real red output reported, all six
-    gates are run, and the result goes through a PR. What is removed is
-    *coordination*, not evidence.
+    Begin with this question:
 
-    **STANDARD — worker implements, orchestrator replays the mutation. No
-    separate checker round.** Single module, may add a test seam, still no
-    write path. This is what T302 (one test) and T303 (one noun) received;
-    both passed first time.
+    **Can a mistake here corrupt persisted data, or materially misrepresent a
+    user’s own persisted records?**
 
-    **HEAVY — packet + premise gate + worker + checker.** Required when the
-    change touches a **write path or destructive operation**, RLS/auth/role
-    logic, a migration or metric-view SQL, or an export another session builds
-    against. **This tier has earned its cost and must not be diluted:** on T305
-    the gate *built* the prescription and captured the real upsert payload,
-    proving the proposed fix would null a student's recorded hours and method;
-    on T189 it proved the proposed detector relied on a view that inner-joins on
-    an active season, so a lapsed season would have told **every** student their
-    account was deactivated. Both were data-correctness defects invisible to
-    reading the code.
+    The unconditional HEAVY triggers below decide that question for the named
+    classes. For changes not covered by those triggers, measure the actual seam,
+    affected records, consumers, and deterministic evidence before selecting
+    FAST or STANDARD.
 
-    **A gate that only reads is worth much less than one that runs.** Every
-    finding that changed an outcome this session came from an agent that
-    executed the prescription in its own worktree (item 23), not from one that
-    reviewed it.
+    A read-only or reversible change is not HEAVY merely because it is
+    user-visible, role-specific, accessible, responsive, spread across several
+    components, affects minors, or changes an internal TypeScript signature.
+    Those properties may require evidence and a checker; they do not by
+    themselves select the tier. Tier and model strength remain separate
+    decisions under item 18.
 
-    **Fast-tier working rule, learned the hard way: commit before mutating.**
-    T323's mutation was reverted with `git checkout --`, which also reverted the
-    uncommitted fix; only the full suite revealed it. Commit, mutate, revert,
-    re-verify.
+    This item preserves the owner’s original authorization for a faster path,
+    quoted verbatim:
 
-    **Choosing the tier is a judgement the orchestrator must state and defend in
-    the PR**, so a wrong call is visible and correctable rather than silent. If
-    two tiers are arguable, take the heavier one — but "it sounds important" is
-    not a trigger, and neither is the number of files touched.
+    *"For small fixes like items T321 and T323 is there a faster path we can take
+    to get those done? the Boss->Checker->Foreman->Worker->Checker path seems to
+    eat up alot of time for a few line bug fix"*
+
+    The expanded tier definitions, parallel-execution rules, and verification
+    budgets in this revision require fresh authorization by the human owner.
+    **Authorization date: 2026-08-23.**
+
+    **Tier-selection order**
+
+    1. **Measure before classifying.** Inspect the current repository and identify
+       the actual behavior, affected data, write seam, consumers, test evidence, and
+       active sibling-task dependencies. Historical labels, ticket estimates, prior
+       line references, and the apparent size of the requested edit do not
+       substitute for current measurement.
+
+    2. **Apply the HEAVY triggers first.** If any unconditional HEAVY trigger
+       applies, the task is HEAVY. An established seam, a small diff, or an existing
+       deterministic test does not lower an unconditional trigger.
+
+    3. **FAST is available, not mandatory.** A task may use FAST only when the
+       orchestrator will implement it directly and every FAST condition holds. Once
+       implementation is delegated to a worker, the task is at least STANDARD.
+
+    4. **STANDARD is the default bounded tier.** Work that is not FAST and does not
+       meet a HEAVY trigger is STANDARD.
+
+    5. **Take the heavier tier when two tiers remain reasonably arguable after
+       measurement.** “It sounds important,” ticket size, and file count are not
+       reasons to raise a tier, but unresolved risk is. Record and defend the
+       decision in the claim comment and PR.
+
+    **FAST — direct implementation with deterministic evidence**
+
+    The orchestrator implements and verifies FAST work directly. FAST has no
+    worker, no worker packet, no premise checker, and no separate acceptance
+    checker.
+
+    FAST is permitted only when **all** of the following hold:
+
+    - no unconditional HEAVY trigger applies;
+    - the change contains no production write path or destructive operation;
+    - it does not change schema, migrations, RLS, security-definer functions,
+      authentication, sessions, role resolution, or permissions;
+    - it does not change a signature or contract imported by another module;
+    - the production change is approximately twenty lines or fewer and remains
+      locally bounded;
+    - the expected behavior can be verified deterministically;
+    - a named mutation can be made that causes the relevant check to fail for the
+      expected reason; and
+    - the orchestrator can inspect the complete diff and all affected consumers
+      without delegating implementation.
+
+    FAST removes coordination, not evidence. The orchestrator must:
+
+    - commit the candidate fix before mutation;
+    - create a disposable worktree for the mutation;
+    - mutate only inside that disposable worktree;
+    - capture the real failing result and exit code;
+    - restore the committed candidate and capture the corresponding green result;
+    - run all six repository gates, recording an exit code or an authorized
+      `SKIPPED` result for each;
+    - inspect the final diff and forbidden-file boundary; and
+    - deliver the result through the normal PR and Linear integration path.
+
+    FAST verification may use test-runner concurrency or isolated process-level
+    lanes when that reduces wall-clock time. For a genuinely small task, sequential
+    execution is acceptable when process setup would cost more than it saves.
+
+    T323 is the genuine historical FAST calibration point. T321 appeared in the
+    owner’s original request for a faster path but was not itself a few-line FAST
+    task: it exceeded the size boundary, added exported symbols, and received
+    STANDARD treatment.
+
+    **STANDARD — compact packet, bounded implementation, proportionate verification**
+
+    For STANDARD work, the orchestrator writes a compact, repository-verified
+    packet and a worker implements from that packet.
+
+    The packet must identify:
+
+    - the measured defect or requested outcome;
+    - allowed and forbidden files;
+    - relevant existing contracts and consumers;
+    - measurable acceptance criteria;
+    - the named deterministic tests and mutation;
+    - the required repository gates;
+    - known risks and escalation conditions; and
+    - verification ownership.
+
+    A separate premise checker is not required for an ordinary STANDARD task. The
+    packet author remains responsible for verifying every operative claim and
+    citation before dispatch. The orchestrator may request a premise review when
+    uncertainty warrants it, but may not use STANDARD to avoid an applicable HEAVY
+    trigger.
+
+    STANDARD may include a **bounded, reversible write** only when all of the
+    following are demonstrated before dispatch:
+
+    - it uses an established, already-reviewed write seam;
+    - it targets one preidentified record or one tightly bounded entity set;
+    - it is idempotent or has a deterministic cleanup or rollback;
+    - it cannot overwrite, clear, or replace unrelated persisted fields;
+    - the test captures the complete relevant row before and after the write and
+      proves that only the intended fields changed; and
+    - its pre-dispatch verification runs against an isolated disposable database or
+      fixture environment.
+
+    If any of those conditions cannot be demonstrated, or if the write can
+    overwrite or null another user’s existing persisted values, the task is HEAVY.
+
+    One worker is the STANDARD default. The orchestrator may dispatch **at most two
+    workers** when their implementation packets are genuinely disjoint. A
+    two-worker split must declare:
+
+    - non-overlapping allowed files;
+    - separate acceptance criteria;
+    - separate commits;
+    - the integration order;
+    - any shared contract and its single owner; and
+    - how each result can be verified independently before integration.
+
+    Two workers may not edit the same worktree or overlapping files. Owner
+    authorization does not turn a three-worker split into STANDARD; a proposed
+    three-worker implementation must satisfy the HEAVY split rules.
+
+    A separate acceptance checker is required at STANDARD when the result depends
+    on specialized independent judgment, including:
+
+    - role- or tenant-sensitive presentation that does not itself change
+      authorization logic;
+    - user-data reporting whose underlying source-of-truth contract is already
+      settled but whose mapping or presentation could still mislead;
+    - a core keyboard or accessibility path;
+    - a cross-surface mapping or shared contract;
+    - a frozen contract with no active sibling task still building against it; or
+    - evidence whose interpretation is materially less deterministic than its
+      execution.
+
+    Authentication, permission, or role-resolution logic itself remains HEAVY. A
+    change capable of materially falsifying a user’s own persisted records remains
+    HEAVY.
+
+    Final verification has one owner:
+
+    - when no separate checker is required, the orchestrator inspects the committed
+      implementation, replays the mutation, and runs the final repository gates;
+    - when a checker is required, that checker performs the final mutation replay
+      and repository gates, while the orchestrator integrates the checked result
+      without duplicating the complete verification run.
+
+    STANDARD verification may use process-level parallelism. Static checks,
+    deterministic tests, and isolated integration or browser checks may run
+    concurrently against the same committed SHA when their resources do not
+    collide.
+
+    One bounded correction round may return to the same worker and, when present,
+    the same checker. A replacement worker, a second correction round, arbitration,
+    an additional checker, or an additional high-capability model requires owner
+    authorization.
+
+    Historical calibration:
+
+    - T302 and T303 were STANDARD because their implementation was delegated. Both
+      would have been FAST-eligible if the orchestrator had implemented them
+      directly and every FAST evidence condition had been met.
+    - GAM-451 is STANDARD only once no active sibling task is building against the
+      contracts it changes. As GAM-451 actually ran on 2026-08-21, active sibling
+      work was coding against GAM-444’s frozen forms, so the frozen-contract trigger
+      correctly held it at HEAVY.
+    - Under this revised process, a future GAM-451-sized task that has no active
+      frozen-contract dependency would ordinarily receive one compact packet, one
+      worker, and one integrated checker where its user-data and accessibility
+      surfaces require one. Verification would use process-level lanes before any
+      additional checker was considered.
+
+    **HEAVY — independently challenge the premise and the result**
+
+    A task is unconditionally HEAVY when it does any of the following:
+
+    - creates or modifies a database migration;
+    - creates or modifies RLS, a security-definer helper, or another database
+      authorization boundary;
+    - changes authentication, session handling, role resolution, or permission
+      logic;
+    - creates or modifies metric SQL or another authoritative persisted-data
+      calculation;
+    - introduces or changes a destructive, bulk, or non-idempotent write;
+    - changes a write that can overwrite, clear, or null another user’s previously
+      persisted fields, even when the write uses an existing seam;
+    - changes the logic that derives, reconciles, or denies the existence, status,
+      or history of a user's own persisted records; presenting values through an
+      already-settled source-of-truth contract is not this trigger — it routes to
+      STANDARD with its required checker;
+    - changes a contract frozen for an active sibling task or a contract against
+      which another active task is currently implementing;
+    - changes an external protocol, generated contract, or contract consumed
+      outside the repository; or
+    - introduces a novel architectural pattern whose effects cannot yet be bounded
+      through existing seams and deterministic evidence.
+
+    These triggers are unconditional. The packet author may not waive a HEAVY
+    trigger by declaring the seam established, the edit small, the test
+    comprehensive, or the risk acceptable.
+
+    Every HEAVY task receives:
+
+    1. an orchestrator-authored implementation packet;
+    2. an independent `checker-premise` verdict of `DISPATCH`;
+    3. implementation by one or more workers;
+    4. independent verification of the committed result; and
+    5. integration by the orchestrator only after the required evidence passes.
+
+    The packet must satisfy item 19, including its numbered **Least confident
+    decisions** section. The premise checker attacks those decisions first.
+
+    Every HEAVY packet receives an independent premise review. Item 19b decides
+    whether that review is full or light, but a HEAVY packet may not skip the
+    independent verdict. The packet author cannot certify that the author’s own
+    claims are sufficiently measured to bypass the premise checker.
+
+    One worker is the HEAVY default. The orchestrator may use up to **three parallel
+    workers** only when the premise checker has returned `DISPATCH` on an explicit
+    split showing:
+
+    - disjoint allowed files and worktrees;
+    - independently testable outputs;
+    - separate commits;
+    - an unambiguous integration order;
+    - one owner for every shared contract;
+    - no circular dependency between packets; and
+    - a mutation and acceptance boundary for each packet.
+
+    At most one worker may own the dangerous core: the migration, authorization
+    boundary, destructive write, authoritative metric, persisted-data mapping, or
+    frozen shared contract that caused the HEAVY classification. The other workers
+    may own disjoint adapters, tests, UI, documentation, or other independently
+    integrable surfaces.
+
+    HEAVY uses **one independent acceptance checker by default**. That checker may
+    run three isolated verification lanes against the same committed SHA:
+
+    1. static analysis and build gates;
+    2. deterministic tests and mutation replays; and
+    3. integration, browser, accessibility, or content checks required by the
+       packet.
+
+    The lanes are process-level parallelism, not three agents independently
+    rereading the same work. Each lane must preserve its real exit code and use
+    isolated resources where applicable, including separate worktrees for source
+    mutations, separate databases or schemas, unique ports, and distinct browser or
+    test output directories. The checker aggregates the lane results into one
+    verdict.
+
+    A second specialized checker always requires explicit owner authorization.
+    This applies even when the proposed specialist is accessibility-, content-,
+    security-, or test-focused. The owner’s authorization must identify the
+    unresolved question the additional checker will answer. Merely wanting more
+    confidence is not sufficient justification for repeating the full review.
+
+    One bounded correction round may return to the same worker and the same checker
+    without another owner decision. More correction rounds, a replacement worker,
+    arbitration, a second checker, or model escalation beyond the tier required by
+    item 18 requires owner authorization.
+
+    The orchestrator does not repeat a checker’s complete final verification. There
+    should be one deliberate run for each evidence class. CI may repeat those
+    checks after push because CI is the repository’s independent integration
+    boundary, not another agent verification round.
+
+    Historical calibration:
+
+    - T305 remains HEAVY because its write could set `hours_override`,
+      `check_in_at`, and `check_out_at` to null and overwrite `method` with
+      `'coach'`, destroying or replacing a student’s existing attendance values.
+      The premise gate’s measured payload exposed the defect.
+    - T189 remains HEAVY because the proposed behavior could show real attendance
+      dots beside “no completed meetings recorded yet this season,” producing
+      contradictory claims about the student’s own records. This is a deliberately
+      conservative calibration for that class.
+    - GAM-451, as run on 2026-08-21, remains HEAVY because it changed a contract
+      frozen for active sibling implementation. Once no sibling task still builds
+      against that contract, the same bounded work would ordinarily be STANDARD.
+
+    **Verification concurrency for every tier**
+
+    Use the test runner’s own safe concurrency before creating additional
+    processes.
+
+    When separate process lanes are useful:
+
+    - run them against the same committed SHA;
+    - preserve each process’s real exit code;
+    - isolate mutable resources;
+    - never let two source mutations share a worktree;
+    - never let database tests share a disposable database when their writes can
+      collide;
+    - assign unique ports and output directories to browser or integration lanes;
+      and
+    - aggregate every lane, including failures and authorized skips, into the final
+      evidence record.
+
+    Process-level parallelism primarily reduces wall-clock time. It does not promise
+    reduced model usage. Agent-level parallelism is reserved for disjoint
+    implementation packets whose outputs can be integrated independently.
+
+    **Principles retained**
+
+    **A check that executes is stronger than one that only reads.** Cognitive
+    review is useful for deciding what to run and where to attack; it does not
+    substitute for executing the prescription, mutation, or acceptance path. Every
+    checker inspects the artifact and runs the evidence required by the packet.
+
+    **Commit before mutating.** Every mutation begins from a committed candidate
+    and runs in a disposable worktree under item 23. A restoration command is not
+    evidence that an uncommitted fix survived.
+
+    **Verification belongs to the tier, not the agent’s confidence.** FAST receives
+    deterministic orchestrator evidence, STANDARD receives bounded independent
+    verification appropriate to its risks, and HEAVY independently challenges both
+    the premise and the completed implementation.
+
+    **Self-test calibration summary**
+
+    | Work class | Result under this item |
+    | --- | --- |
+    | T323-class local fix, implemented directly with deterministic mutation evidence | FAST |
+    | T302/T303 as historically delegated | STANDARD |
+    | T302/T303 if implemented directly and all FAST conditions hold | FAST-eligible |
+    | GAM-451 after no active sibling depends on its frozen contracts | STANDARD, with the required specialized checker |
+    | GAM-451 as run on 2026-08-21 while sibling work used the frozen contracts | HEAVY |
+    | T305-class write capable of nulling or overwriting another user’s persisted fields | HEAVY |
+    | T189-class contradictory or materially false reporting of a user’s own records | HEAVY |
+    | Any migration, RLS/security-definer, auth/session/permission, or metric-SQL change | HEAVY |
 
 27. **A user-visible surface that reads from a fixture, stub, or hardcoded
     value is not Passed — it is Partial, and the wiring task is filed and

@@ -95,14 +95,18 @@ Two decisions George recorded (do not re-litigate):
   by default; the orchestrator passes `model: "opus"` for migrations, RLS /
   `security definer` helpers, metric-math SQL views, and auth/session/permission
   logic.
-- **Constitution item 19 (dispatch gate)**: no PRD, packet set, or packet
-  reaches a worker until `checker-premise` returns DISPATCH. The planning layer
-  was previously the only unchecked artifact in this process — a real PRD
-  reached the approval gate carrying two false claims, an impossible
-  prescription, and a silent reversal of a passed task's green test.
-- **No worker self-certifies.** Every PASS requires a checker independently
-  re-deriving the evidence, never trusting the worker's report. Two of the last
-  16 worker attempts claimed work that did not exist; both were caught this way.
+- **Constitution item 19 (dispatch gate)**: every HEAVY packet needs a
+  `checker-premise` DISPATCH before reaching a worker, as does any PRD or
+  multi-task packet set; a STANDARD packet needs one only when the orchestrator
+  escalates it (item 26). The planning layer was previously the only unchecked
+  artifact in this process — a real PRD reached the approval gate carrying two
+  false claims, an impossible prescription, and a silent reversal of a passed
+  task's green test.
+- **No worker self-certifies.** Every PASS comes from the tier's designated
+  verifier (item 26) — an independent checker where one is required, the
+  orchestrator's own deterministic evidence on FAST and checker-less STANDARD
+  work — never the worker's report. Two of the last 16 worker attempts claimed
+  work that did not exist; both were caught this way.
 - **Never `git stash`** in the shared tree — three workers have done it; each
   time the checker had to run an integrity sweep before reviewing.
 - **Every close-out does a full-ledger sweep**, not just direct dependents.

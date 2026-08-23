@@ -68,6 +68,12 @@ only as far as available slots permit and only where the workflow ownership
 table says files do not overlap. A serial premise → worker → checker chain is
 often safer and cheaper than keeping every role live at once.
 
+Constitution item 26's worker ceilings apply regardless of available slots:
+FAST uses zero subagents; STANDARD one worker by default and two maximum, for
+genuinely disjoint packets; HEAVY one worker by default and three maximum,
+only after the premise checker returns DISPATCH on the explicit split. Prefer
+process-level parallelism (isolated verification lanes) over adding agents.
+
 Codex will not push, open a PR, merge, deploy, or cross a human gate merely
 because it was asked to implement a task. Name those external actions when you
 want them included.

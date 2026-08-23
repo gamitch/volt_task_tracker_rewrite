@@ -628,9 +628,12 @@ default**. Authorized by the owner after he observed it was disproportionate for
 minutes — and it found something a packet round would have charged full price for: an existing
 *passing* test was pinning the bug as correct behaviour.
 
-**Heavy tier is still mandatory for write paths, auth/RLS, migrations, metric-view SQL, and exports
-another session imports.** It earned that twice this session — on T305 and T189 the gate *built* the
-prescription and caught a data-correctness defect invisible to reading the code.
+**Heavy tier is mandatory for item 26's unconditional triggers** — migrations, RLS/security-definer,
+auth/session/permission logic, metric SQL, destructive or cross-user-overwriting writes, user-record
+derivation logic, contracts frozen for active sibling tasks, and external protocols. *(Amended
+2026-08-23: an ordinary bounded, reversible write through an established seam can now be STANDARD —
+read the current item 26.)* The gate earned its cost twice this session — on T305 and T189 it
+*built* the prescription and caught a data-correctness defect invisible to reading the code.
 
 ### Merged since the last update
 

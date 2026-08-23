@@ -74,7 +74,9 @@ when reading branch names or asking a machine what it did.
 
 ## Assignment table
 
-Tier is the **heaviest** item in the workflow, per constitution item 26.
+The Tier column records the workflow's historically heaviest row. Constitution
+item 26 tiers each task individually at claim time — re-judge every row against
+the current item 26; do not inherit the column.
 
 | # | Workflow | Open rows | Tier | State | Safe to run beside |
 |---|---|---:|---|---|---|
@@ -286,8 +288,9 @@ packeted afterwards, and it remains W1's file.
 
 > Every number the app shows a user about their own contribution.
 
-**Constitution item 26 puts this whole workflow at HEAVY** — it is metric-view SQL, where a mistake
-lies to a user about their own data. Do not let a small-looking diff talk you out of the tier.
+**Constitution item 26 makes every row here that touches metric-view SQL HEAVY** — a mistake lies to
+a user about their own data, and no small-looking diff lowers that unconditional trigger. Rows that
+do not touch the SQL (loader tests, comments) are tiered individually per item 26.
 
 | Row | What | Tier |
 |---|---|---|
@@ -554,8 +557,9 @@ These are not suggestions. Each one is written against a failure this project ha
    from their ledger rows — T303 recorded into the wrong column, T323 merged with no
    verification-log entry at all. With N machines running, that drift multiplies by N.
 
-6. **State the tier in the PR and defend it** (item 26). If two tiers are arguable, take the heavier
-   one — but "it sounds important" is not a trigger and neither is file count.
+6. **State the tier in the claim comment and PR and defend it** (item 26). Measure the disputed
+   premise first; if two tiers remain reasonably arguable after measurement, take the heavier one —
+   but "it sounds important" is not a trigger and neither is file count.
 
 7. **Mutation experiments run in the agent's own worktree** (item 23), and **commit before mutating**
    — T323's mutation revert also reverted the uncommitted fix, and only the full suite caught it.

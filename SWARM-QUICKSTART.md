@@ -170,8 +170,8 @@ file is the record.
 | linear-task-writing | Write or rewrite any Linear issue an agent files (constitution item 30) |
 | shared-doc-merge | Resolve conflicts in append-only shared docs under `docs/swarm/` |
 
-The bottom six are the harnesses item 26 means by *"a gate that only reads is
-worth much less than one that runs."*
+The bottom six are the harnesses item 26's execution principle means: *"a check
+that executes is stronger than one that only reads."*
 
 ## Severity Rules
 
@@ -184,7 +184,10 @@ worth much less than one that runs."*
 
 ## Key Rules
 
-- No task is complete because the worker says so — only a checker can pass it.
+- No task is complete because the worker says so — only the tier's designated
+  verifier can pass it (item 26): an independent checker where one is required,
+  the orchestrator's own deterministic evidence on FAST and checker-less
+  STANDARD work.
 - Workers receive compact task packets, never the full ledger or log files.
 - Workers cannot edit `.claude/`, `docs/swarm/`, or any workflow files.
   **⚠️ This line is broader than the constitution and the two disagree.**
