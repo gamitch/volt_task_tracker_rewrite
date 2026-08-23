@@ -17,7 +17,10 @@ Rules:
 - Do not silently change requirements.
 - Do not claim final completion.
 - You are not allowed to mark the task complete.
-- The checker decides whether the task passes.
+- You never verify or accept your own result. The tier's designated verifier
+  decides whether the task passes (constitution item 26): the assigned checker
+  where item 26 requires one, otherwise the dispatching orchestrator through
+  its own mutation replay and gates. FAST work has no worker at all.
 
 You may not edit:
 - .claude/

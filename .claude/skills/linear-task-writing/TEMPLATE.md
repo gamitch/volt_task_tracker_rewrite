@@ -36,8 +36,11 @@ must not break. Cite the module doc or constitution item that says so.>
 ## Size and tier
 
 <Rough size in the units that matter: display strings, functions, files, a
-migration. Then: no schema change / no write path / no signature change, as
-applicable.>
+migration. Then, as applicable: no unconditional HEAVY trigger (item 26) / no
+production write path / the write is bounded and reversible per item 26 —
+established seam, one bounded entity set, idempotent or rollback-able, cannot
+touch unrelated persisted fields, full-row before/after test, verified against
+a disposable database / no signature or contract another module imports.>
 
 <Tier under item 26, named: FAST, STANDARD or HEAVY.>
 

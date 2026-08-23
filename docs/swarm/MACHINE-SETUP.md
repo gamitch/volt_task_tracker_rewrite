@@ -141,4 +141,5 @@ already had:
 - Update the ledger row and the verification-log entry **in the same commit that merges the work**
   (item 24). With N machines this drift multiplies by N.
 - Never resolve a `task-ledger.md` conflict by taking one side wholesale — both sides are real rows.
-- State your tier (item 26) in the PR and defend it. If two are arguable, take the heavier one.
+- State your tier (item 26) in the claim comment and PR and defend it. Measure the disputed premise
+  first; if two tiers remain reasonably arguable after measurement, take the heavier one.
