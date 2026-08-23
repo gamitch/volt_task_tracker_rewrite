@@ -63,3 +63,15 @@ Append-only. One line per milestone. Pushed immediately after each append.
   down rather than assumed: a topic sounding sensitive is not a tier trigger.
   **If this line is the last one in this file, the run died holding this
   subagent.**
+- **12:11Z — worker VERDICT: complete, reported as `86ca2a9a`.** Existence
+  verified by the orchestrator rather than taken on trust (item 21): HEAD moved to
+  `86ca2a9a`, `git status --porcelain` is empty, and `git diff --stat origin/main`
+  shows the four Allowed Files in the committed blob (`sessionRoster.ts` +240,
+  `sessionRoster.test.ts` +360, `CoachMeetingsView.tsx` +96,
+  `CoachMeetingsView.test.tsx` +200) and nothing else under `src/`. Worker's own
+  gates: `typecheck` 0, `lint` 0, `format:check` 0, scoped `vitest` 0 (40/40), and
+  a volunteered full-suite run 0 (2805 tests). Worker declares one deferral (the
+  §3 upstream `attendance.ts` gap, correctly left for the orchestrator to file)
+  and one design disclosure (a `(row.status as string)` cast, because `tsc` rejects
+  the comparison as TS2367 when the declared union cannot hold `'unmarked'`).
+  Not self-certified — a `checker-reviewer` grades this next.
