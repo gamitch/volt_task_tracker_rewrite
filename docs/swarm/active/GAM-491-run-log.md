@@ -87,3 +87,17 @@ Append-only. One line per milestone. Pushed immediately after each append.
   with `run_in_background: false`; this orchestrator is blocking on it.
   **If this line is the last one in this file, the run died holding this
   subagent.**
+- **12:31Z — checker VERDICT: PASS** on `86ca2a9a`, no BLOCKER and no MAJOR; two
+  MINOR/NIT findings, both filed rather than reworked. Six gates all exit 0, and
+  the checker measured a baseline the gate runner disclaims it does not have
+  (merge base `5bf0cb78`: 114 files / 2792 tests, eslint 0 errors / 382 warnings)
+  — so the candidate's 2805 tests is +13 all-new with nothing lost, and its 382
+  warnings is **zero new**. The named mutation reddened for the right reason
+  (`expected 'unmarked' to be null`, criterion 4 only). The checker did not take
+  criterion 10's item-27 proof on trust: `AuthProvider` emits the identical
+  `SupabaseNotConfiguredError` sentence to the console, so it closed the
+  `rosterError` route and confirmed the sentence vanished from the DOM — the
+  connection is real, not a lookalike. Item 6 measured over 11 adversarial names
+  the suite does not cover; no full surname escapes.
+- **12:33Z — item 20 follow-ups filed: GAM-496 and GAM-497**, both `Backlog` +
+  `tier/unreviewed`, both before the PR left draft.
