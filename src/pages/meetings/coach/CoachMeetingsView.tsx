@@ -420,10 +420,7 @@ export function CoachMeetingsView({
     [rows],
   );
 
-  const cardModels = useMemo(
-    () => buildSeriesCardModels(rows, paletteIndexForEventId),
-    [rows],
-  );
+  const cardModels = useMemo(() => buildSeriesCardModels(rows, paletteIndexForEventId), [rows]);
   const cardModelByEventId = useMemo(
     () => new Map(cardModels.map((model) => [model.eventId, model] as const)),
     [cardModels],
@@ -432,7 +429,9 @@ export function CoachMeetingsView({
   const overlapIndex = useMemo(
     () =>
       buildOverlapIndex(
-        rows.flatMap((row) => row.sessions.map((session) => ({ ...session, eventId: row.eventId }))),
+        rows.flatMap((row) =>
+          row.sessions.map((session) => ({ ...session, eventId: row.eventId })),
+        ),
       ),
     [rows],
   );

@@ -284,7 +284,10 @@ describe('buildSeriesCardModels (GAM-452 §1, criteria 5/6/11/12)', () => {
 
   function session(
     overrides: Partial<CoachMeetingRow['sessions'][number]> &
-      Pick<CoachMeetingRow['sessions'][number], 'sessionId' | 'sessionDate' | 'startsAt' | 'endsAt' | 'status'>,
+      Pick<
+        CoachMeetingRow['sessions'][number],
+        'sessionId' | 'sessionDate' | 'startsAt' | 'endsAt' | 'status'
+      >,
   ): CoachMeetingRow['sessions'][number] {
     return {
       durationHours: 2,
@@ -407,7 +410,7 @@ describe('buildSeriesCardModels (GAM-452 §1, criteria 5/6/11/12)', () => {
     expect(nullVal.attendancePct).toBeNull();
   });
 
-  it('criterion 12: nextSessionLabel/sessionsCompleted/sessionsTotal/teamScopeLabel match MTG-01a\'s literal example shape', () => {
+  it("criterion 12: nextSessionLabel/sessionsCompleted/sessionsTotal/teamScopeLabel match MTG-01a's literal example shape", () => {
     const row: CoachMeetingRow = {
       ...BASE_EVENT,
       teamScopeLabel: 'Ravens',

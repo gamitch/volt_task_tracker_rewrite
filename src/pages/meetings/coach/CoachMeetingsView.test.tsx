@@ -228,8 +228,10 @@ function findButtonInSessionRow(sessionDate: string, text: string): HTMLButtonEl
  * session) or roster region (a `completed` session) exists in the DOM. */
 function toggleSessionExpand(sessionDate: string): void {
   const button =
-    findButtonInSessionRow(sessionDate, 'Expand') ?? findButtonInSessionRow(sessionDate, 'Collapse');
-  if (!button) throw new Error(`No Expand/Collapse toggle found for ${formatWeekdayDate(sessionDate)}`);
+    findButtonInSessionRow(sessionDate, 'Expand') ??
+    findButtonInSessionRow(sessionDate, 'Collapse');
+  if (!button)
+    throw new Error(`No Expand/Collapse toggle found for ${formatWeekdayDate(sessionDate)}`);
   clickButton(button);
 }
 
@@ -556,7 +558,10 @@ describe('<MeetingsList /> coach view', () => {
 
     expect(document.body.textContent).toContain('Cancel this session on Wed, Jul 22?');
 
-    const confirmButton = findButtonInDialogByTitle('Cancel this session on Wed, Jul 22?', 'Cancel session');
+    const confirmButton = findButtonInDialogByTitle(
+      'Cancel this session on Wed, Jul 22?',
+      'Cancel session',
+    );
     expect(confirmButton).toBeTruthy();
     clickButton(confirmButton as HTMLButtonElement);
     await flushMicrotasks();
@@ -589,7 +594,10 @@ describe('<MeetingsList /> coach view', () => {
     toggleSessionExpand('2026-07-22');
     const cancelButton = findButtonInSessionRow('2026-07-22', 'Cancel this session');
     clickButton(cancelButton as HTMLButtonElement);
-    const confirmButton = findButtonInDialogByTitle('Cancel this session on Wed, Jul 22?', 'Cancel session');
+    const confirmButton = findButtonInDialogByTitle(
+      'Cancel this session on Wed, Jul 22?',
+      'Cancel session',
+    );
     clickButton(confirmButton as HTMLButtonElement);
     await flushMicrotasks();
 
