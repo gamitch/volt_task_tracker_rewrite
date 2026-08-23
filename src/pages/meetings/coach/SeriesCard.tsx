@@ -34,6 +34,26 @@
  * metric view, per `types.ts:285-294`'s own binding comment.
  *
  * -----------------------------------------------------------------------
+ * 1a. GAM-460 widened `SeriesCardModel` (frozen by GAM-444) to add
+ *     `gradedMarksCt: number`, D014's mitigation: since T508 an unmarked
+ *     student has no attendance row, so forgetting to mark someone INFLATES
+ *     `attendancePct` rather than deflating it (measured 100% for an event
+ *     60% of the roster skipped) -- `types.ts`'s own `graded_marks_ct`
+ *     column comment states in capitals that a consumer rendering
+ *     `attendance_pct` without also rendering `graded_marks_ct` reintroduces
+ *     this exact regression. This widen is safe as an addition to a frozen
+ *     type because, at GAM-460 dispatch time, `SeriesCard` still has no
+ *     real caller anywhere in the tree building a `SeriesCardModel` from
+ *     live data (item 3 above/`CoachMeetingsView` does not render this
+ *     component yet), so no existing literal needed updating and nothing
+ *     downstream could break. `gradedMarksCt` renders unconditionally
+ *     beside `attendanceText` below, in the same Attendance block, never
+ *     gated on `attendancePct !== null`. GAM-452's model builder
+ *     (`coachModel.ts`, once merged) is expected to populate this field from
+ *     `CoachMeetingRow.gradedMarksCt` (`types.ts:139-149`), which
+ *     `loaders/meetings.ts` already wires from `v_event_attendance`.
+ *
+ * -----------------------------------------------------------------------
  * 2. Astryx prop sourcing (constitution item 2) -- every prop below is
  *    cross-checked against `docs/swarm/astryx-api.md` directly:
  *
@@ -246,12 +266,15 @@
  *    reshape a frozen type a sibling ticket is coding against:
  *
  * (a) No location/roster-count/canceled-count/span-chip/"N expected" --
- *     `SeriesCardModel` has exactly the nine fields at `types.ts:268-306`
- *     and none of those. The supporting line renders `teamScopeLabel`
- *     alone; the next-session line renders `nextSessionLabel` verbatim (or
- *     the finished copy below when `null`). No field is fabricated, and no
- *     zero is invented for a number this component does not have (the same
- *     defect class as a fabricated `0%`, per the packet).
+ *     `SeriesCardModel` has exactly ten fields at `types.ts:302-339` (GAM-460
+ *     widened this from the original nine -- see item 1a below); the one
+ *     exception to "no field this component does not have" is
+ *     `gradedMarksCt`, added by GAM-460 for exactly the reason item 1a
+ *     records. The supporting line renders `teamScopeLabel` alone; the
+ *     next-session line renders `nextSessionLabel` verbatim (or the finished
+ *     copy below when `null`). No other field is fabricated, and no zero is
+ *     invented for a number this component does not have (the same defect
+ *     class as a fabricated `0%`, per the packet).
  *
  * (b) No Edit affordance. `onSaveMeetingSeries` is not on
  *     `SeriesCardProps` and the packet is explicit that this ticket must
@@ -508,6 +531,10 @@ export function SeriesCard(props: SeriesCardProps): ReactNode {
             {attendanceText}
           </Text>
           <Text type="supporting">{`across ${model.sessionsCompleted} held`}</Text>
+          {/* GAM-460 -- D014's mitigation (module doc item 1a): rendered
+              unconditionally beside `attendancePct`, never gated on it being
+              non-null, and never behind a responsive/viewport condition. */}
+          <Text type="supporting">{`${model.gradedMarksCt} marks graded`}</Text>
         </VStack>
 
         <VStack gap={0.5}>

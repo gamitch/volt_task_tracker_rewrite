@@ -327,6 +327,20 @@ export interface SeriesCardModel {
    * TypeScript instead is a **BLOCKER** under constitution item 3.
    */
   attendancePct: number | null;
+  /**
+   * `v_event_attendance.graded_marks_ct` -- D014's mitigation, mandatory
+   * whenever `attendancePct` is rendered. Since T508 an unmarked student has
+   * no attendance row, so forgetting to mark someone INFLATES `attendancePct`
+   * rather than deflating it (measured 100% for an event 60% of the roster
+   * skipped). The view's own catalog comment states in capitals that a
+   * consumer rendering `attendance_pct` without also rendering
+   * `graded_marks_ct` reintroduces D014's known regression
+   * (`20260821000000_meetings_event_attendance_view.sql`, column comment on
+   * `graded_marks_ct`). A real SQL `count(...)`, never NULL -- unlike
+   * `attendancePct`, this field has no "no data yet" state to represent.
+   * GAM-460.
+   */
+  gradedMarksCt: number;
   /** MTG-01a "a next-session line ('Next: Tue, Aug 26 · 6–8 PM'), or the
    * finished state" -- `null` means finished (no scheduled session
    * remains); the rendering supplies the "finished" copy itself, not this
