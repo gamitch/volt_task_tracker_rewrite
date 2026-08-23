@@ -745,10 +745,12 @@ describe('<MeetingsList /> coach view -- T605 per-session Edit dialog', () => {
   }
 
   /** GAM-452 -- `SessionRow.tsx`'s own Edit button reads plain "Edit" (no
-   * date suffix, no `isMeetingSessionReconcilable` gate -- that gate lived
-   * only in the now-deleted `CoachMeetingSessionRow`). Scoped to the target
-   * session's own row via `findButtonInSessionRow`, not a global text
-   * search. */
+   * date suffix) and carries no reconcilability logic of its own; the
+   * `isMeetingSessionReconcilable` gate (test 2, below) is applied one
+   * layer up, in `CoachMeetingsView.tsx`, via `SchedulePanel`'s
+   * `canEditSession` prop -- so this helper only ever finds the button on
+   * sessions that already passed that gate. Scoped to the target session's
+   * own row via `findButtonInSessionRow`, not a global text search. */
   function clickEdit(sessionDate: string): void {
     const editButton = findButtonInSessionRow(sessionDate, 'Edit');
     expect(editButton).toBeTruthy();
@@ -767,15 +769,55 @@ describe('<MeetingsList /> coach view -- T605 per-session Edit dialog', () => {
     );
   }
 
-  // GAM-452 -- REMOVED (surface gone, not turned red): the old test 2
-  // asserted the Edit affordance was gated by `isMeetingSessionReconcilable`
-  // per session. `SessionRow.tsx` (frozen, merged GAM-448) renders its own
-  // "Edit" button unconditionally whenever `onEditSession` is supplied,
-  // regardless of session status/reconcilability -- that gate has no home
-  // in the new, already-shipped, checker-approved component. This is a
-  // disclosed, genuine architecture change forced by composing with a
-  // frozen sibling, not an oversight; see this ticket's own completion
-  // report.
+  // GAM-452 attempt 3 -- test 2 RESTORED, re-pointed at the new card-select
+  // -> session-row path. The orchestrator widened `SchedulePanel.tsx` by
+  // exactly one additive optional prop, `canEditSession`, so the
+  // `isMeetingSessionReconcilable` gate this test asserts is real again --
+  // it now lives in `CoachMeetingsView.tsx` (threaded through
+  // `SchedulePanel`'s `canEditSession` prop into `SessionRow`'s own
+  // `onEditSession && ...` render gate), not inside the frozen
+  // `SessionRow.tsx` itself.
+  it('test 2: the per-session Edit affordance is gated by isMeetingSessionReconcilable, not by session identity alone', async () => {
+    renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(buildEditFixtureData()) });
+    await flushMicrotasks();
+    selectCard('Edit Fixture Meeting');
+
+    // `SchedulePanel`'s own month tabs (`data-tab-value="YYYY-MM"`, same
+    // mechanism `selectTab` above uses for the page-level Active/Finished
+    // tabs) -- `COMPLETED_DATE` falls in a DIFFERENT Chicago month than the
+    // other three fixture sessions below, so it is only reachable after
+    // switching tabs.
+    function selectMonthTab(monthKey: string): void {
+      const tab = container.querySelector(`[data-tab-value="${monthKey}"]`);
+      if (!tab) throw new Error(`No month tab found for "${monthKey}"`);
+      clickButton(tab as HTMLButtonElement);
+    }
+
+    // Reconcilable (scheduled, strictly future) -- Edit present. Default
+    // month tab is the fixture's fake-clock month, which is also this
+    // session's own month, so no tab switch is needed here.
+    expect(findButtonInSessionRow(RECONCILABLE_DATE, 'Edit')).toBeTruthy();
+
+    // Past-scheduled (status still 'scheduled', but startsAt already
+    // passed) -- Edit absent. Same month tab as above.
+    expect(findButtonInSessionRow(PAST_SCHEDULED_DATE, 'Edit')).toBeFalsy();
+
+    // Canceled -- Edit absent. Same month tab as above.
+    expect(findButtonInSessionRow(CANCELED_DATE, 'Edit')).toBeFalsy();
+
+    // Completed -- Edit absent. A different Chicago month; switch tabs
+    // first.
+    selectMonthTab(COMPLETED_DATE.slice(0, 7));
+    expect(findButtonInSessionRow(COMPLETED_DATE, 'Edit')).toBeFalsy();
+
+    // The past-scheduled session's own Cancel affordance is still offered
+    // (status === 'scheduled' is SessionRow's own, independent gate for
+    // that button) -- proving the missing Edit button above is a
+    // deliberate reconcilability gate, not a missing row/button entirely.
+    selectMonthTab(PAST_SCHEDULED_DATE.slice(0, 7));
+    toggleSessionExpand(PAST_SCHEDULED_DATE);
+    expect(findButtonInSessionRow(PAST_SCHEDULED_DATE, 'Cancel this session')).toBeTruthy();
+  });
 
   it('test 3: clicking Edit opens the dialog prefilled with the real session’s own date/time/notes', async () => {
     renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(buildEditFixtureData()) });

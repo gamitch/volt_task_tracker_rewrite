@@ -220,6 +220,7 @@ import {
   setAttendanceStatus,
 } from '../../../lib/supabase/loaders/attendance';
 import {
+  isMeetingSessionReconcilable,
   ScheduleMeetingsDialog,
   type CreateMeetingsPayload,
   type EditMeetingSeriesInitialData,
@@ -771,6 +772,17 @@ export function CoachMeetingsView({
                                     );
                                     if (session) handleEditSessionRequest(row.eventId, session);
                                   }}
+                                  // GAM-452 (orchestrator's one-prop
+                                  // widening) -- the real per-session gate:
+                                  // the Edit affordance renders only for a
+                                  // still-`scheduled`, strictly-future
+                                  // session, reusing the exact rule
+                                  // `ScheduleMeetingsDialog` already applies
+                                  // to its own "already happened" sessions,
+                                  // never a locally reimplemented copy.
+                                  canEditSession={(session) =>
+                                    isMeetingSessionReconcilable(session, new Date())
+                                  }
                                   // §13 -- this component only ever renders
                                   // for a coach/admin viewer (MTG-12).
                                   canSetExcused

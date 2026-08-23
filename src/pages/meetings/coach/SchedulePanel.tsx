@@ -223,6 +223,10 @@ export interface SchedulePanelProps {
    * ticket owns the affordance only, not the dialog behind it
    * (`EditMeetingSessionDialog` is a GAM-452 wiring concern). */
   onEditSession?: (sessionId: string) => void;
+  /** Optional per-session predicate deciding whether the row's Edit
+   * affordance renders. Defaults to always-true, so existing callers are
+   * unchanged. */
+  canEditSession?: (session: CoachMeetingSessionDetail) => boolean;
   /** The acting coach's own `profiles.id` -- required by the write seam but
    * optional here; when absent every chip renders disabled rather than
    * emitting a write with a fabricated identity (criterion 10). */
@@ -317,6 +321,7 @@ export function SchedulePanel({
   overlapIndex,
   focusRequest,
   onEditSession,
+  canEditSession,
   recordedBy,
   canSetExcused,
 }: SchedulePanelProps): ReactNode {
@@ -413,7 +418,9 @@ export function SchedulePanel({
               isRosterLoading={isRosterLoading}
               rosterError={rosterError}
               hasOverlap={(overlapIndex?.get(session.sessionId)?.length ?? 0) > 0}
-              onEditSession={onEditSession}
+              onEditSession={
+                onEditSession && (canEditSession?.(session) ?? true) ? onEditSession : undefined
+              }
               recordedBy={recordedBy}
               canSetExcused={canSetExcused}
             />
