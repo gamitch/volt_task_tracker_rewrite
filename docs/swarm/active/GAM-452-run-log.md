@@ -250,3 +250,34 @@ did not land.
   scoped to MAJOR-1 and to whether the widening itself introduced anything,
   `run_in_background: false`. *If this line is the last one in this file, the
   run died holding this subagent* — the rework is pushed to PR #242 but ungraded.
+- `03:24Z` — **`checker-reviewer` re-check VERDICT: MAJOR-1 RESOLVED; ticket is
+  `Partial`, not `Passed`** (agent `a6db6c165e2cc5fb2`, ~55K tokens, 32 tool
+  calls). It ran **three** of its own mutations rather than trusting the
+  worker's:
+  - gate stripped from `SchedulePanel.tsx` → **exit 1** at the right assertion;
+    `canEditSession` stripped from the caller → **exit 1**; restored → **exit 0**,
+    38/38. MAJOR-1 is genuinely fixed.
+  - The widening is default-preserving *by mechanism, not by claim*:
+    `onEditSession && (canEditSession?.(session) ?? true)` short-circuits, so
+    `canEditSession` is never invoked when `onEditSession` is undefined, and an
+    omitted predicate reproduces the old expression byte-for-byte.
+    `SchedulePanel.test.tsx` is absent from the diff and its 11 tests pass
+    unmodified. Only two consumers of `SchedulePanel` exist in the repo.
+  - `EditMeetingSessionDialog.tsx` comment-only was verified **mechanically** —
+    strip comments from both revisions, files are byte-identical.
+  - Six gates exit 0 at `b01c4db6`; full suite 2790, no regression.
+  - **New MINOR-3, and it is a good catch:** the restored test pins the *date*
+    axis but not the *status* axis, because both the canceled and completed
+    fixtures are past-dated. It proved this by mutation — a date-only gate
+    **survived all 475 meetings tests at exit 0**. The shipped code is correct
+    (it calls the shared `isMeetingSessionReconcilable`, whose status axis is
+    pinned in its own tests); the hole is in the connection test, inherited
+    from the deleted original. One fixture session fixes it.
+  - The remaining FAIL is **not code**: item 27 holds this at `Partial` while
+    the roster-loader row is unfiled. That row is mine to file, and the checker
+    was right that the run log said "to be filed" and nothing had been.
+  - Note: the harness flagged this subagent's output as instruction-shaped. On
+    inspection the trigger is a verbatim quote of the constitution's own
+    forbidden-files list (`:26-33`, which names `.claude/settings.json`), used
+    to justify that the run log is *not* forbidden. Benign, and no directive in
+    it was acted on.
