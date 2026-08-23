@@ -101,3 +101,9 @@ Append-only. One line per milestone. Pushed immediately after each append.
   the suite does not cover; no full surname escapes.
 - **12:33Z — item 20 follow-ups filed: GAM-496 and GAM-497**, both `Backlog` +
   `tier/unreviewed`, both before the PR left draft.
+- **12:36Z — PR #245 finalized and marked ready for review**; final body written
+  from the artifact, `check.mjs` → `OK declaration closes GAM-491`.
+- **12:37Z — close-out posted and GAM-491 moved to `In Review`**, read back and
+  confirmed (`state.name = "In Review"`). Never `Done` — the merge closes it
+  (item 28e). **Run complete; no subagent is in flight.** Both subagents were
+  dispatched with `run_in_background: false` and both verdicts are recorded above.
