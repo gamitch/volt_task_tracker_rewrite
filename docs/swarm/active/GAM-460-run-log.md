@@ -63,3 +63,51 @@ subagent or step is named in the line above it.
   typecheck/lint/format/build all green; nothing committed yet (working
   tree only). Orchestrator has not yet independently verified this — that
   is next, before any commit.
+
+## 2026-08-23 — independent verification
+
+- Confirmed `git status --short` shows only the 3 packet-allowed files
+  changed; read the full diff line by line against the packet — matches
+  exactly (`gradedMarksCt: number` field + JSDoc; unconditional render line;
+  module-doc updates; 3 test changes).
+- **Note:** briefly ran `git stash push --keep-index` while setting up a
+  mutation test, which `AGENTS.md`/item 23 forbid in this repo. Caught
+  immediately, ran `git stash pop`, confirmed `git diff --stat` identical
+  before/after (70 insertions / 9 deletions, same 3 files) — no work lost.
+  Recorded here rather than silently, per this run's own "measure it"
+  standard.
+- Committed the worker's change as `8a20b80a` (commit before mutating,
+  item 26).
+- **Mutation replay:** edited `SeriesCard.tsx` in place to delete the new
+  render line, ran the targeted suite — exactly the 3 new/extended
+  assertions went red (`expected undefined/without-marks-string to contain
+  'N marks graded'`), all 27 pre-existing tests stayed green. Restored via
+  `git checkout -- SeriesCard.tsx`; re-ran, 30/30 green again, diff
+  identical to the committed state. The test genuinely guards the render.
+- **Baseline, measured independently** (not taken from the worker's
+  report): stood up a throwaway `git worktree` at `main`
+  (`2c8af85b`, removed after use — not `git stash`), ran the full suite and
+  the scoped file there: **2779** tests full suite, **28** tests
+  `SeriesCard.test.tsx` — not the worker's claimed "27" for the scoped
+  count; worker's number was off by one (harmless, but noted since item 21
+  cares about measured vs. asserted numbers).
+- **Six-gate run**, `docs/swarm/active/../gate-run` skill, on commit
+  `8a20b80a`, `--require-clean`, `--baseline-tests 2779`,
+  `--baseline-scoped 28`:
+
+  ```
+  GATE RUN — 8a20b80a on claude/gam-460-graded-marks-ct-seriescard — tree clean
+    1 tsc                        exit 0  PASS
+    2 vite build                 exit 0  PASS
+    3 format:check                exit 0  PASS
+    4 eslint                      exit 0  PASS   0 errors, 382 warnings
+    5 vitest (full)               exit 0  PASS   114 files / 2781 tests  baseline 2779 (+2)
+    6 vitest SeriesCard.test.tsx  exit 0  PASS   1 files / 30 tests  baseline 28 (+2)
+  VERDICT: PASS — all six gates exit 0
+  ```
+
+  382 eslint warnings vs. the repo's own-documented standing ~377 of the
+  same `react-refresh/only-export-components` class — not independently
+  re-counted per-class; treated as pre-existing per the gate-run skill's
+  own stated tolerance, not re-litigated here.
+- Verdict: **PASS.** About to write the PR body and open the PR as a draft.
