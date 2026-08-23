@@ -76,6 +76,7 @@ export const SEED = {
   meetingEvent: 'e0e00000-0000-4000-8000-000000000001',
   liveSession: '5e550000-0000-4000-8000-000000000004',
   studentPriya: '57000000-0000-4000-8000-000000000001',
+  studentNina: '57000000-0000-4000-8000-000000000004',
   studentJordan: '57000000-0000-4000-8000-000000000002',
 } as const;
 
@@ -85,10 +86,24 @@ function psql(sqlText: string): string {
     // VERBOSITY=verbose puts the SQLSTATE in the error text, so an RLS denial
     // can be asserted as 42501 rather than by matching English prose.
     [
-      '-h', '127.0.0.1', '-p', PG_PORT, '-U', 'postgres', '-d', PG_DB,
-      '-X', '-q', '-A', '-t',
-      '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=verbose',
-      '-c', sqlText,
+      '-h',
+      '127.0.0.1',
+      '-p',
+      PG_PORT,
+      '-U',
+      'postgres',
+      '-d',
+      PG_DB,
+      '-X',
+      '-q',
+      '-A',
+      '-t',
+      '-v',
+      'ON_ERROR_STOP=1',
+      '-v',
+      'VERBOSITY=verbose',
+      '-c',
+      sqlText,
     ],
     { encoding: 'utf8' },
   ).trim();
@@ -99,7 +114,9 @@ function psql(sqlText: string): string {
  * use it to check what actually landed in the table, not what a persona can see.
  */
 export function readRows<T = Record<string, unknown>>(selectStatement: string): T[] {
-  return JSON.parse(psql(`select coalesce(json_agg(t), '[]'::json)::text from (${selectStatement}) t`) || '[]');
+  return JSON.parse(
+    psql(`select coalesce(json_agg(t), '[]'::json)::text from (${selectStatement}) t`) || '[]',
+  );
 }
 
 /**
@@ -107,7 +124,10 @@ export function readRows<T = Record<string, unknown>>(selectStatement: string): 
  * `authenticated` role with that persona's `auth.uid()`. This is the only
  * form that can demonstrate an RLS policy actually filtering something.
  */
-export function readRowsAs<T = Record<string, unknown>>(persona: PersonaKey, selectStatement: string): T[] {
+export function readRowsAs<T = Record<string, unknown>>(
+  persona: PersonaKey,
+  selectStatement: string,
+): T[] {
   const uid = PERSONAS[persona].profileId;
   const out = psql(
     [
@@ -155,9 +175,7 @@ export async function signIn(page: Page, persona: PersonaKey): Promise<void> {
   await page.locator('input[name="email"]').fill(PERSONAS[persona].email);
   await page.locator('input[name="password"]').fill(PERSONA_PASSWORD);
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect
-    .poll(() => new URL(page.url()).pathname, { timeout: 20_000 })
-    .not.toBe('/login');
+  await expect.poll(() => new URL(page.url()).pathname, { timeout: 20_000 }).not.toBe('/login');
 }
 
 /**

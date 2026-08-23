@@ -8,7 +8,12 @@
 // convention `src/lib/format/dates.test.ts` established, plus the acceptance
 // criteria for `buildScheduleChips` (criterion 5).
 import { describe, expect, it } from 'vitest';
-import { buildScheduleChips, type ScheduleRule } from './format.ts';
+import {
+  buildScheduleChips,
+  formatDateSquare,
+  formatRelativeChicagoDay,
+  type ScheduleRule,
+} from './format.ts';
 
 describe('buildScheduleChips', () => {
   it("renders the issue's own worked example -- two rules, in input order", () => {
@@ -61,5 +66,17 @@ describe('buildScheduleChips', () => {
   it('throws RangeError when startMinutes is 1440 (out of the 0-1439 range, and no legal endMinutes exists above it either)', () => {
     const rules: ScheduleRule[] = [{ dow: 2, startMinutes: 1440, endMinutes: 1440 }];
     expect(() => buildScheduleChips(rules)).toThrow(RangeError);
+  });
+});
+
+describe('student hero date formatters', () => {
+  it('uses Chicago calendar dates for a date square and static relative labels', () => {
+    expect(formatDateSquare('2026-08-22')).toEqual({ month: 'Aug', day: '22' });
+    const chicagoLateEvening = new Date('2026-08-22T04:30:00.000Z');
+    expect(formatRelativeChicagoDay('2026-08-21', chicagoLateEvening)).toBe('Today');
+    expect(formatRelativeChicagoDay('2026-08-22', chicagoLateEvening)).toBe('Tomorrow');
+    expect(formatRelativeChicagoDay('2026-08-27', chicagoLateEvening)).toBe('in 6 days');
+    expect(formatRelativeChicagoDay('2026-08-28', chicagoLateEvening)).toBe('Fri, Aug 28');
+    expect(formatRelativeChicagoDay('2026-08-20', chicagoLateEvening)).toBeNull();
   });
 });

@@ -17,7 +17,11 @@
 // run in vitest's default node environment" posture for this directory.
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { describe, expect, it, vi } from 'vitest';
-import { makeLoadCoachMeetingsData } from './meetings';
+import {
+  makeLoadCoachMeetingsData,
+  makeLoadStudentMeetingsData,
+  selectSingleParticipationRow,
+} from './meetings';
 
 /** Same helper `outreach.test.ts` already established for this exact
  * purpose -- reused verbatim, not re-derived. */
@@ -313,5 +317,126 @@ describe('queryTeams (via makeLoadCoachMeetingsData) -- GAM-305 criterion 5 sele
     const load = makeLoadCoachMeetingsData(() => client);
     const data = await load();
     expect(data.teams).toEqual([]);
+  });
+});
+
+function studentLoaderClient() {
+  const chains = new Map<
+    string,
+    {
+      select: ReturnType<typeof vi.fn>;
+      eq?: ReturnType<typeof vi.fn>;
+      is?: ReturnType<typeof vi.fn>;
+    }
+  >();
+  const thenable = (data: unknown[]) => Promise.resolve({ data, error: null });
+  const make = (table: string, data: unknown[]) => {
+    const select = vi.fn(() => ({
+      then: thenable(data).then.bind(thenable(data)),
+      order: () => thenable(data),
+      eq: () => ({ is: () => thenable(data) }),
+    }));
+    chains.set(table, { select });
+  };
+  make('events', [
+    makeMeetingEventRow('all-team'),
+    makeMeetingEventRow('team-a', { team_ids: ['team-a'] }),
+    makeMeetingEventRow('team-b', { team_ids: ['team-b'] }),
+  ]);
+  make('event_sessions', [
+    makeSessionRow('all-session', 'all-team'),
+    makeSessionRow('a-session', 'team-a'),
+    makeSessionRow('b-session', 'team-b'),
+  ]);
+  make('attendance', []);
+  make('v_student_participation', []);
+  const teamResult = thenable([{ team_id: 'team-a' }]);
+  const studentTeams = {
+    select: vi.fn(() => ({ eq: vi.fn(() => ({ is: vi.fn(() => teamResult) })) })),
+  };
+  return {
+    client: {
+      from: vi.fn((table: string) =>
+        table === 'student_teams'
+          ? studentTeams
+          : (chains.get(table) ??
+            (() => {
+              throw new Error(`unexpected ${table}`);
+            })()),
+      ),
+    } as unknown as SupabaseClient,
+    studentTeams,
+  };
+}
+
+describe('makeLoadStudentMeetingsData selected-child event boundary -- GAM-451', () => {
+  it('keeps all-team and active-team events, but excludes another linked child’s scoped event and its session', async () => {
+    const { client, studentTeams } = studentLoaderClient();
+    const data = await makeLoadStudentMeetingsData(() => client)('student-a');
+    expect(data.history.map((row) => row.sessionId).sort()).toEqual(['a-session', 'all-session']);
+    expect(data.history.map((row) => row.title)).not.toContain('Meeting team-b');
+    expect(studentTeams.select).toHaveBeenCalledWith('team_id');
+  });
+
+  it('passes a sole metric-view percentage through unchanged', () => {
+    const metric = {
+      student_id: 'student-a',
+      team_id: 'team-a',
+      season_id: 'season-a',
+      expected_ct: 7,
+      present_ct: 4,
+      late_ct: 1,
+      excused_ct: 0,
+      participation_pct: 57.1,
+    };
+    expect(selectSingleParticipationRow([metric])).toBe(metric);
+  });
+
+  it('returns null when no metric-view row exists', () => {
+    expect(selectSingleParticipationRow([])).toBeNull();
+  });
+
+  it('preserves an inner null percentage from the sole metric-view row', () => {
+    expect(
+      selectSingleParticipationRow([
+        {
+          student_id: 'student-a',
+          team_id: 'team-a',
+          season_id: 'season-a',
+          expected_ct: 0,
+          present_ct: 0,
+          late_ct: 0,
+          excused_ct: 0,
+          participation_pct: null,
+        },
+      ])?.participation_pct,
+    ).toBeNull();
+  });
+
+  it('returns null for ambiguous multi-row metrics instead of inventing an aggregate percentage', () => {
+    expect(
+      selectSingleParticipationRow([
+        {
+          student_id: 'student-a',
+          team_id: 'team-a',
+          season_id: 'season-a',
+          expected_ct: 2,
+          present_ct: 2,
+          late_ct: 0,
+          excused_ct: 0,
+          participation_pct: 100,
+        },
+        {
+          student_id: 'student-a',
+          team_id: 'team-b',
+          season_id: 'season-a',
+          expected_ct: 3,
+          present_ct: 0,
+          late_ct: 0,
+          excused_ct: 0,
+          participation_pct: 0,
+        },
+      ]),
+    ).toBeNull();
   });
 });

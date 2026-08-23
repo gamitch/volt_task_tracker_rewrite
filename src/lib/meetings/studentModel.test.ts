@@ -79,4 +79,24 @@ describe('buildStudentMeetingsData (constitution item 3)', () => {
     );
     expect(data.participation).toBeNull();
   });
+
+  it('keeps the already-loaded event location on each history row', () => {
+    const data = buildStudentMeetingsData(
+      'stu-1',
+      [{ ...MULTI_SESSION_EVENT }],
+      [
+        {
+          id: 'session-1',
+          eventId: 'e1',
+          sessionDate: '2026-08-24',
+          startsAt: '2026-08-24T23:00:00Z',
+          endsAt: '2026-08-25T01:00:00Z',
+          status: 'scheduled',
+        },
+      ],
+      [],
+      [],
+    );
+    expect(data.history[0]?.locationName).toBe('Robotics Lab');
+  });
 });

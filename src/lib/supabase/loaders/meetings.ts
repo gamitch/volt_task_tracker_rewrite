@@ -147,10 +147,11 @@
  *      accurate) -- drops `.limit(1)` (T116 consumer finding #2's arbitrary-
  *      team-for-dual-members bug) and instead fetches EVERY
  *      `v_student_participation` row for this student (one per team
- *      membership, T116's own migration doc). `aggregateParticipationRows`
- *      (below) sums those rows' own already-computed counters and reapplies
- *      the view's own `participation_pct` expression verbatim -- see that
- *      function's own doc for the full decision record and citation.
+ *      membership, T116's own migration doc). `selectSingleParticipationRow`
+ *      accepts the metric-view row only when exactly one is returned and
+ *      otherwise returns no metric, preserving the database-owned
+ *      `participation_pct` unchanged rather than aggregating counters or
+ *      recomputing a percentage in TypeScript.
  *
  * -----------------------------------------------------------------------
  * GAM-301 (T407) round 3, BLOCKER 2 fix: `makeResolveCurrentStudentId`/
@@ -317,6 +318,10 @@ interface AttendanceDbRow {
   session_id: string;
   student_id: string;
   status: AttendanceStatus;
+}
+
+interface StudentTeamDbRow {
+  team_id: string;
 }
 
 /** T122 (module doc above, item b). Cited column-for-column against
@@ -547,26 +552,23 @@ async function queryAttendanceForStudent(
   return { data: excludeUnmarked(result.data as AttendanceDbRow[] | null), error: result.error };
 }
 
+/** Active memberships are the selected student's presentation boundary. */
+async function queryActiveStudentTeams(
+  client: SupabaseClient,
+  studentId: string,
+): Promise<LoaderQueryResult<StudentTeamDbRow[]>> {
+  const result = await client
+    .from('student_teams')
+    .select('team_id')
+    .eq('student_id', studentId)
+    .is('left_on', null);
+  return { data: (result.data as StudentTeamDbRow[] | null) ?? null, error: result.error };
+}
+
 /**
- * T122 fix (T116 consumer finding #2, this task's own ".limit(1)" fix
- * decision -- full record in this task's own worker output): RENAMED from
- * the old `queryParticipationForStudent` (plural "Rows" -- it can now
- * genuinely return more than one row) and `.limit(1)` is REMOVED. The old
- * `.limit(1)` picked an ARBITRARY one of a dual member's per-team
- * `v_student_participation` rows (T116's migration doc,
- * `20260722000000_membership_views.sql`: one row per (student, membership-
- * team)) -- silently showing e.g. only her FRC team's participation and
- * dropping her FTC team's entirely, or vice versa, depending on whatever
- * order Postgrest happened to return rows in.
- *
- * Still not season-scoped, matching `MeetingsList.tsx`'s own deliberately
- * season-unaware `studentId`-only `LoadStudentMeetingsDataFn` signature
- * (that file's own Forbidden Files instruction) -- if a student has
- * multiple seasons' worth of rows too, they are summed together the same as
- * multiple teams' rows are (disclosed in this task's own worker output
- * "Known risks", same pre-existing limitation the old `.limit(1)` code's own
- * comment already disclosed, now inherited by the aggregate instead of
- * silently dropped).
+ * Fetch every visible metric row. The selector below deliberately rejects a
+ * zero- or multi-row result: this route has no team/season selector and must
+ * not choose a row arbitrarily or recompute a percentage in TypeScript.
  */
 async function queryParticipationRowsForStudent(
   client: SupabaseClient,
@@ -582,63 +584,16 @@ async function queryParticipationRowsForStudent(
 }
 
 /**
- * T122's `.limit(1)` fix decision (this task's own worker output has the
- * full record): `MeetingsList`'s student/parent view has NO team parameter
- * anywhere in its own type signatures (`LoadStudentMeetingsDataFn =
- * (studentId: string) => ...`; that file's own Forbidden Files instruction
- * keeps this route deliberately season/team-UNAWARE, same reason
- * `makeCreateMeetings`'s own season lookup lives in THIS loader rather than
- * as a page-level hook) -- so T120's twin decision's "team-scope if the call
- * site has a team" branch genuinely does not apply here (there is no team in
- * context to scope to). This is the documented fallback: aggregate.
- *
- * Sums the view's own already-computed counters (`expected_ct`,
- * `present_ct`, `late_ct`, `excused_ct`) across every row this student has,
- * then recomputes `participation_pct` using the SAME expression the view
- * itself uses, byte-for-byte -- cited directly from
- * `supabase/migrations/20260722000000_membership_views.sql`:
- *   round(100.0 * present_ct / greatest(expected_ct - excused_ct, 1), 1)
- * This is NOT a new/invented formula (constitution item 3 forbids that) --
- * it is the view's own arithmetic, applied to summed inputs instead of one
- * row's inputs. `v_team_participation` (same migration file) already
- * establishes this exact pattern for the analogous student-rollup-into-team
- * direction: it SUMs `v_student_participation`'s own counters across
- * students and reapplies this identical expression, never re-deriving a new
- * one. This function does the identical operation across a dual member's
- * OWN rows instead of across students -- same class of aggregate, same
- * source expression, cited the same way.
- *
- * `team_id` on the returned row is populated from the FIRST row purely to
- * satisfy `ParticipationDbRow`'s existing shape -- `MeetingsList.tsx` never
- * renders `StudentParticipationMetric.teamId` anywhere (grep-provable: only
- * `participationPct` is read from that shape, in `StudentMeetingsView`), so
- * this field carries no real "the" team meaning for an aggregate row and is
- * disclosed as such here rather than silently implying one.
+ * The student view has no honest singular team/season context. A metric-view
+ * row is therefore usable only when exactly one row is returned: its
+ * `participation_pct` is database-owned and passes through unchanged. Zero
+ * rows mean no metric; multiple rows are ambiguous, so returning null avoids
+ * inventing a client aggregate or implying that the first row is canonical.
  */
-export function aggregateParticipationRows(
+export function selectSingleParticipationRow(
   rows: readonly ParticipationDbRow[],
 ): ParticipationDbRow | null {
-  if (rows.length === 0) return null;
-  if (rows.length === 1) return rows[0];
-  const expectedCt = rows.reduce((sum, row) => sum + row.expected_ct, 0);
-  const presentCt = rows.reduce((sum, row) => sum + row.present_ct, 0);
-  const lateCt = rows.reduce((sum, row) => sum + row.late_ct, 0);
-  const excusedCt = rows.reduce((sum, row) => sum + row.excused_ct, 0);
-  // View's own expression, cited above -- `greatest(x, 1)` -> `Math.max(x, 1)`,
-  // `round(x, 1)` -> `Math.round(x * 10) / 10` (both non-negative here, so
-  // this matches Postgres `round`'s round-half-away-from-zero behavior).
-  const denominator = Math.max(expectedCt - excusedCt, 1);
-  const participationPct = Math.round(((100.0 * presentCt) / denominator) * 10) / 10;
-  return {
-    student_id: rows[0].student_id,
-    team_id: rows[0].team_id,
-    season_id: rows[0].season_id,
-    expected_ct: expectedCt,
-    present_ct: presentCt,
-    late_ct: lateCt,
-    excused_ct: excusedCt,
-    participation_pct: participationPct,
-  };
+  return rows.length === 1 ? rows[0] : null;
 }
 
 async function queryActiveSeasonId(
@@ -1071,8 +1026,7 @@ export function makeLoadCoachMeetingsData(
 /** `MeetingsList.tsx`'s own default `loadCoachData` -- real query. */
 export const loadCoachMeetingsData: LoadCoachMeetingsDataFn = makeLoadCoachMeetingsData();
 
-/** Student/parent view real load (Trap #1; T122 module doc above item c --
- * dual-member aggregation replaces the old `.limit(1)` arbitrary pick). */
+/** Student/parent view real load. */
 export function makeLoadStudentMeetingsData(
   getClient: () => SupabaseClient = getSupabaseClient,
 ): LoadStudentMeetingsDataFn {
@@ -1086,20 +1040,34 @@ export function makeLoadStudentMeetingsData(
     queryParticipationRowsForStudent,
     getClient,
   );
+  const loadActiveTeamRows = createLoader<string, StudentTeamDbRow[]>(
+    queryActiveStudentTeams,
+    getClient,
+  );
   return async (studentId: string): Promise<StudentMeetingsData> => {
-    const [eventRows, sessionRows, attendanceRows, participationRows] = await Promise.all([
-      loadEventRows(),
-      loadSessionRows(),
-      loadAttendanceRows(studentId),
-      loadParticipationRows(studentId),
-    ]);
-    const aggregatedParticipation = aggregateParticipationRows(participationRows ?? []);
+    const [eventRows, sessionRows, attendanceRows, participationRows, activeTeamRows] =
+      await Promise.all([
+        loadEventRows(),
+        loadSessionRows(),
+        loadAttendanceRows(studentId),
+        loadParticipationRows(studentId),
+        loadActiveTeamRows(studentId),
+      ]);
+    const activeTeamIds = new Set((activeTeamRows ?? []).map((row) => row.team_id));
+    const visibleEvents = (eventRows ?? []).filter(
+      (event) =>
+        event.team_ids === null || event.team_ids.some((teamId) => activeTeamIds.has(teamId)),
+    );
+    const visibleEventIds = new Set(visibleEvents.map((event) => event.id));
+    const participationRow = selectSingleParticipationRow(participationRows ?? []);
     return buildStudentMeetingsData(
       studentId,
-      (eventRows ?? []).map(mapEventDbRow),
-      (sessionRows ?? []).map(mapSessionDbRow),
+      visibleEvents.map(mapEventDbRow),
+      (sessionRows ?? [])
+        .filter((session) => visibleEventIds.has(session.event_id))
+        .map(mapSessionDbRow),
       (attendanceRows ?? []).map(mapAttendanceDbRow),
-      aggregatedParticipation === null ? [] : [mapParticipationDbRow(aggregatedParticipation)],
+      participationRow === null ? [] : [mapParticipationDbRow(participationRow)],
     );
   };
 }
