@@ -320,3 +320,111 @@ disclosure, and anything you were told to stop on.
    card shows fewer chips than the series actually meets — a quiet lie rather
    than a loud crash. I chose the quiet failure because the loud one takes the
    whole page down via `RouteErrorBoundary`.
+
+---
+
+# §9. DISPATCH ADDENDUM — round 2's corrections. **This section outranks every section above it.**
+
+`checker-premise` round 2 returned **REVISE (3 MAJOR, 8 MINOR, 6 NIT)** and
+graded the remainder **category (b)**: *"none justifies burning the item-19a
+escalation … orchestrator folds the corrections below into the dispatch message
+and sends it, rather than a round 3."* Item 19a caps the gate at two rounds, and
+both are spent. These corrections are therefore applied by the orchestrator
+here, not by a third gate round.
+
+**9a. Attendance % — §0d's em-dash interim is WITHDRAWN. Pass the real value.**
+
+Round 2 proved my interim was the worse half of the trade, and it is right.
+`PRD:312-313` (MTG-01a) binds: *"The attendance % is **DATA-01 passthrough**
+from the metric view (null → '—'), never computed in TypeScript."* Constitution
+item 1 puts a PRD requirement id above this packet. Emitting `null`
+unconditionally would (i) break that binding requirement, (ii) reverse
+GAM-446's already-passed delivered value at the assembly point, which the
+Definition of Ready item 5 forbids without authorization I do not have, and
+(iii) overload `SeriesCard.tsx:362-368`'s `null`, which that file's own comment
+defines as *"no completed sessions yet … never conflated with 'no data'"*.
+
+**So: `attendancePct: row.attendancePct ?? null` — a true passthrough.** Never
+`?? 0`, never arithmetic. Put a comment at that line naming **D014** and
+**GAM-460**: the `graded_marks_ct` mitigation that `types.ts:139-147` calls
+mandatory cannot be rendered from a frozen `SeriesCardModel`, so this ticket
+ships the percentage with that mitigation missing — a **disclosed, accepted
+risk which the migration itself assigns to the consuming ticket**
+(`20260821000000_meetings_event_attendance_view.sql:162-163`). The escalation
+to the owner stays open; if the owner promotes GAM-460, that ticket removes the
+risk. Disclose this prominently in your completion report.
+
+**9b. `Grouped Table` does not exist. Do not look for it.** §3a's second
+directive is deleted. Round 2 established this four separate ways in this
+repository — `ParticipationTab.tsx:137-160`, `HoursTab.tsx:218-222`,
+`EventsTab.tsx:228-232`, `CoachHome.tsx:21` (*"which does not exist anywhere,
+CLI or installed"*) — and `/roster` and `/reports` have **no** resizable detail
+panel. `PRD:357-359` is a **PRD defect**; report it, do not chase it.
+Compose the rail split from Astryx `Grid`/`GridSpan` (`astryx-api.md:98-151`),
+with shipped precedents in `HoursTab.tsx` and `CoachHome.tsx`. Never
+hand-rolled CSS grid.
+**`Card Grid` is different — it is verified installed** (GAM-441's gate ran
+`astryx template --list`, `GAM-441-run-log.md:172`, `:203`). §3a's `Card Grid`
+directive stands.
+
+**9c. T511 — the danger is a vacuous green, not a red.** Corrected ranges: the
+link is `CoachMeetingsView.tsx:938-949`; the T511 `describe` is
+`CoachMeetingsView.test.tsx:1199-1279` (§4 truncated C3 by 33 lines).
+`expandRow('Build Night')` — used by C1, C2, and inside **C3's `try/catch` at
+`:1252-1257`** — clicks the coach-table expander this teardown deletes.
+Re-point it at the new card-select → month-tab → session-expand path.
+**If you do not, C3's `catch` swallows the failure and C3 goes vacuously
+green** — the exact failure C3's own comment at `:1232-1240` records having
+happened once already ("left this test green while turning 23 others red").
+In C3, assert the coach fixture actually rendered **before** asserting the
+absence of links.
+
+**9d. No dead control ships — §3d and §8.4 were wrong on the fact.** With
+`roster` undefined, `SessionRow.tsx:368-375` **returns** the "No roster
+recorded" empty state *instead of* the roster rows, so `AttendanceChips`
+(`:398`, `:412`) never mounts. Say it that way, not "inert chips".
+**Wire the seams anyway** — `SchedulePanel` already declares
+`onSetAttendanceStatus` (`:204`), `onClearAttendance` (`:207`) and `recordedBy`
+(`:229`). Pass all three now from `loaders/attendance.ts:588`/`:653` and
+`useAuth()`. Three lines, and the roster ticket then needs no edit here.
+
+**9e. Two criteria added, one made non-vacuous.**
+- **Criterion 8 rewritten:** using a fixture containing at least one genuine
+  cross-series overlap pair, assert the three badge sites render **and** that
+  no overlap-specific copy appears at page level. Do not assert on `Banner`
+  absence (`:1582-1590`) — feedback and DES-12 banners are legitimate.
+- **Criterion 11:** a `coachModel.test.ts` case proving a 10 PM–1 AM session
+  yields no chip and throws nothing (§1 required the test; no criterion pinned
+  it).
+- **Criterion 12:** `nextSessionLabel`, `sessionsCompleted`/`sessionsTotal` and
+  `teamScopeLabel` match MTG-01a's literal example (`PRD:306-308`). Round 2
+  found five `SeriesCardModel` fields specified by nothing.
+
+**9f. Criterion 7's grep caveat.** `SESSION_STATUS_BADGE` is **also** exported
+by `EventsTab.tsx:491` and pinned green by `EventsTab.test.tsx:258-259`. Scope
+criterion 7's grep to `src/pages/meetings/**`; that hit is not yours.
+
+**9g. Citation fixes** (round 2 re-verified every line and found these):
+`auto-mode-decisions.md:4348-4350` → `:4345-4346`; `coachModel.ts:392` → `:393`;
+`coachModel.ts:167-216` → `:167-217`; `CoachMeetingsView.tsx:915-918` →
+`:916-936`; `PRD:90` → `:89`; §3a's quote begins `PRD:310`. GAM-449's handoff
+comment is `MeetingsRail.tsx:57-71`.
+
+**9h. The preamble's SKILL.md note was itself wrong.** `MeetingsList.tsx` has
+**zero** `ConsistencyStrip` references — that importer is gone entirely, not
+renumbered — and `ParentHome.tsx` imports it at `:396`/`:400`. `.claude/**` is
+Forbidden for you; the orchestrator owns that fix.
+
+**9i. Precedents to copy rather than invent.** The jsdom stub pattern is
+already in your own test file — `CoachMeetingsView.test.tsx:31-46` scopes an
+`HTMLDialogElement.showModal` gap with exactly the "not `src/test-setup.ts`"
+reasoning. And `formatChicagoWallTime` is the **third** copy already
+(`ScheduleMeetingsDialog.tsx:788-789` cites `OutreachList.tsx:1660-1665` and
+`OutreachDetail.tsx:1449`), so yours is the fourth — say "fourth" in the
+disclosure.
+
+**9j. Tooling limit, stated because it lands on you.** `node_modules` was
+absent for **both** gate rounds. No gate has been able to run `npm ci`, the
+vitest suite, or `astryx template --list` against this packet. **You are the
+first to execute anything here.** A template that fails to emit is a
+stop-and-report, not a route-around.

@@ -97,3 +97,40 @@ did not land.
   REVISE escalates to the owner rather than looping), `run_in_background: false`.
   *If this line is the last one in this file, the run died holding this
   subagent* — round 2 never returned a verdict and no worker was dispatched.
+- `01:54Z` — **`checker-premise` round 2 VERDICT: REVISE** (agent
+  `a0f445068ac69b108`, ~131K tokens, 54 tool calls). 3 MAJOR, 8 MINOR, 6 NIT —
+  and the gate graded the remainder **category (b)** itself: *"none justifies
+  burning the item-19a escalation … orchestrator folds the corrections below
+  into the dispatch message and sends it, rather than a round 3."* It audited
+  all 12 of round 1's required revisions and confirmed 9 applied correctly, 2
+  applied wrongly, 1 whose correction was itself wrong.
+  - **It overturned my own interim call, and it is right.** My em-dash
+    resolution of the D014 question breaks MTG-01a (`PRD:312-313` binds
+    `attendancePct` as a DATA-01 passthrough), reverses GAM-446's passed value
+    at the assembly point, and overloads the `null` that `SeriesCard.tsx:362-368`
+    already defines as "no completed sessions yet". Constitution item 1 puts the
+    PRD above my packet. §9a **withdraws the interim**: pass the real value,
+    disclose the missing `graded_marks_ct` mitigation loudly, keep the owner
+    escalation open for GAM-460.
+  - **`Grouped Table` does not exist** — proven four ways in this repo. My §3a
+    told the worker to start from an Astryx template that has never existed,
+    and my own "stop and report" clause would have converted that into a
+    guaranteed stall. `PRD:357-359` is a PRD defect. §9b deletes the directive.
+  - **T511's real hazard is a vacuous green, not a red.** C3 wraps `expandRow`
+    in `try/catch` (`test:1252-1257`); after the teardown that catch always
+    fires and C3 passes while asserting nothing — the exact failure its own
+    comment records having happened once already. §9c pins it.
+- `01:55Z` — **Item 19a resolution, stated because it is a judgement call.**
+  Both gate rounds are spent and the second returned REVISE, which 19a says
+  escalates rather than loops. I am **not** opening a round 3 and **not**
+  escalating the plan as a whole, because the gate that issued the REVISE
+  explicitly graded its own remaining findings worker-safe with named
+  corrections. Those corrections are applied by me as §9 of the packet, which
+  outranks every section above it. The one finding that genuinely needs the
+  owner (D014) was already escalated and remains open.
+- `01:55Z` — **DISPATCHED `worker-implementer`** on packet revision 2 + §9,
+  `run_in_background: false`, pinned default model (item 18 — no migration, no
+  RLS, no security definer, no metric-view SQL, no auth/role logic, so item 25's
+  second obligation forbids bumping it for sounding important). *If this line is
+  the last one in this file, the run died holding this subagent* — the worker's
+  diff, if any, is unmerged and unrecorded.
