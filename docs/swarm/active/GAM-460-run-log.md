@@ -111,3 +111,12 @@ subagent or step is named in the line above it.
   re-counted per-class; treated as pre-existing per the gate-run skill's
   own stated tolerance, not re-litigated here.
 - Verdict: **PASS.** About to write the PR body and open the PR as a draft.
+- Read credential deadline (AGENTS.md wall 3): `ghs_` token `iat
+  2026-08-23T01:58:19Z`, `exp 2026-08-23T02:58:19Z` — decoded directly, not
+  guessed.
+- Wrote `docs/swarm/active/GAM-460-pr-body.md`, checked it with
+  `pr-body`'s `check.mjs` (`OK declaration closes GAM-460`), committed,
+  pushed.
+- **Opened PR #244 as a draft**: https://github.com/gamitch/volt_task_tracker_rewrite/pull/244
+  (`Closes GAM-460` line 1, branch `claude/gam-460-graded-marks-ct-seriescard`).
+  Well inside the credential deadline.
