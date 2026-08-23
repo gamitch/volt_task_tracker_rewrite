@@ -249,11 +249,25 @@ export const UNMARKED_DB_STATUS = 'unmarked';
  * could not show it being dropped. Filtering here puts the invariant on the
  * path the fixtures actually exercise.
  *
- * `null` is preserved as `null`: every caller distinguishes it (a query
- * error) from `[]` (no rows).
+ * **`undefined` is accepted and normalised to `null`, and the parameter type
+ * says so on purpose.** Every call site passes
+ * `result.data as SomeDbRow[] | null`, and that cast LIES: Postgrest can
+ * resolve `data` as `undefined`, and this repo's own query-builder fakes
+ * routinely return a bare `{}` for a table the fixture never stubbed. The
+ * expression this helper replaced was `(result.data as T[] | null) ?? null`,
+ * whose `?? null` was doing exactly this coercion -- dropping it turned a
+ * `undefined` into `undefined.filter(...)` and took out GAM-451's
+ * selected-child boundary test on the merge with `main`. Narrowing the
+ * parameter back to `T[] | null` would compile, because the cast hides the
+ * real type, and break at runtime again.
+ *
+ * Both nullish inputs return `null`: every caller distinguishes `null` (a
+ * query error) from `[]` (no rows).
  */
-export function excludeUnmarked<T extends { status: string }>(rows: T[] | null): T[] | null {
-  return rows === null ? null : rows.filter((row) => row.status !== UNMARKED_DB_STATUS);
+export function excludeUnmarked<T extends { status: string }>(
+  rows: T[] | null | undefined,
+): T[] | null {
+  return rows == null ? null : rows.filter((row) => row.status !== UNMARKED_DB_STATUS);
 }
 /** `attendance.method` check constraint -- widened to permit `'self'` by
  * `supabase/migrations/20260724000000_self_checkoff.sql:31-33` (current

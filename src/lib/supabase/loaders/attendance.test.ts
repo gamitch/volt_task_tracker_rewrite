@@ -527,6 +527,15 @@ describe('excludeUnmarked — GAM-479 storage-state invariant', () => {
     expect(excludeUnmarked([])).toEqual([]);
   });
 
+  it("normalises undefined to null instead of throwing — Postgrest and this repo's fakes both produce it", () => {
+    // Regression. Every call site passes `result.data as SomeDbRow[] | null`,
+    // a cast that hides `undefined` from the compiler. The first version of
+    // this helper took `T[] | null` and did `rows === null`, which typechecked
+    // everywhere and then threw `Cannot read properties of undefined (reading
+    // 'filter')` against a fixture that never stubbed the attendance table.
+    expect(excludeUnmarked(undefined)).toBeNull();
+  });
+
   it('returns an all-sentinel page as [], not null — a page of only cleared rows is a real, empty answer', () => {
     expect(excludeUnmarked([{ status: UNMARKED_DB_STATUS }])).toEqual([]);
   });
