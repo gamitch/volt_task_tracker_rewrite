@@ -42,3 +42,29 @@ did not land.
   item-19a two-round cap), `run_in_background: false`. *If this line is the
   last one in this file, the run died holding this subagent* — the gate never
   returned a verdict and no worker was ever dispatched.
+- `01:52Z` — **`checker-premise` VERDICT: REVISE** (round 1 of 2; agent
+  `adadfe5bdb165882f`, ~170K tokens, 85 tool calls). 2 BLOCKER, 4 MAJOR,
+  7 MINOR, 2 NIT. It attacked §8's least-confident list first as its charter
+  requires, and the two findings that matter were **not** on that list:
+  - **BLOCKER 1 — the teardown would delete T511's only live-console entry
+    point.** `CoachMeetingsView.tsx:938-944` is the sole call site of
+    `routePaths.meetingLiveSession`; `SessionRow.tsx` has no such link and my
+    §6 marked it Forbidden. Worse, my own §4 wording ("a test deleted because
+    the surface is gone is fine") plus criterion 7 gave a worker written
+    permission to delete `CoachMeetingsView.test.tsx:1199-1245` C1/C2/C3 — the
+    exact assertions guarding the regression. That is the silent-reversal
+    class, and I wrote it in.
+  - **BLOCKER 2 — the attendance wiring in §3 is impossible as specified.**
+    No attendance write seam exists on this view (my §3 asserted one does —
+    false); the real seams are `loaders/attendance.ts:588/:653`. And nothing
+    in `src/lib/**` produces `SessionRosterEntry[]`, while §6 forbids loaders.
+    A worker following §3 mounts MTG-01g's tap-to-cycle chips over a
+    permanently empty roster.
+  - **MAJOR 6 is the one that needs the owner, not a rewrite** — see the
+    escalation line below.
+  - Also: my §2 stated a false fact about shipped code —
+    `partitionCoachMeetingRows` already *is* the Active/Finished predicate
+    (`coachModel.ts:378/:392/:415-427`, tested at `coachModel.test.ts:250-264`),
+    and my packet told the worker to write a second copy of it.
+  - Four of my own line citations were wrong (`types.ts:302` not `:329`, etc.).
+    Item 19c, demonstrated on me.
