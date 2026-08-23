@@ -40,10 +40,21 @@ import type {
   EventType,
   PartitionedRows,
   PastAttendanceSummary,
+  SeriesCardModel,
   SessionStatus,
   Team,
 } from './types';
-import { buildDateRangeLabel, buildRecurrenceChips, sessionDurationHours } from './format';
+import {
+  buildDateRangeLabel,
+  buildRecurrenceChips,
+  buildScheduleChips,
+  CHICAGO_TIME_ZONE,
+  formatWeekdayDate,
+  parseDateOnly,
+  sessionDurationHours,
+  type Dow,
+  type ScheduleRule,
+} from './format';
 
 // ---------------------------------------------------------------------------
 // Fixture data types (constitution item 6: fabricated names only). Former
@@ -451,6 +462,179 @@ export function buildCoachMeetingTableRows(
     }
   }
   return tableRows;
+}
+
+// ---------------------------------------------------------------------------
+// GAM-452 §1 -- `buildSeriesCardModels`, the one piece of genuinely new
+// logic this ticket adds. MTG-01a's coach series `Card` (`types.ts:295-340`,
+// `SeriesCardModel`, frozen by GAM-444) needs a `scheduleChips: string[]`
+// built from `buildScheduleChips(rules)` (`./format`), but no stored
+// recurrence column exists anywhere in this schema
+// (`20260717000000_scheduling_attendance.sql:33-48` has none, and
+// `ScheduleMeetingsDialog` only ever materialises real dates and discards
+// the rule that produced them) -- so every `ScheduleRule` below is DERIVED
+// from a `CoachMeetingRow`'s own `sessions`, never read off a column.
+// ---------------------------------------------------------------------------
+
+/** GAM-452 §1 -- this is a disclosed FOURTH reimplementation of the Chicago
+ * wall-clock-from-instant conversion `ScheduleMeetingsDialog.tsx`'s own
+ * unexported `formatChicagoWallTime` (`ScheduleMeetingsDialog.tsx:793-805`)
+ * already performs -- that function cites `OutreachList.tsx`'s own copy as
+ * its third, and it is deliberately NOT exported (only that file's own
+ * `resetForm()` calls it), so importing it here would cross a page-module
+ * boundary into a pure `src/lib/**` model file. `hourCycle: 'h23'` avoids an
+ * AM/PM split; every `Intl.DateTimeFormat` in this module stays pinned to
+ * `CHICAGO_TIME_ZONE` (NFR-09). */
+const CHICAGO_MINUTES_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  hour: 'numeric',
+  minute: 'numeric',
+  hourCycle: 'h23',
+  timeZone: CHICAGO_TIME_ZONE,
+});
+
+function chicagoMinutesFromMidnight(isoDateTime: string): number {
+  const parts = CHICAGO_MINUTES_FORMATTER.formatToParts(new Date(isoDateTime));
+  const hour = Number(parts.find((part) => part.type === 'hour')?.value ?? '0');
+  const minute = Number(parts.find((part) => part.type === 'minute')?.value ?? '0');
+  return hour * 60 + minute;
+}
+
+/** One `ScheduleRule` per session. `dow` is bucketed from the STORED
+ * `sessionDate` (`parseDateOnly(...).getUTCDay()`), never re-derived from the
+ * UTC `startsAt` instant -- the live trap already in this file's own fixture
+ * (`FIXTURE_SESSIONS[0]`, above: `2026-07-22T23:00:00.000Z` is 6 PM CDT on
+ * `sessionDate '2026-07-22'`, but an evening session routinely crosses into
+ * the next UTC calendar date, which would silently shift the bucketed
+ * weekday if this read the instant instead). `startMinutes`/`endMinutes` come
+ * from the real `startsAt`/`endsAt` instants, converted to Chicago wall-clock
+ * minutes. A session whose Chicago end time is exactly midnight is
+ * `endMinutes: 1440`, never `0` (`format.ts:245-247`,`:308-309`). A session
+ * that genuinely SPANS midnight (its converted end minutes fall at or before
+ * its start minutes, and the end is not exactly 00:00) is DROPPED here,
+ * never clamped or fabricated: `ScheduleRule` cannot represent it
+ * (`format.ts:217-220`), and handing it to `buildScheduleChips` would throw a
+ * `RangeError` that `RouteErrorBoundary` turns into a whole-page error for a
+ * single bad row. */
+function deriveScheduleRule(session: {
+  sessionDate: string;
+  startsAt: string;
+  endsAt: string;
+}): ScheduleRule | null {
+  const dow = parseDateOnly(session.sessionDate).getUTCDay() as Dow;
+  const startMinutes = chicagoMinutesFromMidnight(session.startsAt);
+  const rawEndMinutes = chicagoMinutesFromMidnight(session.endsAt);
+  const endMinutes = rawEndMinutes === 0 ? 1440 : rawEndMinutes;
+  if (endMinutes <= startMinutes) {
+    return null;
+  }
+  return { dow, startMinutes, endMinutes };
+}
+
+/** Dedupe to one rule per distinct `(dow, startMinutes, endMinutes)`,
+ * first-seen order (§1). Canceled sessions are excluded before dedup, so a
+ * canceled occurrence of an otherwise-real slot never manufactures a chip. */
+function deriveDedupedScheduleRules(
+  sessions: readonly CoachMeetingSessionDetail[],
+): ScheduleRule[] {
+  const seen = new Set<string>();
+  const rules: ScheduleRule[] = [];
+  for (const session of sessions) {
+    if (session.status === 'canceled') continue;
+    const rule = deriveScheduleRule(session);
+    if (rule === null) continue; // Midnight-spanning -- dropped, not thrown.
+    const key = `${rule.dow}:${rule.startMinutes}:${rule.endMinutes}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rules.push(rule);
+  }
+  return rules;
+}
+
+/** MTG-01a's "next-session line" (`PRD:306-308`'s own literal example,
+ * `"Next: Tue, Aug 26 · 6–8 PM"`, criterion 12). Reuses `buildScheduleChips`
+ * for the time-range half (dropped `:00` minutes, collapsed duplicate
+ * meridiem, en dash) instead of a second time formatter -- a chip built from
+ * one rule is `"{weekday} {timeRange}"`; this line needs the full calendar
+ * date instead of the bare weekday abbreviation, so only the leading weekday
+ * word is stripped back off. `null` when nothing is still `scheduled` (the
+ * finished state; `SeriesCard.tsx`'s own `FINISHED_SESSIONS_COPY` supplies
+ * that copy, not this builder). */
+function buildNextSessionLabel(
+  nextScheduled: CoachMeetingSessionDetail | undefined,
+): string | null {
+  if (nextScheduled === undefined) return null;
+  const rule = deriveScheduleRule(nextScheduled);
+  if (rule === null) {
+    // Midnight-spanning next session -- still dropped from time-range
+    // derivation (§1); fall back to the date alone rather than fabricate a
+    // range `buildScheduleChips` cannot honestly produce.
+    return `Next: ${formatWeekdayDate(nextScheduled.sessionDate)}`;
+  }
+  const [chip] = buildScheduleChips([rule]);
+  const timeRange = chip.slice(chip.indexOf(' ') + 1);
+  return `Next: ${formatWeekdayDate(nextScheduled.sessionDate)} · ${timeRange}`;
+}
+
+/**
+ * GAM-452 §1/§3b -- builds MTG-01a's `SeriesCardModel[]` from real
+ * `CoachMeetingRow[]`. `paletteIndexFor` is INJECTED, never imported
+ * directly from `MeetingsRail.tsx`'s own `paletteIndexForEventId` -- that
+ * file does `import './MeetingsRail.css'` and pulls in `@astryxdesign/core`,
+ * which would drag a page component into this pure model's own unit test.
+ * The composing page (`CoachMeetingsView.tsx`) passes the real
+ * `paletteIndexForEventId` at the call site; this builder never writes a
+ * second hash of its own (GAM-476).
+ */
+export function buildSeriesCardModels(
+  rows: readonly CoachMeetingRow[],
+  paletteIndexFor: (eventId: string) => number,
+): SeriesCardModel[] {
+  return rows.map((row) => {
+    const rules = deriveDedupedScheduleRules(row.sessions);
+    const nonCanceled = row.sessions.filter((session) => session.status !== 'canceled');
+    const completed = row.sessions.filter((session) => session.status === 'completed');
+    const nextScheduled = row.sessions
+      .filter((session) => session.status === 'scheduled')
+      .slice()
+      .sort((a, b) => a.startsAt.localeCompare(b.startsAt))[0];
+
+    return {
+      eventId: row.eventId,
+      title: row.title,
+      teamScopeLabel: row.teamScopeLabel,
+      scheduleChips: buildScheduleChips(rules),
+      sessionsCompleted: completed.length,
+      sessionsTotal: nonCanceled.length,
+      /**
+       * §9a (WITHDRAWN §0d interim) -- a true passthrough, never `?? 0`,
+       * never arithmetic (constitution item 3, BLOCKER). `row.attendancePct`
+       * is GAM-446's own `v_event_attendance.attendance_pct` merge
+       * (`types.ts:123-134`); `null`/`undefined` both collapse to `null`
+       * here, rendered as "—" by `SeriesCard.tsx:362-368`, never a
+       * fabricated zero.
+       *
+       * DISCLOSED, ACCEPTED RISK (D014 / GAM-460, still `Backlog`): this
+       * view does not also render `graded_marks_ct`
+       * (`types.ts:139-147`'s own capitalized warning calls that
+       * "MANDATORY whenever attendance_pct is rendered" -- `SeriesCardModel`
+       * is frozen without that field, and `SeriesCard.tsx` belongs to
+       * already-merged GAM-447, both outside this ticket's Allowed Files).
+       * Since T508 an unmarked student has no attendance row, so forgetting
+       * to mark someone INFLATES this percentage (measured 100% for an
+       * event 60% of the roster skipped). The migration itself assigns this
+       * mitigation to the consuming ticket
+       * (`20260821000000_meetings_event_attendance_view.sql:162-163`);
+       * GAM-460 is that ticket. Do not "fix" this back to `null` -- round 2
+       * of this packet's own premise gate proved that withholding a real
+       * number here is the worse half of the honesty trade (PRD MTG-01a:
+       * "The attendance % is DATA-01 passthrough ... never computed in
+       * TypeScript").
+       */
+      attendancePct: row.attendancePct ?? null,
+      nextSessionLabel: buildNextSessionLabel(nextScheduled),
+      paletteIndex: paletteIndexFor(row.eventId),
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------

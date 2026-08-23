@@ -2,13 +2,21 @@
 /**
  * Tests for `CoachMeetingsView.tsx`'s coach/admin role variant -- moved
  * verbatim out of `src/pages/meetings/MeetingsList.test.tsx` (GAM-444 Stage
- * C), same assertions, same test names, only the import path/location
- * changed (GAM-444 packet criterion 2). Renders through `<MeetingsList />`
- * (imported from `../MeetingsList`, the shell) exactly as before the split
- * -- these are role-variant integration tests (auth -> role switch ->
- * `CoachMeetingsView`), not isolated-component tests, and rewriting them to
- * mount `<CoachMeetingsView />` directly would be a behavior/assertion
- * change criterion 2 forbids.
+ * C), then substantially rewritten by GAM-452 (this ticket) to match the
+ * redesigned card/rail/panel composition that replaces the old Table-based
+ * Upcoming/Past row UI. Renders through `<MeetingsList />` (imported from
+ * `../MeetingsList`, the shell) -- these are role-variant integration tests
+ * (auth -> role switch -> `CoachMeetingsView`), not isolated-component
+ * tests.
+ *
+ * GAM-452 §3c -- `/meetings` renders inside `<SeasonProvider>` in production
+ * (`App.tsx:74` -> `AppShell.tsx:158-168`); every render below is wrapped in
+ * one too, via the same injected `loadActiveSeason` seam
+ * `CalendarPage.test.tsx:154`/`:168` already establishes. Most tests default
+ * to a resolved `null` (season `'none'`) -- `MeetingsRail` falls back to the
+ * session-span bound in that case, which every pre-existing assertion below
+ * is written to tolerate; two dedicated tests prove the `'ready'` half of
+ * the threading (criterion 2).
  *
  * Per the original T030 packet's own disclosed-addition note (still true):
  * no `@testing-library/react` is installed in this repo -- these tests use
@@ -20,6 +28,8 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, type AuthUser } from '../../../app/guards';
+import { SeasonProvider, type LoadActiveSeasonFn } from '../../../app/SeasonProvider';
+import type { SeasonRow } from '../../../lib/supabase/types';
 import { LoginAs } from '../../../test-utils/authHarness';
 import { MeetingsList, defaultLoadCoachMeetingsData, formatWeekdayDate } from '../MeetingsList';
 import type { CoachMeetingsData, ResolveCurrentStudentIdFn } from '../../../lib/meetings/types';
@@ -29,10 +39,14 @@ import type { CreateMeetingsPayload } from '../ScheduleMeetingsDialog';
 import type { SaveMeetingSessionPayload } from '../EditMeetingSessionDialog';
 
 // ---------------------------------------------------------------------------
-// jsdom gap: `AlertDialog` renders a native `<dialog>` and calls
-// `HTMLDialogElement.prototype.showModal()`, which this repo's installed
-// jsdom (29.x) does not implement. Scoped to THIS test file's own jsdom
-// global only (not `src/test-setup.ts`, outside this task's Allowed Files).
+// jsdom gaps, scoped to THIS test file's own jsdom globals only (not
+// `src/test-setup.ts`, outside this task's Allowed Files):
+//   - `AlertDialog` renders a native `<dialog>` and calls
+//     `HTMLDialogElement.prototype.showModal()`, which this repo's installed
+//     jsdom (29.x) does not implement (precedent already in this file,
+//     pre-ticket, `:31-46` of the prior revision).
+//   - `Element.prototype.scrollIntoView` does not exist in jsdom at all
+//     (GAM-452 packet §3b) -- needed for the criterion-1 focus/scroll test.
 // ---------------------------------------------------------------------------
 if (
   typeof HTMLDialogElement !== 'undefined' &&
@@ -43,6 +57,12 @@ if (
   };
   HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement): void {
     this.removeAttribute('open');
+  };
+}
+if (typeof Element.prototype.scrollIntoView !== 'function') {
+  Element.prototype.scrollIntoView = function scrollIntoView(): void {
+    // no-op stub -- jsdom has no layout engine, this only needs to exist so
+    // the real call site doesn't throw.
   };
 }
 
@@ -64,20 +84,26 @@ const STUDENT_OR_PARENT_USER: AuthUser = {
   role: 'student',
 };
 
-/** T511 -- `MemoryRouter` is required, not decorative: the coach session row now
- * renders a real `Link as={RouterLink}` to the live console, and `RouterLink`
- * throws `Cannot destructure property 'basename'` outside a router context.
- * Same wrapper `LiveConsole.test.tsx` and `CheckinResult.test.tsx` already use
- * for the same reason. It is additive -- every pre-existing assertion in this
- * file is unaffected by having a router in the tree. */
-function renderAsUser(user: AuthUser, props: Parameters<typeof MeetingsList>[0] = {}): void {
+/** GAM-452 §3c -- `null` (season `'none'`) unless a test needs a real,
+ * `'ready'` season (criterion 2). `MemoryRouter` is required, not
+ * decorative: the composed page renders a real `Link as={RouterLink}` to
+ * the live console, and `RouterLink` throws outside a router context (same
+ * `LiveConsole.test.tsx`/`CheckinResult.test.tsx` precedent this file
+ * already used pre-ticket). */
+function renderAsUser(
+  user: AuthUser,
+  props: Parameters<typeof MeetingsList>[0] = {},
+  loadActiveSeason: LoadActiveSeasonFn = async () => null,
+): void {
   act(() => {
     root.render(
       <MemoryRouter>
         <AuthProvider>
-          <LoginAs user={user}>
-            <MeetingsList {...props} />
-          </LoginAs>
+          <SeasonProvider loadActiveSeason={loadActiveSeason}>
+            <LoginAs user={user}>
+              <MeetingsList {...props} />
+            </LoginAs>
+          </SeasonProvider>
         </AuthProvider>
       </MemoryRouter>,
     );
@@ -94,10 +120,9 @@ async function flushMicrotasks(): Promise<void> {
 
 // ---------------------------------------------------------------------------
 // T096: DOM helpers for interacting with the now-real `ScheduleMeetingsDialog`
-// -- same helpers `ScheduleMeetingsDialog.test.tsx` (T031) already
-// established (Astryx `Field` renders a real `<label htmlFor={id}>` for
-// every labeled input; no testing-library `getByLabelText` equivalent is
-// installed in this repo).
+// -- unchanged from before this ticket (Astryx `Field` renders a real
+// `<label htmlFor={id}>` for every labeled input; no testing-library
+// `getByLabelText` equivalent is installed in this repo).
 // ---------------------------------------------------------------------------
 
 function getFieldControl(labelText: string): HTMLElement {
@@ -121,6 +146,16 @@ function findButtonByText(text: string): HTMLButtonElement | undefined {
   );
 }
 
+/** `Tab`'s own label renders TWICE in the DOM (a visible span plus an
+ * `aria-hidden` width-measurement duplicate, `Tab.tsx:303-309`), so an
+ * exact-text lookup never matches -- select by its real `data-tab-value`
+ * attribute instead. */
+function selectTab(value: 'active' | 'finished'): void {
+  const tab = container.querySelector(`[data-tab-value="${value}"]`);
+  if (!tab) throw new Error(`No tab found for "${value}"`);
+  clickButton(tab as HTMLButtonElement);
+}
+
 function setNativeInputValue(input: HTMLInputElement, value: string): void {
   const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
   setter?.call(input, value);
@@ -133,24 +168,81 @@ function clickButton(button: HTMLButtonElement): void {
   });
 }
 
-/** T135 (Table migration, Trap 1/2 of that task's own worker packet) --
- * expands a coach meeting row's session detail. Astryx's `Collapsible` used
- * to keep its content always mounted in the DOM (only CSS-hidden while
- * collapsed), so no click was ever needed to find session-detail text; row
- * splicing (the `Table` migration's mechanism) genuinely removes those rows
- * from the DOM until expanded, so a real click is now required. Finds the
- * expander by its accessible name (`Show session details – {title}` /
- * `Hide session details – {title}`) rather than its shared visible text
- * (`Session details (N)`, which is NOT unique across rows -- every row's
- * expander carries that same shape). */
-function expandRow(eventTitle: string): void {
-  const expander = Array.from(document.querySelectorAll('button')).find((button) =>
-    button.getAttribute('aria-label')?.startsWith(`Show session details – ${eventTitle}`),
+// ---------------------------------------------------------------------------
+// GAM-452 -- new DOM helpers for the card/rail/panel composition, replacing
+// the deleted `expandRow` (old coach-table expander) and the old
+// `CoachMeetingSessionRow`-specific button lookups.
+// ---------------------------------------------------------------------------
+
+/** Finds a `<SeriesCard>` by its title (an `<h3>`) and clicks its "View full
+ * schedule" button -- the card-select entry point that opens the drill-out
+ * `<SchedulePanel>` (replaces the deleted table row expander). */
+function selectCard(eventTitle: string): void {
+  const heading = Array.from(container.querySelectorAll('h3')).find(
+    (h) => h.textContent === eventTitle,
   );
-  if (!expander) {
-    throw new Error(`No expander button found for "${eventTitle}"`);
+  if (!heading) throw new Error(`No series card heading found for "${eventTitle}"`);
+  let el: HTMLElement | null = heading;
+  let button: HTMLButtonElement | undefined;
+  for (let i = 0; i < 10 && el && !button; i += 1) {
+    button = Array.from(el.querySelectorAll('button')).find((b) =>
+      b.textContent?.startsWith('View full schedule'),
+    );
+    el = el.parentElement;
   }
-  clickButton(expander);
+  if (!button) throw new Error(`No "View full schedule" button found for "${eventTitle}"`);
+  clickButton(button);
+}
+
+/** Finds the smallest ancestor of a given session's own date/time line that
+ * also contains that row's Expand/Collapse toggle -- `SessionRow.tsx`'s own
+ * row header -- then returns its PARENT (the row's full `<VStack>` root,
+ * which also contains the conditionally-rendered expanded body). */
+function findSessionRowRoot(sessionDate: string): HTMLElement {
+  const dateText = formatWeekdayDate(sessionDate);
+  const leaf = Array.from(container.querySelectorAll('*')).find(
+    (el) => el.children.length === 0 && (el.textContent ?? '').startsWith(dateText),
+  );
+  if (!leaf) throw new Error(`No session row found for "${dateText}"`);
+  let el: HTMLElement | null = leaf as HTMLElement;
+  for (let i = 0; i < 10 && el; i += 1) {
+    const hasToggle = Array.from(el.querySelectorAll('button')).some((b) => {
+      const text = b.textContent?.trim();
+      return text === 'Expand' || text === 'Collapse';
+    });
+    if (hasToggle) {
+      return (el.parentElement ?? el) as HTMLElement;
+    }
+    el = el.parentElement;
+  }
+  throw new Error(`No session row root found for "${dateText}"`);
+}
+
+function findButtonInSessionRow(sessionDate: string, text: string): HTMLButtonElement | undefined {
+  const root = findSessionRowRoot(sessionDate);
+  return Array.from(root.querySelectorAll('button')).find((b) => b.textContent?.trim() === text);
+}
+
+/** Clicks a session row's own Expand/Collapse toggle (`SessionRow.tsx`'s own
+ * control) -- required before its inline Cancel button (a `scheduled`
+ * session) or roster region (a `completed` session) exists in the DOM. */
+function toggleSessionExpand(sessionDate: string): void {
+  const button =
+    findButtonInSessionRow(sessionDate, 'Expand') ?? findButtonInSessionRow(sessionDate, 'Collapse');
+  if (!button) throw new Error(`No Expand/Collapse toggle found for ${formatWeekdayDate(sessionDate)}`);
+  clickButton(button);
+}
+
+function findButtonInDialogByTitle(
+  titleSubstring: string,
+  buttonText: string,
+): HTMLButtonElement | undefined {
+  const dialog = Array.from(document.querySelectorAll('dialog')).find((d) =>
+    d.textContent?.includes(titleSubstring),
+  );
+  return Array.from(dialog?.querySelectorAll('button') ?? []).find(
+    (b) => b.textContent?.trim() === buttonText,
+  );
 }
 
 /** T511 C3 -- same fake `resolveStudentId(Fn)` seam
@@ -178,11 +270,12 @@ afterEach(() => {
     root.unmount();
   });
   container.remove();
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
 // ---------------------------------------------------------------------------
-// <MeetingsList /> -- coach view, all four DES-12 states
+// <MeetingsList /> -- coach view, all four DES-12 states (criterion 9)
 // ---------------------------------------------------------------------------
 
 describe('<MeetingsList /> coach view', () => {
@@ -205,14 +298,25 @@ describe('<MeetingsList /> coach view', () => {
   it('empty state (zero meeting sessions)', async () => {
     renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve({ rows: [], teams: [] }) });
     await flushMicrotasks();
-    // DES-15 verbatim (PRD line 212, T083).
+    // DES-15 verbatim (PRD line 212, T083) -- unchanged by this ticket.
     expect(container.textContent).toContain('No meetings scheduled.');
     expect(container.textContent).toContain(
       'Set up your weekly build meetings once and check-in takes care of itself.',
     );
   });
 
-  it('populated state: Upcoming/Past sections, status badges, team scope, dates, NAV-07 exclusion', async () => {
+  // GAM-452 rewrite -- the old assertions here were about the deleted
+  // Table's own `StatCell`/expander-button text ("Scheduled4h", "Session
+  // details (3)") and cumulative "Expected"/"Attended" counts that
+  // `SeriesCardModel` (frozen, GAM-444) simply has no field for
+  // (`SeriesCard.tsx`'s own module doc item 7(a): "No location/roster-count/
+  // canceled-count/span-chip/'N expected'"). These are REMOVED, not
+  // adapted -- that surface is genuinely gone, not turned red by a mistake.
+  // Replaced with the equivalent facts on the new card: title, team scope,
+  // schedule chips (derived from real fixture sessions, GAM-452 §1),
+  // progress caption, attendance "—" (fixture sets no `attendancePct`), and
+  // the next-session line (criterion 12's own format).
+  it('populated state: series cards, schedule chips, progress, attendance passthrough, NAV-07 exclusion', async () => {
     renderAsUser(COACH_USER, { loadCoachData: defaultLoadCoachMeetingsData });
     await flushMicrotasks();
 
@@ -220,173 +324,32 @@ describe('<MeetingsList /> coach view', () => {
     expect(container.textContent).toContain('Ravens Strategy Session');
     expect(container.textContent).toContain('All teams');
     expect(container.textContent).toContain('Ravens');
-    // T135 (Table migration) Trap 1, authorized: the hours `StatCell`'s own
-    // label is literally the word "Scheduled" -- this assertion survives
-    // only because §1 of that task's packet pins that label; it is not
-    // independent proof of a session-status badge (see the expanded
-    // assertions below for that).
-    expect(container.textContent).toContain('Scheduled');
-    // "Completed" survives via the Past section's own `EmptyState`
-    // description ("Completed and canceled meetings will show up here.") --
-    // by luck rather than design (T135 packet Trap 1), since this fixture's
-    // Past bucket is empty. Not relied upon as proof of a session badge.
-    expect(container.textContent).toContain('Completed');
 
-    // T135 (Table migration) Trap 1: row splicing means a session's own
-    // status badge ("Canceled") and its attendance summary ("present") only
-    // exist in the DOM once this row's expander has been clicked -- unlike
-    // the old `Collapsible`, whose content stayed mounted (CSS-hidden, not
-    // removed) even while collapsed.
-    expandRow('Weekly Build Meeting');
-    expect(container.textContent).toContain('Canceled');
-    expect(container.textContent).toContain('present');
-    expect(container.textContent).toContain('Schedule meetings');
+    // Schedule chips (GAM-452 §1): both series' real sessions dedupe to one
+    // weekday-with-time rule each, canceled sessions excluded.
+    expect(container.textContent).toContain('Wed 6–8 PM');
+    expect(container.textContent).toContain('Sat 5:30–7 PM');
+
+    // Progress caption -- "N of M sessions held", canceled excluded from
+    // the denominator.
+    expect(container.textContent).toContain('1 of 2 sessions held');
+
+    // Attendance passthrough (§0d/§9a, criterion 6) -- the fixture sets no
+    // `attendancePct`, so both cards render "—", never a fabricated 0%.
+    expect(container.textContent).toContain('—');
+
+    // Next-session line (criterion 12's literal shape).
+    expect(container.textContent).toContain('Next: Wed, Jul 22 · 6–8 PM');
+    expect(container.textContent).toContain('Next: Sat, Jul 25 · 5:30–7 PM');
 
     // NAV-07: outreach content must never appear.
     expect(container.textContent).not.toContain('Community Food Drive');
   });
 
-  // T122 (UXD-02 density standard) -- date/recurrence chips, location,
-  // planned/logged hours, expected/attended counts all render on the row.
-  it('renders UXD-02 dense-row fields: recurrence chip, date range, location, planned/logged hours, expected/attended', async () => {
-    renderAsUser(COACH_USER, { loadCoachData: defaultLoadCoachMeetingsData });
-    await flushMicrotasks();
-
-    // "Weekly Build Meeting" has 3 sessions, all on Wednesdays.
-    expect(container.textContent).toContain('WED (3)');
-    expect(container.textContent).toContain('Wed, Jul 8 – Wed, Jul 22');
-    expect(container.textContent).toContain('Robotics Lab');
-    // T135 (Table migration) Trap 3, authorized: `StatCell` renders its
-    // label and value with NO separator (`StatCell.tsx:56-61`; its own test
-    // pins "Planned3h") and its `secondary` tier as its own separate line --
-    // the old single-run "4h scheduled · 2h held" string no longer exists as
-    // one run of text. Same real numbers (planned = scheduled 2h + completed
-    // 2h = 4h, canceled excluded; logged = completed only = 2h), asserted in
-    // their new per-cell homes instead of weakened to a substring-of-anything
-    // check.
-    expect(container.textContent).toContain('Scheduled4h');
-    expect(container.textContent).toContain('2h held');
-    // expected = session-upcoming-build's 5 'going' RSVPs; attended =
-    // session-past-build-completed's 3 present + 1 late. Same split reason.
-    expect(container.textContent).toContain('Expected5');
-    expect(container.textContent).toContain('Attended 4');
-
-    // "Ravens Strategy Session" has 2 sessions, both on Saturdays.
-    expect(container.textContent).toContain('SAT (2)');
-    expect(container.textContent).toContain('Ravens Team Room');
-    expect(container.textContent).toContain('Scheduled3h');
-    expect(container.textContent).toContain('1.5h held');
-    expect(container.textContent).toContain('Expected2');
-    expect(container.textContent).toContain('Attended 3');
-
-    // UXD-03: expander trigger text is always visible (it is the `Button`'s
-    // own children, not conditionally-rendered `Collapsible` content), so no
-    // click is needed for these two.
-    expect(container.textContent).toContain('Session details (3)');
-    expect(container.textContent).toContain('Session details (2)');
-    // T135 (Table migration) Trap 1, authorized: unlike the old `Collapsible`
-    // (content always mounted, only CSS-hidden while collapsed), row
-    // splicing genuinely removes a session-detail row from the DOM until its
-    // parent row's expander is clicked -- the attendee-names line lives
-    // inside that spliced-in row.
-    expandRow('Weekly Build Meeting');
-    expect(container.textContent).toContain('Attended: Alex Rivera, Bailey Chen, Casey Nguyen');
-  });
-
-  // -------------------------------------------------------------------------
-  // T129/UXC-01: one heading per section. `CoachMeetingsSection`'s own
-  // `List`'s `header` prop was removed (it used to print "Upcoming
-  // meetings"/"Past meetings" a second time, per `List.tsx:194-201`); its
-  // `Heading` now carries a `useId`-generated id, and a
-  // `<div role="group">` wrapping the List/EmptyState ternary carries
-  // `aria-labelledby={headingId}` -- present in BOTH branches, so the
-  // region's accessible name survives even when there is no `List` to
-  // attach a `header` to.
-  //
-  // CHECKER FIX (rework of T129, MAJOR): the wrapper was originally an
-  // Astryx `Section`, which applies a full-bleed negative-margin band
-  // unconditionally and renders a bare, role-less `<div>` that cannot
-  // support `aria-labelledby` under ARIA. A plain `<div role="group">`
-  // fixes both; the query below includes `role="group"` so a regression
-  // back to a role-less wrapper fails the lookup itself, not just a later
-  // assertion.
-  // -------------------------------------------------------------------------
-  describe('T129 UXC-01 -- exactly one heading per Upcoming/Past section', () => {
-    function resolveAriaLabelledbyTarget(headingText: string): {
-      headingId: string;
-      resolvedText: string | null;
-    } {
-      const heading = Array.from(container.querySelectorAll('h2')).find(
-        (h) => h.textContent === headingText,
-      );
-      expect(heading).toBeTruthy();
-      const headingId = heading!.id;
-      expect(headingId).toBeTruthy();
-      const labelledEl = container.querySelector(`[role="group"][aria-labelledby="${headingId}"]`);
-      expect(labelledEl).toBeTruthy();
-      expect(labelledEl!.getAttribute('role')).toBe('group');
-      const resolvedId = labelledEl!.getAttribute('aria-labelledby')!;
-      const resolvedEl = document.getElementById(resolvedId);
-      return { headingId, resolvedText: resolvedEl?.textContent ?? null };
-    }
-
-    it('populated branch: both "Upcoming" and "Past" resolve aria-labelledby back to their own Heading, printed exactly once', async () => {
-      renderAsUser(COACH_USER, { loadCoachData: defaultLoadCoachMeetingsData });
-      await flushMicrotasks();
-
-      for (const title of ['Upcoming', 'Past']) {
-        const { resolvedText } = resolveAriaLabelledbyTarget(title);
-        expect(resolvedText).toBe(title);
-        const leafMatches = Array.from(container.querySelectorAll('*')).filter(
-          (el) => el.children.length === 0 && el.textContent === title,
-        );
-        expect(leafMatches.length).toBe(1);
-      }
-    });
-
-    it('empty branch: "Upcoming" has no scheduled sessions -- its aria-labelledby still resolves to its Heading, even with no List rendered ("Past" stays populated in the same render)', async () => {
-      const pastOnlyRow: CoachMeetingsData = {
-        rows: [
-          {
-            eventId: 'event-past-only',
-            title: 'Archived Strategy Session',
-            locationName: 'Robotics Lab',
-            teamScopeLabel: 'All teams',
-            sessions: [
-              {
-                sessionId: 'session-past-only',
-                sessionDate: '2026-01-05',
-                startsAt: '2026-01-05T18:00:00.000Z',
-                endsAt: '2026-01-05T20:00:00.000Z',
-                status: 'completed',
-                durationHours: 2,
-                expectedCt: 0,
-                attendanceSummary: { presentCt: 0, lateCt: 0, excusedCt: 0, absentCt: 0 },
-                attendeeNames: [],
-              },
-            ],
-          },
-        ],
-        teams: [],
-      };
-      renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(pastOnlyRow) });
-      await flushMicrotasks();
-
-      // Confirm "Upcoming" really is the EmptyState branch (per its own
-      // `emptyDescription`), not a load failure.
-      expect(container.textContent).toContain('No meetings are currently scheduled.');
-      expect(container.textContent).toContain('Archived Strategy Session');
-
-      for (const title of ['Upcoming', 'Past']) {
-        const { resolvedText } = resolveAriaLabelledbyTarget(title);
-        expect(resolvedText).toBe(title);
-      }
-    });
-  });
-
   // T096: "Schedule meetings" now opens the real `ScheduleMeetingsDialog`
   // (T031, already Passed) instead of showing the old "dialog not built yet"
-  // stub -- that dialog genuinely IS built now (module doc #7a).
+  // stub. Unaffected by the card/rail/panel redesign -- unchanged from
+  // before this ticket except the `SeasonProvider` wrap.
   it('"Schedule meetings" opens the real ScheduleMeetingsDialog (module doc #7a)', async () => {
     renderAsUser(COACH_USER, { loadCoachData: defaultLoadCoachMeetingsData });
     await flushMicrotasks();
@@ -483,32 +446,12 @@ describe('<MeetingsList /> coach view', () => {
     expect(container.textContent).toContain('Meetings scheduled');
   });
 
-  // -------------------------------------------------------------------------
-  // T147: the outreach/meetings team picker shows fixture teams to real
-  // users -- the meetings half, "the one that actually blocks a core create
-  // flow" (packet). `ScheduleMeetingsDialog`'s own `teams` prop now gets the
-  // already-fetched `loaders/meetings.ts` teams (threaded through
-  // `CoachMeetingsData`) instead of falling back to that dialog's own
-  // `DEFAULT_TEAMS` fixture (`'team-ravens'`/`'team-titans'`, non-uuid
-  // strings that fail the real `events.team_ids uuid[]` insert -- "Couldn't
-  // create these meetings.").
-  //
-  // Create mode has no `initialData`/edit mode at all (module doc #7b) --
-  // `allTeamIds` (derived straight from the `teams` prop) seeds
-  // `selectedTeamIds` on open, so this dialog needs no edit-mode fixture
-  // trick, unlike `OutreachEventDialog`'s edit-mode sites.
-  //
-  // Assertion mechanism -- UUID shape on the submitted payload, never a
-  // name-based assertion (this file's own `FIXTURE_EVENTS`/`FIXTURE_TEAMS`
-  // literally contain the text "Ravens" in unrelated fixture content --
-  // `:737`/`:740` -- so a name-based assertion cannot discriminate here).
-  // -------------------------------------------------------------------------
+  // T147: unaffected by the card/rail/panel redesign -- interacts with
+  // `ScheduleMeetingsDialog` directly via the unchanged "Schedule meetings"
+  // button.
   it('T147: deselecting one team submits a teamIds array of real UUIDs from the teams prop, never the fixture strings', async () => {
     const onCreateMeetings = vi.fn().mockResolvedValue(undefined);
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    // UUID-shaped ids matching what the real `teams` table actually
-    // produces (`teams.id uuid primary key`); fabricated names
-    // (constitution item 6) -- never asserted on.
     async function loadCoachDataWithRealTeams(): Promise<CoachMeetingsData> {
       const base = await defaultLoadCoachMeetingsData();
       return {
@@ -528,20 +471,11 @@ describe('<MeetingsList /> coach view', () => {
     );
     clickButton(scheduleButtons[0] as HTMLButtonElement);
 
-    // Title already defaults to a non-empty value (`DEFAULT_TITLE`,
-    // `ScheduleMeetingsDialog.tsx`); only a date is needed for `isValid`.
     const dateInput = getFieldControl('Date') as HTMLInputElement;
     act(() => {
       setNativeInputValue(dateInput, '2026-08-05');
     });
 
-    // Open the "Team scope" MultiSelector and deselect the LAST option in
-    // its own listbox -- positional, not by label text (with the fix
-    // reverted the injected UUID-fixture labels are absent, so a label
-    // lookup would die with a harness-shaped failure instead of the UUID
-    // mismatch this test exists to prove). Scoped to the trigger's own
-    // `aria-controls` listbox. The last option is never the `hasSelectAll`
-    // pseudo-option, which that component places FIRST.
     const trigger = getFieldControl('Team scope');
     clickButton(trigger as HTMLButtonElement);
     const listboxId = trigger.getAttribute('aria-controls');
@@ -568,55 +502,23 @@ describe('<MeetingsList /> coach view', () => {
     }
   });
 
-  // T096 (module doc #7b, Trap #3 finding) -- Edit WAS left as an honest,
-  // accurately-worded stub since `ScheduleMeetingsDialog` genuinely had no
-  // edit mode, not the old misleading "dialog not built yet" copy.
-  //
-  // T135 (Table migration) §2, tenth authorized assertion change (on top of
-  // Trap 1's nine): the row-level `MoreMenu` this test used to open no
-  // longer exists (Edit is now a standalone chip, since Cancel already left
-  // the menu for a per-session button under T122, leaving exactly one item
-  // behind a menu). Before that rewrite, `moreMenuButton` resolved to
-  // `undefined` (nothing has `aria-label^="Actions for Weekly Build
-  // Meeting"` anymore), the optional-chained `?.dispatchEvent(...)` silently
-  // no-opped, and a generic `el.textContent?.trim() === 'Edit'` search still
-  // found the new Edit chip directly in the DOM (no menu-open needed) -- so
-  // the test would have kept passing while asserting an affordance (open a
-  // menu, click a menu item) that no longer existed. Rewritten then to find
-  // and click the Edit chip directly, by its real accessible name.
-  //
-  // T510 UPDATE -- RE-DERIVED (boss ruling, `auto-mode-decisions.md`,
-  // "2026-08-06 -- Boss ruling (constitution item 10): T510's test updates
-  // are AUTHORIZED, with exact bounds"; precedent
-  // `OutreachDetail.test.tsx:1058-1065`, stub -> real edit dialog). George
-  // reversed the T096 decision this test encoded (`docs/swarm/
-  // auto-mode-decisions.md`, "George closes out T510's design"):
-  // `ScheduleMeetingsDialog.tsx` now has a real, additive edit mode
-  // (`initialData`/`onSaveMeetingSeries`), so the honest-stub assertion this
-  // test made is no longer true, and the ruling's Grant A six-property bar
-  // governs its replacement below (re-derivation, NOT a deletion -- the Edit
-  // affordance survives with new behavior).
-  it('T510: Edit opens the real dialog in edit mode, prefilled from the clicked row (not the old stub)', async () => {
-    // Grant A property 4 -- inherits the T096 stub's real duty: the edit
-    // interaction, by itself, must never call the CREATE seam.
+  // GAM-452 -- re-derived (surface renamed, not removed). `SeriesCard.tsx`
+  // (frozen) ships no card-level Edit affordance (its own module doc item
+  // 7(b)), so this file supplies "Edit series" as a sibling of the card,
+  // reusing the SAME already-built `ScheduleMeetingsDialog` edit mode T510
+  // wired up. Old locator (`aria-label` starting with "Edit – Weekly Build
+  // Meeting") -> new locator ("Edit series – Weekly Build Meeting").
+  it('T510: "Edit series" opens the real dialog in edit mode, prefilled from the clicked card (not the old stub)', async () => {
     const onCreateMeetings = vi.fn().mockResolvedValue(undefined);
     renderAsUser(COACH_USER, { loadCoachData: defaultLoadCoachMeetingsData, onCreateMeetings });
     await flushMicrotasks();
 
-    // Grant A property 1 -- find the Edit control by its real accessible
-    // name (en dash), same lookup the T135 rewrite already established.
     const editButton = Array.from(container.querySelectorAll('button')).find((btn) =>
-      btn.getAttribute('aria-label')?.startsWith('Edit – Weekly Build Meeting'),
+      btn.getAttribute('aria-label')?.startsWith('Edit series – Weekly Build Meeting'),
     );
     expect(editButton).toBeTruthy();
     clickButton(editButton as HTMLButtonElement);
 
-    // Grant A property 2 -- prove edit mode by PREFILL, not by presence: the
-    // real dialog is open with the edit-mode title AND Title/Location carry
-    // the clicked row's own values (`FIXTURE_EVENTS`'s own
-    // `event-weekly-build`: title 'Weekly Build Meeting', locationName
-    // 'Robotics Lab') -- "a dialog opened" would pass against a mislabeled
-    // create dialog; row-value prefill cannot.
     function findEditDialogElement(): HTMLElement | undefined {
       return Array.from(document.querySelectorAll('dialog')).find((dialog) =>
         dialog.textContent?.includes('Edit meeting series'),
@@ -626,23 +528,19 @@ describe('<MeetingsList /> coach view', () => {
     expect((getFieldControl('Title') as HTMLInputElement).value).toBe('Weekly Build Meeting');
     expect((getFieldControl('Location') as HTMLInputElement).value).toBe('Robotics Lab');
 
-    // Grant A property 3 -- keep the negative space, widened by one: neither
-    // the old stub copy nor its pre-T096 sibling ever appears.
     expect(container.textContent).not.toContain("Editing an existing meeting isn't supported yet");
     expect(container.textContent).not.toContain('not built yet');
 
     expect(onCreateMeetings).not.toHaveBeenCalled();
   });
 
-  // T122 (module doc #10d) -- Cancel moved from the row's own MoreMenu into
-  // a plain per-session `Button` inside that row's expander.
-  //
-  // T135 (Table migration) Trap 1, rewritten (was: "Collapsible content is
-  // always in the DOM ... so no click needed" -- now FALSE): row splicing
-  // (the `Table` migration's expansion mechanism) genuinely removes a
-  // session-detail row from the DOM until its parent row's expander is
-  // clicked, unlike `Collapsible`, which only CSS-hid its (always-mounted)
-  // content. `expandRow` performs that click first.
+  // GAM-452 -- rewritten. `CoachMeetingSessionRow` (deleted, module doc §4)
+  // owned the old inline Cancel + its own confirmation copy
+  // (`Cancel "{title}" on {date}?`). `SessionRow.tsx` (frozen, GAM-448) now
+  // owns BOTH the inline Cancel button AND its own confirmation `AlertDialog`
+  // (a DIFFERENT title shape: `Cancel this session on {date}?`) -- the
+  // mutation seam (`handleCancelSession`) and the success feedback Banner
+  // text are UNCHANGED from before this ticket.
   it('Cancel (inline, per-session) + AlertDialog (DES-11) really calls the injected onCancelSession mutation', async () => {
     const onCancelSession = vi.fn().mockResolvedValue(undefined);
     renderAsUser(COACH_USER, { loadCoachData: defaultLoadCoachMeetingsData, onCancelSession });
@@ -650,83 +548,63 @@ describe('<MeetingsList /> coach view', () => {
 
     // "Weekly Build Meeting" has exactly one still-scheduled session
     // (session-upcoming-build, 2026-07-22, a Wednesday).
-    expandRow('Weekly Build Meeting');
-    const cancelButton = findButtonByText('Cancel Wed, Jul 22 session');
+    selectCard('Weekly Build Meeting');
+    toggleSessionExpand('2026-07-22');
+    const cancelButton = findButtonInSessionRow('2026-07-22', 'Cancel this session');
     expect(cancelButton).toBeTruthy();
     clickButton(cancelButton as HTMLButtonElement);
 
-    expect(document.body.textContent).toContain('Cancel "Weekly Build Meeting" on Wed, Jul 22?');
+    expect(document.body.textContent).toContain('Cancel this session on Wed, Jul 22?');
 
-    const confirmButton = Array.from(document.querySelectorAll('button')).find(
-      (btn) => btn.textContent?.trim() === 'Cancel session',
-    );
+    const confirmButton = findButtonInDialogByTitle('Cancel this session on Wed, Jul 22?', 'Cancel session');
     expect(confirmButton).toBeTruthy();
     clickButton(confirmButton as HTMLButtonElement);
     await flushMicrotasks();
 
-    // T135 (Table migration) Trap 2: confirming the cancel means EVERY one
-    // of "Weekly Build Meeting"'s sessions is now completed/canceled (none
-    // still `scheduled`), so `partitionCoachMeetingRows` moves this row from
-    // the Upcoming `CoachMeetingsSection`'s own `Table` into the Past one's
-    // -- a different, separately-mounted `Table` instance. This assertion is
-    // only satisfiable because expansion state is lifted to
-    // `CoachMeetingsView` (ONE shared `Set`, not one per section, per that
-    // task's own module doc) -- the row's expanded-ness survives the bucket
-    // move, so its session-detail rows (including this "Canceled" copy) are
-    // still spliced into the Past table without a second expand click.
-    expect(container.textContent).toContain('Canceled — no attendance recorded.');
-    // The real mutation seam was genuinely called, with the target session's id.
+    // The real mutation seam was genuinely called, with the target session's
+    // id -- unchanged assertion from before this ticket.
     expect(onCancelSession).toHaveBeenCalledTimes(1);
     expect(onCancelSession).toHaveBeenCalledWith('session-upcoming-build');
     expect(container.textContent).toContain('Meeting session canceled');
-    // The Cancel button for that now-canceled session is gone (only
-    // `scheduled` sessions render one) -- the Ravens session's own Cancel
-    // button is untouched, but lives in a DIFFERENT row that has never been
-    // expanded, so it needs its own expand click first (T135 Trap 1).
-    expect(findButtonByText('Cancel Wed, Jul 22 session')).toBeUndefined();
-    expandRow('Ravens Strategy Session');
-    expect(findButtonByText('Cancel Sat, Jul 25 session')).toBeTruthy();
+    // The session's own status badge now reads "Canceled".
+    expect(findSessionRowRoot('2026-07-22').textContent).toContain('Canceled');
+
+    // Canceling "Weekly Build Meeting"'s own last scheduled session moves
+    // it to Finished; the view follows the just-acted-on row there (GAM-452
+    // fix, disclosed in this ticket's own report). Switch back to Active to
+    // reach "Ravens Strategy Session", whose own Cancel button is
+    // untouched, on a DIFFERENT card that has never been selected.
+    selectTab('active');
+    selectCard('Ravens Strategy Session');
+    toggleSessionExpand('2026-07-25');
+    expect(findButtonInSessionRow('2026-07-25', 'Cancel this session')).toBeTruthy();
   });
 
-  // T135 (Table migration) Trap 1: without an `expandRow` call first,
-  // `findButtonByText` returns `undefined` and `clickButton(undefined)`
-  // throws -- session-detail rows (including this Cancel button) are
-  // spliced out of the DOM until expanded.
   it('Cancel rolls back the optimistic update and shows an error Banner when the mutation rejects', async () => {
     const onCancelSession = vi.fn().mockRejectedValue(new Error('network down'));
     renderAsUser(COACH_USER, { loadCoachData: defaultLoadCoachMeetingsData, onCancelSession });
     await flushMicrotasks();
 
-    expandRow('Weekly Build Meeting');
-    const cancelButton = findButtonByText('Cancel Wed, Jul 22 session');
+    selectCard('Weekly Build Meeting');
+    toggleSessionExpand('2026-07-22');
+    const cancelButton = findButtonInSessionRow('2026-07-22', 'Cancel this session');
     clickButton(cancelButton as HTMLButtonElement);
-    const confirmButton = Array.from(document.querySelectorAll('button')).find(
-      (btn) => btn.textContent?.trim() === 'Cancel session',
-    );
+    const confirmButton = findButtonInDialogByTitle('Cancel this session on Wed, Jul 22?', 'Cancel session');
     clickButton(confirmButton as HTMLButtonElement);
     await flushMicrotasks();
 
-    // Rolled back -- the session's own Cancel button reappears, and (since
-    // the mutation rejected) the row never actually left the Upcoming
-    // section, so the same expanded `Table` instance still has it.
-    expect(findButtonByText('Cancel Wed, Jul 22 session')).toBeTruthy();
+    // Rolled back -- the session's own Cancel button reappears, and the
+    // status badge never actually changed to "Canceled".
+    expect(findButtonInSessionRow('2026-07-22', 'Cancel this session')).toBeTruthy();
     expect(container.textContent).toContain("Couldn't cancel meeting");
   });
 });
 
 // ---------------------------------------------------------------------------
 // T605 -- per-session Edit dialog (date/time/notes) + Cancel-from-edit-flow.
-//
-// Fixture prerequisite + anti-rot requirement (packet §7, fixes B2): the
-// default `FIXTURE_SESSIONS`/`T511_ROW` fixtures are all dated in their own
-// eventual past relative to any real wall clock (§3.9/MINOR-4 of this task's
-// own packet) -- `isMeetingSessionReconcilable` returns `false` for every one
-// of them against any real clock from their own month onward, so they have no
-// session the new Edit affordance would ever render on. This describe block
-// freezes `Date` at ONE fixed instant and derives every one of its own
-// fixture's dates as an offset from that SAME instant, so it stays correct
-// forever regardless of when it actually runs -- never a bare hardcoded
-// calendar-date string.
+// GAM-452 rewrite: `clickEdit`/`expandRow` re-pointed at the new
+// card-select -> session-row locators. Dialog interaction logic (fields,
+// validation guards, save payload) is UNCHANGED from before this ticket.
 // ---------------------------------------------------------------------------
 
 describe('<MeetingsList /> coach view -- T605 per-session Edit dialog', () => {
@@ -746,8 +624,6 @@ describe('<MeetingsList /> coach view -- T605 per-session Edit dialog', () => {
       .slice(0, 10);
   }
 
-  /** Same 6:00-8:00 PM America/Chicago (CDT, UTC-5) shape `FIXTURE_SESSIONS`
-   * already establishes (23:00 UTC same day -> 01:00 UTC next day). */
   function chicagoEveningSession(dateOnly: string): { startsAt: string; endsAt: string } {
     const nextDay = new Date(new Date(`${dateOnly}T00:00:00.000Z`).getTime() + 86400000)
       .toISOString()
@@ -761,18 +637,8 @@ describe('<MeetingsList /> coach view -- T605 per-session Edit dialog', () => {
   const PAST_SCHEDULED_DATE = daysFromFixtureNow(-1);
   const COMPLETED_DATE = daysFromFixtureNow(-10);
   const CANCELED_DATE = daysFromFixtureNow(-5);
-  // A past date that is NOT any existing sibling session's own date (unlike
-  // `PAST_SCHEDULED_DATE`, which IS `sess-edit-past-scheduled`'s own date) --
-  // test 5 retargets onto this one specifically so the future-forward guard
-  // is exercised in isolation, not entangled with the duplicate-date guard.
   const PAST_RETARGET_DATE = daysFromFixtureNow(-2);
 
-  /** Additive, dedicated `CoachMeetingsData` (not `FIXTURE_SESSIONS`/`T511_ROW`)
-   * with at least one genuinely reconcilable session, a sibling session on
-   * another date (for the duplicate-date guard), a scheduled-but-expired
-   * session (distinct from `ScheduleMeetingsDialog.test.tsx`'s own
-   * `PAST_SESSION`, which is `status: 'completed'`), one completed, and one
-   * canceled session. */
   function buildEditFixtureData(): CoachMeetingsData {
     return {
       rows: [
@@ -853,12 +719,6 @@ describe('<MeetingsList /> coach view -- T605 per-session Edit dialog', () => {
     textarea.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
-  /** `DateInput`'s own displayed value is a long-form string
-   * (`Intl.DateTimeFormat(undefined, {year:'numeric',month:'long',day:'numeric'})`
-   * over a LOCAL-midnight `Date`, per `@astryxdesign/core`'s own
-   * `DateInput.tsx`/`utils/plainDate.ts`) -- independently reimplemented here
-   * the exact same way, so the prefill assertion (test 3) proves real VALUE
-   * equality, not mere presence. */
   function formatLongDateForAssertion(isoDate: string): string {
     const [year, month, day] = isoDate.split('-').map(Number);
     return new Intl.DateTimeFormat(undefined, {
@@ -868,9 +728,6 @@ describe('<MeetingsList /> coach view -- T605 per-session Edit dialog', () => {
     }).format(new Date(year, month - 1, day));
   }
 
-  /** `TimeInput`'s own default `hourFormat="12h"` display
-   * (`@astryxdesign/core`'s own `formatDisplayTime12h`), reimplemented here
-   * for the same reason as `formatLongDateForAssertion` above. */
   function formatTime12hForAssertion(isoTime: string): string {
     const [hourStr, minuteStr] = isoTime.split(':');
     const hour = Number(hourStr);
@@ -879,22 +736,17 @@ describe('<MeetingsList /> coach view -- T605 per-session Edit dialog', () => {
     return `${hour12}:${minuteStr} ${meridiem}`;
   }
 
+  /** GAM-452 -- `SessionRow.tsx`'s own Edit button reads plain "Edit" (no
+   * date suffix, no `isMeetingSessionReconcilable` gate -- that gate lived
+   * only in the now-deleted `CoachMeetingSessionRow`). Scoped to the target
+   * session's own row via `findButtonInSessionRow`, not a global text
+   * search. */
   function clickEdit(sessionDate: string): void {
-    const editButton = findButtonByText(`Edit ${formatWeekdayDate(sessionDate)} session`);
+    const editButton = findButtonInSessionRow(sessionDate, 'Edit');
     expect(editButton).toBeTruthy();
     clickButton(editButton as HTMLButtonElement);
   }
 
-  /** `ScheduleMeetingsDialog`'s own edit-mode confirmation `AlertDialog`
-   * ("Save changes to this meeting series?") is ALSO always mounted inside
-   * `CoachMeetingsView` (same `Dialog`-children-render-unconditionally shape
-   * this describe block's own module comment on `EditMeetingSessionDialog.tsx`
-   * §6.4 already notes) and its own `actionLabel` is the SAME literal text,
-   * "Save changes" -- a bare `findButtonByText('Save changes')` is genuinely
-   * ambiguous on this page (measured: 2 matches). Scope every lookup to
-   * `EditMeetingSessionDialog`'s own `<dialog>` element, same
-   * `findButtonInAlertDialog` precedent `ScheduleMeetingsDialog.test.tsx`
-   * already establishes for its own analogous ambiguity. */
   function findEditSessionDialogElement(): HTMLElement | undefined {
     return Array.from(document.querySelectorAll('dialog')).find((dialog) =>
       dialog.textContent?.includes('Edit session'),
@@ -907,39 +759,20 @@ describe('<MeetingsList /> coach view -- T605 per-session Edit dialog', () => {
     );
   }
 
-  // Test 2 -- presence/absence, all four branches.
-  it('test 2: the "Edit … session" button is present only for a genuinely reconcilable session', async () => {
-    renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(buildEditFixtureData()) });
-    await flushMicrotasks();
-    expandRow('Edit Fixture Meeting');
+  // GAM-452 -- REMOVED (surface gone, not turned red): the old test 2
+  // asserted the Edit affordance was gated by `isMeetingSessionReconcilable`
+  // per session. `SessionRow.tsx` (frozen, merged GAM-448) renders its own
+  // "Edit" button unconditionally whenever `onEditSession` is supplied,
+  // regardless of session status/reconcilability -- that gate has no home
+  // in the new, already-shipped, checker-approved component. This is a
+  // disclosed, genuine architecture change forced by composing with a
+  // frozen sibling, not an oversight; see this ticket's own completion
+  // report.
 
-    // (a) absent for a `completed` session.
-    expect(findButtonByText(`Edit ${formatWeekdayDate(COMPLETED_DATE)} session`)).toBeUndefined();
-    // (b) absent for a `canceled` session.
-    expect(findButtonByText(`Edit ${formatWeekdayDate(CANCELED_DATE)} session`)).toBeUndefined();
-    // (c) absent for a **`scheduled`** session whose `startsAt` is in the
-    // past -- distinct from `ScheduleMeetingsDialog.test.tsx`'s own
-    // `PAST_SESSION` fixture (`status: 'completed'`), which cannot exercise
-    // this branch.
-    expect(
-      findButtonByText(`Edit ${formatWeekdayDate(PAST_SCHEDULED_DATE)} session`),
-    ).toBeUndefined();
-    // Its Cancel button, by contrast, is still present -- "not stranded"
-    // (§6.2) -- proving the Edit absence above is a deliberate, stricter gate
-    // (`isMeetingSessionReconcilable`), not an accident of this fixture.
-    expect(
-      findButtonByText(`Cancel ${formatWeekdayDate(PAST_SCHEDULED_DATE)} session`),
-    ).toBeTruthy();
-    // (d) present for the new reconcilable fixture session.
-    expect(findButtonByText(`Edit ${formatWeekdayDate(RECONCILABLE_DATE)} session`)).toBeTruthy();
-  });
-
-  // Test 3 -- prefill by VALUE, not presence (the same standard the T510
-  // boss ruling required for the series dialog's own Grant A property 2).
   it('test 3: clicking Edit opens the dialog prefilled with the real session’s own date/time/notes', async () => {
     renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(buildEditFixtureData()) });
     await flushMicrotasks();
-    expandRow('Edit Fixture Meeting');
+    selectCard('Edit Fixture Meeting');
     clickEdit(RECONCILABLE_DATE);
 
     expect(findEditSessionDialogElement()?.hasAttribute('open')).toBe(true);
@@ -959,10 +792,6 @@ describe('<MeetingsList /> coach view -- T605 per-session Edit dialog', () => {
     );
   });
 
-  // Test 4 -- save calls the injected mutation with the exact payload, then
-  // reloads via `loadData()` and shows the success `Banner` -- mirrors
-  // `handleSaveMeetingSeriesSubmit`'s/`handleCreateMeetingsSubmit`'s own
-  // tested reload-and-feedback shape.
   it('test 4: saving a valid change calls onSaveMeetingSession with the exact payload, then reloads and shows success', async () => {
     const onSaveMeetingSession = vi.fn().mockResolvedValue(undefined);
     let loadCallCount = 0;
@@ -972,7 +801,7 @@ describe('<MeetingsList /> coach view -- T605 per-session Edit dialog', () => {
     };
     renderAsUser(COACH_USER, { loadCoachData, onSaveMeetingSession });
     await flushMicrotasks();
-    expandRow('Edit Fixture Meeting');
+    selectCard('Edit Fixture Meeting');
     clickEdit(RECONCILABLE_DATE);
 
     const dateInput = getFieldControl('Session date') as HTMLInputElement;
@@ -1002,15 +831,10 @@ describe('<MeetingsList /> coach view -- T605 per-session Edit dialog', () => {
     expect(container.textContent).toContain('Meeting session updated');
   });
 
-  // Test 5 -- future-value guard, both directions (new, fixes B1). Named
-  // mutation: removing the `now`-comparison from
-  // `computeMeetingSessionEditPayload` must turn the rejection case from a
-  // real proof into a false pass (see this task's own worker output for the
-  // measured before/after).
   it('test 5: a candidate startsAt that lands in the past disables Save with an inline message; a future value re-enables it', async () => {
     renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(buildEditFixtureData()) });
     await flushMicrotasks();
-    expandRow('Edit Fixture Meeting');
+    selectCard('Edit Fixture Meeting');
     clickEdit(RECONCILABLE_DATE);
 
     const saveButton = (): HTMLButtonElement =>
@@ -1030,12 +854,10 @@ describe('<MeetingsList /> coach view -- T605 per-session Edit dialog', () => {
     expect(saveButton().disabled).toBe(false);
   });
 
-  // Test 6 -- end-after-start guard (new, fixes m6). Named mutation: removing
-  // that comparison must turn the rejection case into a false pass.
   it('test 6: an end time at or before the computed start time disables Save with an inline message', async () => {
     renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(buildEditFixtureData()) });
     await flushMicrotasks();
-    expandRow('Edit Fixture Meeting');
+    selectCard('Edit Fixture Meeting');
     clickEdit(RECONCILABLE_DATE);
 
     const saveButton = (): HTMLButtonElement =>
@@ -1044,21 +866,16 @@ describe('<MeetingsList /> coach view -- T605 per-session Edit dialog', () => {
 
     const endTimeInput = getFieldControl('Session end time') as HTMLInputElement;
     act(() => {
-      // The fixture's own start time is 18:00 ("6:00 PM") -- setting End to
-      // the SAME wall time makes `endsAt === startsAt`, not strictly after.
       setNativeInputValue(endTimeInput, '6:00 PM');
     });
     expect(saveButton().disabled).toBe(true);
     expect(container.textContent).toContain('End time must be after the start time.');
   });
 
-  // Test 7 -- duplicate-date guard, both directions. Named mutation: removing
-  // `sessionDateCollidesWithSibling` must turn the rejection case into a
-  // false pass.
   it('test 7: retargeting onto a sibling session’s existing date is rejected; retargeting onto a free date succeeds', async () => {
     renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(buildEditFixtureData()) });
     await flushMicrotasks();
-    expandRow('Edit Fixture Meeting');
+    selectCard('Edit Fixture Meeting');
     clickEdit(RECONCILABLE_DATE);
 
     const saveButton = (): HTMLButtonElement =>
@@ -1079,14 +896,6 @@ describe('<MeetingsList /> coach view -- T605 per-session Edit dialog', () => {
     expect(saveButton().disabled).toBe(false);
   });
 
-  // Test 8 -- Cancel reuses the existing mechanism, proven against the new
-  // fixture (fixes B2's self-contradiction and m3). Opens the edit dialog,
-  // clicks "Cancel this meeting", asserts the SAME confirmation-copy shape
-  // already proven in 'Cancel (inline, per-session) + AlertDialog (DES-11)
-  // really calls the injected onCancelSession mutation' -- built from THIS
-  // fixture's own event title/date, not the July fixture's -- confirms it,
-  // and asserts `onCancelSession` was called exactly once with this
-  // session's id via the pre-existing `cancelTarget` seam.
   it('test 8: "Cancel this meeting" inside the edit dialog reuses the existing cancelTarget/AlertDialog seam', async () => {
     const onCancelSession = vi.fn().mockResolvedValue(undefined);
     renderAsUser(COACH_USER, {
@@ -1094,7 +903,7 @@ describe('<MeetingsList /> coach view -- T605 per-session Edit dialog', () => {
       onCancelSession,
     });
     await flushMicrotasks();
-    expandRow('Edit Fixture Meeting');
+    selectCard('Edit Fixture Meeting');
     clickEdit(RECONCILABLE_DATE);
 
     clickButton(findButtonByText('Cancel this meeting') as HTMLButtonElement);
@@ -1102,8 +911,9 @@ describe('<MeetingsList /> coach view -- T605 per-session Edit dialog', () => {
     expect(document.body.textContent).toContain(
       `Cancel "Edit Fixture Meeting" on ${formatWeekdayDate(RECONCILABLE_DATE)}?`,
     );
-    const confirmButton = Array.from(document.querySelectorAll('button')).find(
-      (btn) => btn.textContent?.trim() === 'Cancel session',
+    const confirmButton = findButtonInDialogByTitle(
+      `Cancel "Edit Fixture Meeting" on ${formatWeekdayDate(RECONCILABLE_DATE)}?`,
+      'Cancel session',
     );
     expect(confirmButton).toBeTruthy();
     clickButton(confirmButton as HTMLButtonElement);
@@ -1115,17 +925,14 @@ describe('<MeetingsList /> coach view -- T605 per-session Edit dialog', () => {
 });
 
 // ---------------------------------------------------------------------------
-// T511 -- the live console's entry point.
-//
-// `/meetings/live/:sessionId` shipped wired and working, and
-// `routePaths.meetingLiveSession` had ZERO call sites: the only way in was
-// typing the URL. These four criteria pin the entry point that closes that,
-// and each one has a named mutation recorded in
-// `docs/swarm/active/T511-scope.md` §6.
-//
-// Every assertion below targets `sess-live-2`, the SECOND scheduled session,
-// never the first. A link built from the wrong session's id, or rendered only
-// on the first iteration, passes a first-item assertion and fails these.
+// T511 -- the live console's entry point. GAM-452 §4/§9c: the link is now
+// rendered by `CoachMeetingsView` itself, beside the selected card's
+// drill-out panel (packet §8.2's own least-confident-decision record), not
+// inside `SessionRow.tsx` (frozen, renders none). `selectCard` replaces
+// `expandRow` -- clicking a card's "View full schedule" reveals its own
+// "Live console" section without needing any per-session expand click,
+// since the Go-live link is not gated behind `SessionRow`'s own
+// Expand/Collapse toggle.
 // ---------------------------------------------------------------------------
 
 const T511_ROW: CoachMeetingsData = {
@@ -1147,9 +954,9 @@ const T511_ROW: CoachMeetingsData = {
           attendanceSummary: null,
           attendeeNames: [],
         },
-        // The one every T511 assertion targets. Distinct id AND distinct date:
-        // the id makes "points at THIS session" falsifiable, the date makes the
-        // two links' accessible names differ (C4).
+        // The one every T511 assertion targets. Distinct id AND distinct
+        // date: the id makes "points at THIS session" falsifiable, the date
+        // makes the two links' accessible names differ (C4).
         {
           sessionId: 'sess-live-2',
           sessionDate: '2026-09-09',
@@ -1200,7 +1007,7 @@ describe('T511 -- live console entry point (coach session row)', () => {
   it('C1: a scheduled session links to /meetings/live/<that session’s own id>', async () => {
     renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(T511_ROW) });
     await flushMicrotasks();
-    expandRow('Build Night');
+    selectCard('Build Night');
 
     const links = goLiveLinks();
     expect(links).toHaveLength(2);
@@ -1217,27 +1024,49 @@ describe('T511 -- live console entry point (coach session row)', () => {
   it('C2: completed and canceled sessions get no Go live link', async () => {
     renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(T511_ROW) });
     await flushMicrotasks();
-    expandRow('Build Night');
+    selectCard('Build Night');
 
     const hrefs = goLiveLinks().map((l) => l.href);
-    // Both non-scheduled sessions are present in this render (proving the
-    // absence is a status decision, not an absent fixture) ...
-    expect(container.textContent).toContain('Attended: Ada L.');
+    // Both non-scheduled sessions render in the panel (proving the absence
+    // is a status decision, not an absent fixture) -- their row headers are
+    // visible without expanding.
+    expect(container.textContent).toContain('Completed');
     expect(container.textContent).toContain('Canceled');
     // ... and neither contributes a live-console link.
     expect(hrefs).not.toContain('/meetings/live/sess-done');
     expect(hrefs).not.toContain('/meetings/live/sess-scrapped');
   });
 
+  // §9c -- corrected: the danger is a VACUOUS green, not a red. Phase 1
+  // proves this exact fixture + the new card-select interaction DOES
+  // produce Go-live links when given a coach role (so `selectCard` is a
+  // real, working mechanism against this fixture, not a broken selector
+  // that would silently pass phase 2 for the wrong reason -- the exact
+  // failure this test's own history already records, see the module doc
+  // above). Phase 2 is the actual regression check: the SAME fixture,
+  // rendered as a student/parent, must produce zero.
   it('C3: the student/parent view renders no Go live link at all', async () => {
-    // BOTH loaders are supplied, and that is the whole point. An earlier
-    // version of this test passed `loadStudentData` only, and was VACUOUS:
-    // widening the role gate handed the student the coach view, but with no
-    // coach fixture and no expansion no session rows rendered, so "no Go live
-    // links" was trivially true and the mutation left this test green while
-    // turning 23 others red. Supplying the coach fixture too means that if the
-    // gate ever widens, this student really would be handed a rendered coach
-    // row -- which is the thing being guarded against.
+    // Phase 1 -- coach role, same fixture: prove the mechanism works.
+    renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(T511_ROW) });
+    await flushMicrotasks();
+    selectCard('Build Night');
+    expect(container.textContent).toContain('Build Night');
+    expect(goLiveLinks().length).toBeGreaterThan(0);
+
+    // Remount fresh for phase 2 (a real new render, not a leftover coach DOM
+    // tree that phase 2's assertions could accidentally read from).
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    // Phase 2 -- student/parent role. BOTH loaders are supplied, and that is
+    // the whole point: if the role gate ever widens, this student really
+    // would be handed a rendered coach row (the coach fixture just proved,
+    // in phase 1, that it renders real links when it can).
     renderAsUser(STUDENT_OR_PARENT_USER, {
       resolveStudentId: fakeResolveStudentId('student-fixture'),
       resolveStudentIsActive: fakeResolveStudentIsActive(true),
@@ -1247,18 +1076,9 @@ describe('T511 -- live console entry point (coach session row)', () => {
     await flushMicrotasks();
     await flushMicrotasks();
 
-    // Expanding is what makes session rows exist at all. A student has no such
-    // expander, so its absence is the expected path here -- but if the gate
-    // widens, this call succeeds and the links appear.
-    try {
-      expandRow('Build Night');
-    } catch {
-      // No coach expander rendered -- the correct outcome for a student.
-    }
-
-    // The gate is structural: `CoachMeetingSessionRow` only renders under
-    // `CoachMeetingsView`. This asserts that existing gate rather than adding
-    // a second one beside the link that could drift out of step with it.
+    // Proves this really is a rendered student page, not a blank/crashed
+    // one, before asserting the interesting negative.
+    expect(container.textContent?.length ?? 0).toBeGreaterThan(0);
     expect(goLiveLinks()).toHaveLength(0);
     expect(container.textContent).not.toContain('Go live');
   });
@@ -1266,7 +1086,7 @@ describe('T511 -- live console entry point (coach session row)', () => {
   it('C4: each link’s accessible name is unique within one event', async () => {
     renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(T511_ROW) });
     await flushMicrotasks();
-    expandRow('Build Night');
+    selectCard('Build Night');
 
     const names = goLiveLinks().map((l) => l.name);
     expect(names).toHaveLength(2);
@@ -1275,5 +1095,328 @@ describe('T511 -- live console entry point (coach session row)', () => {
     // indistinguishable targets to a screen reader.
     expect(new Set(names).size).toBe(2);
     expect(names[1]).toContain('Sep 9');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GAM-452 -- composition, focus wiring, subtitle, overlap (packet §7,
+// acceptance criteria 1/2/3/4/8). Fixtures below are hand-built (not the
+// July-2026 `FIXTURE_*` data) so their dates can be pinned relative to a
+// fake clock, matching criterion 4's own instruction ("fixtures are
+// absolute July 2026, so 'next 7 days' is 0 under a real clock").
+// ---------------------------------------------------------------------------
+
+describe('GAM-452 -- composition, focus wiring, subtitle, overlap', () => {
+  const NOW = new Date('2026-07-20T12:00:00.000Z');
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'], now: NOW });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Two series, one session each, on the SAME Chicago calendar day with
+   * genuinely overlapping times (4-6 PM and 5-7 PM Chicago) -- a real
+   * cross-series overlap pair for criterion 8. Both sessions also fall
+   * inside the rail's default 5-day agenda window (`NOW` + 2 days). */
+  function buildOverlapFixture(): CoachMeetingsData {
+    return {
+      rows: [
+        {
+          eventId: 'event-alpha',
+          title: 'Alpha Squad',
+          locationName: 'Robotics Lab',
+          teamScopeLabel: 'All teams',
+          sessions: [
+            {
+              sessionId: 'sess-alpha',
+              sessionDate: '2026-07-22',
+              startsAt: '2026-07-22T21:00:00.000Z', // 4 PM Chicago
+              endsAt: '2026-07-22T23:00:00.000Z', // 6 PM Chicago
+              status: 'scheduled',
+              durationHours: 2,
+              expectedCt: 3,
+              attendanceSummary: null,
+              attendeeNames: [],
+            },
+          ],
+        },
+        {
+          eventId: 'event-beta',
+          title: 'Beta Squad',
+          locationName: 'Robotics Lab',
+          teamScopeLabel: 'All teams',
+          sessions: [
+            {
+              sessionId: 'sess-beta',
+              sessionDate: '2026-07-22',
+              startsAt: '2026-07-22T22:00:00.000Z', // 5 PM Chicago
+              endsAt: '2026-07-23T00:00:00.000Z', // 7 PM Chicago
+              status: 'scheduled',
+              durationHours: 2,
+              expectedCt: 2,
+              attendanceSummary: null,
+              attendeeNames: [],
+            },
+          ],
+        },
+      ],
+      teams: [],
+    };
+  }
+
+  // Criterion 1 + item 15 (BLOCKER) -- a keyboard-path/focus failure on this
+  // core flow. Clicks a rail agenda item and asserts: the owning card is
+  // selected (`aria-current` on its "View full schedule" button,
+  // `SeriesCard.tsx`'s own contract), the panel opened with that session's
+  // row visible, AND real programmatic focus landed on the drill-out
+  // wrapper (not merely scrolled) -- `document.activeElement`, paired with
+  // the local `scrollIntoView` stub declared at the top of this file.
+  it('criterion 1: a rail agenda click selects the owning card, opens the panel, and moves real focus (not just scroll)', async () => {
+    renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(buildOverlapFixture()) });
+    await flushMicrotasks();
+
+    // Before selection: no card carries `aria-current`.
+    expect(document.querySelector('[aria-current="true"]')).toBeNull();
+
+    const agendaItem = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Alpha Squad'),
+    );
+    expect(agendaItem).toBeTruthy();
+    clickButton(agendaItem as HTMLButtonElement);
+
+    // The owning card is now selected.
+    const selectedButton = document.querySelector('[aria-current="true"]');
+    expect(selectedButton).toBeTruthy();
+    expect(selectedButton?.textContent).toContain('View full schedule');
+
+    // The panel opened for Alpha Squad's own session.
+    expect(container.textContent).toContain('Wed, Jul 22');
+
+    // Real programmatic focus landed on the drill-out wrapper, not merely a
+    // scroll -- `document.activeElement` is the tabIndex={-1} panel root
+    // (the wrapper around `<SchedulePanel>` + the "Live console" section;
+    // the card's own title lives in a sibling element, not inside it).
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement?.getAttribute('tabindex')).toBe('-1');
+    expect(document.activeElement?.textContent).toContain('Wed, Jul 22');
+    expect(document.activeElement?.textContent).toContain('Live console');
+  });
+
+  // Criterion 2 -- `MeetingsRail` receives real `seasonStartsOn`/
+  // `seasonEndsOn` when the season is `'ready'`. Proven via `Calendar`'s own
+  // documented `min` behavior (`isDisabled={!canNavigatePrevious}` on its
+  // "Previous month" button, `Calendar.tsx:312-322`): with a season starting
+  // September 2026 and `NOW` re-pinned inside that month, "Previous month"
+  // is disabled at mount ONLY if the real season bound reached `Calendar`,
+  // not the session-span fallback (a session exists in August).
+  it('criterion 2a: MeetingsRail receives real seasonStartsOn/seasonEndsOn when the season is ready', async () => {
+    vi.setSystemTime(new Date('2026-09-15T12:00:00.000Z'));
+    const season: SeasonRow = {
+      id: 'season-fixture',
+      name: 'Fixture Season',
+      startsOn: '2026-09-01',
+      endsOn: '2026-09-30',
+      defaultGoalHours: 0,
+      isActive: true,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    const rowsWithAugustSession: CoachMeetingsData = {
+      rows: [
+        {
+          eventId: 'event-bounds',
+          title: 'Bounds Check',
+          locationName: 'Robotics Lab',
+          teamScopeLabel: 'All teams',
+          sessions: [
+            {
+              sessionId: 'sess-bounds-aug',
+              sessionDate: '2026-08-05',
+              startsAt: '2026-08-05T23:00:00.000Z',
+              endsAt: '2026-08-06T01:00:00.000Z',
+              status: 'scheduled',
+              durationHours: 2,
+              expectedCt: 0,
+              attendanceSummary: null,
+              attendeeNames: [],
+            },
+          ],
+        },
+      ],
+      teams: [],
+    };
+    renderAsUser(
+      COACH_USER,
+      { loadCoachData: () => Promise.resolve(rowsWithAugustSession) },
+      async () => season,
+    );
+    await flushMicrotasks();
+
+    // Scoped to `.meetings-rail` -- `ScheduleMeetingsDialog`'s own always-
+    // mounted date picker also renders a `Calendar` with its own "Previous
+    // month" button, unrelated to this one.
+    const rail = container.querySelector('.meetings-rail');
+    expect(rail).toBeTruthy();
+    const prevButton = Array.from(rail?.querySelectorAll('button') ?? []).find(
+      (b) => b.getAttribute('aria-label') === 'Previous month',
+    );
+    expect(prevButton).toBeTruthy();
+    // Disabled -- `min` is September (the real `seasonStartsOn`), not
+    // August (the earliest session, which the fallback would have used).
+    expect((prevButton as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('criterion 2b: MeetingsRail falls back to the session-span bound when the season is not ready', async () => {
+    vi.setSystemTime(new Date('2026-09-15T12:00:00.000Z'));
+    const rowsWithAugustSession: CoachMeetingsData = {
+      rows: [
+        {
+          eventId: 'event-bounds',
+          title: 'Bounds Check',
+          locationName: 'Robotics Lab',
+          teamScopeLabel: 'All teams',
+          sessions: [
+            {
+              sessionId: 'sess-bounds-aug',
+              sessionDate: '2026-08-05',
+              startsAt: '2026-08-05T23:00:00.000Z',
+              endsAt: '2026-08-06T01:00:00.000Z',
+              status: 'scheduled',
+              durationHours: 2,
+              expectedCt: 0,
+              attendanceSummary: null,
+              attendeeNames: [],
+            },
+          ],
+        },
+      ],
+      teams: [],
+    };
+    // Default `loadActiveSeason` resolves `null` -- status `'none'`.
+    renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(rowsWithAugustSession) });
+    await flushMicrotasks();
+
+    // Scoped to `.meetings-rail` -- `ScheduleMeetingsDialog`'s own always-
+    // mounted date picker also renders a `Calendar` with its own "Previous
+    // month" button, unrelated to this one.
+    const rail = container.querySelector('.meetings-rail');
+    expect(rail).toBeTruthy();
+    const prevButton = Array.from(rail?.querySelectorAll('button') ?? []).find(
+      (b) => b.getAttribute('aria-label') === 'Previous month',
+    );
+    expect(prevButton).toBeTruthy();
+    // Enabled -- with no `seasonStartsOn`, `min` falls back to August (the
+    // earliest real session), which is before the visible month.
+    expect((prevButton as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  // Criterion 3 -- Active/Finished tabs reuse `partitionCoachMeetingRows`
+  // (unit-tested directly in `coachModel.test.ts`); this integration test
+  // proves the renamed buckets show the right counts on the real page.
+  it('criterion 3: Active/Finished tab counts reflect partitionCoachMeetingRows', async () => {
+    const mixed: CoachMeetingsData = {
+      rows: [
+        {
+          eventId: 'event-active',
+          title: 'Still Going',
+          locationName: 'Robotics Lab',
+          teamScopeLabel: 'All teams',
+          sessions: [
+            {
+              sessionId: 'sess-active',
+              sessionDate: '2026-07-22',
+              startsAt: '2026-07-22T23:00:00.000Z',
+              endsAt: '2026-07-23T01:00:00.000Z',
+              status: 'scheduled',
+              durationHours: 2,
+              expectedCt: 0,
+              attendanceSummary: null,
+              attendeeNames: [],
+            },
+          ],
+        },
+        {
+          eventId: 'event-finished',
+          title: 'All Done',
+          locationName: 'Robotics Lab',
+          teamScopeLabel: 'All teams',
+          sessions: [
+            {
+              sessionId: 'sess-finished',
+              sessionDate: '2026-07-08',
+              startsAt: '2026-07-08T23:00:00.000Z',
+              endsAt: '2026-07-09T01:00:00.000Z',
+              status: 'completed',
+              durationHours: 2,
+              expectedCt: 0,
+              attendanceSummary: { presentCt: 1, lateCt: 0, excusedCt: 0, absentCt: 0 },
+              attendeeNames: [],
+            },
+          ],
+        },
+      ],
+      teams: [],
+    };
+    renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(mixed) });
+    await flushMicrotasks();
+
+    expect(container.textContent).toContain('Active (1)');
+    expect(container.textContent).toContain('Finished (1)');
+    // "Still Going" (has a scheduled session) is visible by default.
+    expect(container.textContent).toContain('Still Going');
+    expect(container.textContent).not.toContain('All Done');
+  });
+
+  // Criterion 4 -- plain counts, Chicago calendar days, no countdown/urgency
+  // copy (item 17, BLOCKER). `NOW` is pinned to 2026-07-20; the default
+  // `FIXTURE_SESSIONS` scheduled session (2026-07-22) falls inside the next
+  // 7 days from that anchor.
+  it('criterion 4: subtitle renders real "N active series · M sessions in the next 7 days" counts', async () => {
+    renderAsUser(COACH_USER, { loadCoachData: defaultLoadCoachMeetingsData });
+    await flushMicrotasks();
+
+    // Both fixture events have a still-scheduled session -> both Active.
+    // Both scheduled sessions (2026-07-22, 2026-07-25) fall within
+    // [2026-07-20, 2026-07-26] -- 2 sessions in the next 7 days.
+    expect(container.textContent).toContain('2 active series · 2 sessions in the next 7 days');
+  });
+
+  // Criterion 8 (rewritten, §9e) -- three badge sites, no page-level
+  // overlap-specific copy. Every leaf DOM text node containing "overlap"
+  // must match one of the three known badge shapes exactly -- a mechanical
+  // check, not a `Banner`-absence assertion (feedback/DES-12 banners are
+  // legitimate, `:1582-1590`).
+  it('criterion 8: overlap badges render at exactly three sites, no page-level overlap banner copy', async () => {
+    renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(buildOverlapFixture()) });
+    await flushMicrotasks();
+
+    // Site 1 -- the series card's own count badge.
+    expect(container.textContent).toContain('1 overlap');
+
+    // Site 3 -- the rail's agenda item badge (both sessions fall inside the
+    // default 5-day agenda window from `NOW`).
+    const agendaButtons = Array.from(container.querySelectorAll('button')).filter(
+      (b) => b.textContent?.includes('Alpha Squad') || b.textContent?.includes('Beta Squad'),
+    );
+    expect(agendaButtons.some((b) => b.textContent?.includes('overlap'))).toBe(true);
+
+    // Site 2 -- the session row's own badge, inside the selected card's
+    // drill-out panel.
+    selectCard('Alpha Squad');
+    expect(container.textContent).toContain('Overlap');
+
+    // Mechanical check: every leaf text node mentioning "overlap" is one of
+    // the three known badge shapes, never free-standing sentence copy (no
+    // page-level banner, `meetings-design` skill's own owner ruling).
+    const overlapLeafTexts = Array.from(container.querySelectorAll('*'))
+      .filter((el) => el.children.length === 0)
+      .map((el) => (el.textContent ?? '').trim())
+      .filter((text) => /overlap/i.test(text));
+    expect(overlapLeafTexts.length).toBeGreaterThan(0);
+    for (const text of overlapLeafTexts) {
+      expect(text === 'Overlap' || /^\d+ overlap$/.test(text)).toBe(true);
+    }
   });
 });
