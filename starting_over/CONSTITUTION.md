@@ -84,7 +84,9 @@ sentence. (P-5)
   Migrations, RLS, auth, metric SQL, and destructive writes get an
   independent review with C-7-style executed evidence. A CSS change does
   not. No tiers, no packets, no premise gates — judgment plus this one
-  sentence.
+  sentence. *(Tuition: the full packet → premise-gate → worker → checker
+  chain charged full price for two-line fixes until George himself ordered
+  a faster path.)*
 - **C-10 · Code budget.** Page files ≤ ~500 lines (split at the seam:
   loader → pure model → view); one home per shared utility (dates, load
   state, formatters); duplication found = duplication removed in that PR.

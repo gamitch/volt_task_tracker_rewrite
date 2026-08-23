@@ -80,6 +80,9 @@ Format: **ID — ruling** (date · original record).
   confirmed hours. (PRD v1 MET-04 / BEH-02)
 - **D-13 — RSVPs are readable by every authenticated user.** Seeing who
   signed up is the product. (owner ruling D013 · migration 20260804000001)
+  *Scope note: "authenticated" here means an invited, role-holding account;
+  an uninvited sign-in has no role and reaches zero data (PRD v1
+  acceptance §14).*
 - **D-14 — Sessions have two buckets (upcoming/past); the coach closes days
   by hand.** Accepted risk: unclosed days never reach the hours views.
   Recorded with the cheaper middle ground on T304 if it bites. (T304)

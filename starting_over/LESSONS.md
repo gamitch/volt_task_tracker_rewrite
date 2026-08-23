@@ -35,8 +35,8 @@ doc called this out in July as "THE SINGLE MOST IMPORTANT ENGINEERING FACT"
 - All three role dashboards and the calendar rendered fabricated students and
   events on production routes for months (T155/T176/T181/T324).
 - Six fully built, fully tested components were **never mounted anywhere** —
-  including StudentMeetingView with a 946-line test file and 45 passing tests
-  and zero production render sites.
+  including StudentMeetingView with a nearly 1,000-line test file, 44
+  passing tests, and zero production render sites.
 
 An external evidence-based UX audit (2026-08-01) returned ship-recommendation
 **hold**, summarized in one line: *"The core attendance loop has no working
@@ -54,9 +54,9 @@ browser. Concretely:
 - The only tests that exercise the running app — the 13 Playwright persona
   specs — ran in **no CI workflow** and fail on a clean checkout (GAM-360,
   GAM-381).
-- ~66,600 lines of jsdom tests (a 0.94:1 test-to-code ratio) had to be
-  maintained on every change, yet every defect the owner actually hit was
-  found by using the app, not by the suite.
+- ~66.6k lines of test code (a 0.94:1 ratio with app code, ~56k of it jsdom
+  component suites) had to be maintained on every change, yet every defect
+  the owner actually hit was found by using the app, not by the suite.
 - Vacuous tests shipped repeatedly: mutation replay found suites that stayed
   green with the guarded feature entirely deleted (GAM-202/211/338/341).
 
@@ -95,7 +95,7 @@ conflicts — and in doing so guaranteed the failure between the tiles:
   ~12 hours wall clock, ~$90 notional — ~$36 of it delivering nothing. One
   assembly ticket (GAM-452) burned ~1.1M subagent tokens and still closed
   Partial.
-- **Documentation became the product**: 19MB across ~640 files in
+- **Documentation became the product**: 19MB across ~680 files in
   `docs/swarm/` — a 725KB task ledger, a 915KB verification log, a 1,223-line
   constitution (~350 lines just to classify a task's process tier), and a
   92KB RESUME-HERE.md whose own header warns most of it is stale. The
@@ -124,7 +124,7 @@ undeployed app is unbounded work; deployment pressure is what forces the
    only layer that never failed an audit.
 3. **Checks that run things.** Scratch-Postgres RLS suites, mutation replay,
    and the persona e2e harness found every real defect that reviews missed.
-4. **Owner rulings recorded verbatim, with dates.** The ~20 recorded
+4. **Owner rulings recorded verbatim, with dates.** The ~30 recorded
    decisions are the project's actual domain spec and its most valuable
    artifact (now consolidated in `DECISIONS.md`).
 5. **Owner live testing.** The highest-confidence defect signal in the

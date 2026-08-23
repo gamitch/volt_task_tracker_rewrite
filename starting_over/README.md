@@ -24,16 +24,16 @@ accumulated.
 
 | File | What it is | Read it when |
 |---|---|---|
-| **PRD.md** | The rebuild's product spec: mission, domain rules, vertical-slice milestones M0–M5, NFRs from the old defect classes, persona acceptance suite, and the 13 decisions George still owes | First — it's the plan |
-| **CONSTITUTION.md** | The working rules, ~150 lines instead of 1,223: hard floors, working-software rules C-1..C-11 (each citing its tuition), agreements W-1..W-6 | Before any build session |
+| **PRD.md** | The rebuild's product spec: mission, domain rules, vertical-slice milestones M0–M5, NFRs from the old defect classes, persona acceptance suite, and the 14 decisions George still owes | First — it's the plan |
+| **CONSTITUTION.md** | The working rules, ~130 lines instead of 1,223: hard floors, working-software rules C-1..C-11 (each citing its tuition), agreements W-1..W-6 | Before any build session |
 | **DECISIONS.md** | George's ~30 standing rulings, consolidated and dated, several verbatim — the project's real domain spec | When any "should it…?" comes up |
 | **LESSONS.md** | The post-mortem with receipts: the five failures, what worked, and how each maps to a constitution rule | To understand *why* the rules exist |
 | **SALVAGE.md** | The shopping list: schema/views/RLS, check-in HMAC, timezone modules, theme tokens, e2e harness, ETL — by file path in this repo | During M0, constantly |
 
 ## How to start (the first week)
 
-1. George reads `PRD.md` §12 and answers the 13 decisions (defaults are
-   proposed for every one — thirteen yes/nos unblocks everything).
+1. George reads `PRD.md` §12 and answers the 14 decisions (defaults are
+   proposed for every one — fourteen yes/nos unblocks everything).
 2. Create the fresh Supabase project; squash the schema per `SALVAGE.md` §2
    into one baseline migration; re-run the ETL (`SALVAGE.md` §5).
 3. Stand up M0: auth, guards, error boundary, generated types, CI with the

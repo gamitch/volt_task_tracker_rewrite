@@ -117,15 +117,22 @@ not re-derive it.
 ### Metrics
 
 - **MET-1 · Participation %** = (present + late marks) ÷ (explicit marks −
-  excused) over **completed** sessions of participation-counting meeting
-  events in the student's team scope. `unmarked` sentinel rows are excluded.
-  When the denominator is empty the value is **NULL, rendered as an em-dash,
-  never 0%** (D-15, D-16).
+  excused) over **completed** sessions of events with
+  `counts_participation = true`, in the student's team scope. `unmarked`
+  sentinel rows are excluded. When the denominator is empty the value is
+  **NULL, rendered as an em-dash, never 0%** (D-15, D-16).
 - **MET-2 · Volunteer hours** = Σ over present/late marks on **completed**
-  sessions of `type='outreach'` events that count volunteer hours, of:
+  sessions of events with `counts_volunteer_hours = true`, of:
   `hours_override` if set, else the check-in/out interval clamped to the
-  session window, else the scheduled session length. Hours count by event
-  **type**, never name (D-2).
+  session window, else the scheduled session length.
+- **MET-2a · The flags are set by event type, never by name** (D-2), and only
+  an admin can override them: `meeting` defaults to participation-only,
+  `outreach` to hours-only, `competition` to neither (opt-in per SCH-1). This
+  makes the metrics purely flag-driven — one deliberate change from the
+  ported hours view, which also hard-filtered `type='outreach'` and so made
+  the competition opt-in a dead letter. Dropping that clause changes nothing
+  for existing data (no opted-in competitions exist) and makes SCH-1's
+  opt-in real. George ratifies this in §12 Q14.
 - **MET-3 · Goal** = `student.goal_hours_override ?? season.default_goal_hours`
   (currently 90h). **Planned hours** (future `going` RSVPs × scheduled
   duration) display separately and are never summed into confirmed (D-12).
@@ -188,10 +195,13 @@ not re-derive it.
 
 - **ROS-1** · Closed roster, invite-only. Email/password + Google sign-in
   with public signups disabled; an uninvited Google sign-in reaches zero
-  data.
+  data. Wherever this PRD or a ruling says "authenticated," it means an
+  invited, role-holding account — a session with no role sees nothing (this
+  is the scope D-13 and P-2 operate within).
 - **ROS-2** · Roles: `admin | coach | student | parent`. Students may exist
   with no account; parents link to students via guardian rows and see only
-  their own kids (P-3).
+  their own kids' private data (guardian-link scoping via the
+  `my_student_ids()` RLS design).
 - **ROS-3** · **`student_teams` is the only membership source** — there is
   no legacy `team_id` column, and the membership writer ships in the same
   milestone as the table (the writer-less junction was the costliest single
@@ -222,11 +232,13 @@ persona test, accepted by George **on the deployed app** before the next
 starts. No parallel waves. Acceptance criteria are the persona tests in §11.
 
 - **M0 · Deployed skeleton (week 1).** Fresh Supabase project. One squashed
-  baseline migration: the 15-table schema, RLS helpers + policies, and the
-  final metric views, ported per `SALVAGE.md`. Generated DB types. Auth +
-  role guards + route error boundary. Deployed to the real domain with CI
-  (typecheck, build, lint, unit, **and the persona e2e suite, green on a
-  clean checkout**). Real data seeded by the proven ETL.
+  baseline migration: the 12-table baseline schema, RLS helpers + policies,
+  and the final metric views, ported per `SALVAGE.md` §2. Generated DB
+  types. Auth + role guards + route error boundary. Deployed to the real
+  domain with CI (typecheck, build, lint, unit, **and the persona e2e
+  suite, green on a clean checkout**). Real data seeded by the proven ETL.
+  The baseline is the sanctioned C-4 exception: the ETL is its writer, and
+  no UI ships against a table before its writer's milestone lands.
   *Accepted when: George signs in as admin on the production URL and sees
   the real roster (20 students, 4 teams, 341.75 hours intact).*
 - **M1 · Run a meeting.** Roster CRUD (with membership writer), season
@@ -237,13 +249,16 @@ starts. No parallel waves. Acceptance criteria are the persona tests in §11.
 - **M2 · Outreach hours.** Outreach event creation (transactional, expected
   attendees), RSVP (student / parent-on-behalf / coach-on-behalf),
   mark-day-complete with per-student hours, retroactive self check-off,
-  mark-whole-event-complete, hours + goal + planned on student home.
+  mark-whole-event-complete, hours + goal + planned on student home. Parent
+  **accounts and guardian linking ship here** — the on-behalf RSVP and
+  self check-off paths need them; parent home/calendar surfaces wait for M5.
   *Accepted when: a real outreach event's hours land correctly for every
   attendee, verified against the database.*
 - **M3 · One set of numbers.** Coach dashboard (the §8 shortlist),
   leaderboard (S-5), reports (participation table, hours table, CSV export).
-  Acceptance is the old W4 test, promoted to a release gate: *the same
-  student's numbers agree on every screen that shows them.*
+  Acceptance is the same-numbers-everywhere gate from the first rewrite,
+  promoted to a release gate: *the same student's numbers agree on every
+  screen that shows them.*
 - **M4 · Fast check-in.** QR + rotating 6-char code + manual entry + student
   self check-in, per ATT-5/6 — shipped as one slice including its fallback.
   The Edge Function's deployment is part of the milestone's definition of
@@ -389,7 +404,10 @@ modes, verified by reading rows back from the database:
   "who is short of their hours goal?" from the dashboard without exporting.
 - **P-PARENT:** signs in, sees each linked kid's next event above the fold
   and their attendance/hours; RSVPs on a kid's behalf; the student sees who
-  did it; sees **zero** data about unlinked students.
+  did it; sees **zero private data** about unlinked students — no attendance,
+  hours, contact info, or full names. (Seeing unlinked students as
+  "First L." on shared surfaces like event signups is expected behavior per
+  D-13/P-2, not a failure.)
 
 Plus the standing gates: same-numbers-everywhere (M3), uninvited sign-in
 reaches zero data, RLS anon audit, DST-window tests, CSV export opens in
@@ -400,8 +418,10 @@ Sheets with ISO dates.
 Proposed defaults so work can start; each needs a yes/no:
 
 1. **Data**: fresh Supabase project, re-run the proven ETL, then teardown
-   the old project's mixed state. *(Default: yes — RUNBOOK.md §8 is the
-   playbook.)*
+   the old project's mixed state. *(Default: yes — RUNBOOK.md §4–§5 are the
+   playbook, teardown first per §5's account-preserving SQL; §8 records the
+   proven first run. Note §5's durable manifest-teardown branch is unmerged
+   and unverified — check before relying on it.)*
 2. **Design system**: keep Astryx (its real constraints are now documented)
    or switch to a mainstream system, keeping the volt tokens. *(Default:
    George's call — the friction was real but so is the sunk fluency; no
@@ -417,7 +437,9 @@ Proposed defaults so work can start; each needs a yes/no:
    yes.)*
 7. **§4 cut list** confirmed (ICS, digest emails, kiosk TV view, toasts,
    avatars, activity feed out of v1). *(Default: yes.)*
-8. **Parent features** land in M5, not earlier. Multi-child parents get a
+8. **Parent scope split**: parent accounts, guardian linking, RSVP-on-behalf,
+   and self check-off ship inside M2 (the outreach loop needs them); parent
+   home, child switcher, and calendar land in M5. Multi-child parents get a
    child switcher. *(Default: yes.)*
 9. **KPI strip**: dashboard-only, not persistent across pages. *(Default:
    yes.)*
@@ -431,6 +453,11 @@ Proposed defaults so work can start; each needs a yes/no:
     label; carry nothing forward except what this PRD already encodes.
     *(Default: yes — the ~30 domain-rule findings are already folded into
     §5/§10.)*
+14. **Flag-driven metrics** (MET-2a): the hours view keys on
+    `counts_volunteer_hours` alone, dropping the ported SQL's extra
+    `type='outreach'` filter, so your CMP opt-in design actually works;
+    type still sets the defaults per D-2 and meetings still never count.
+    *(Default: yes.)*
 
 ## 13. Changelog
 

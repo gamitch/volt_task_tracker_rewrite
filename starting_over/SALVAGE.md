@@ -20,11 +20,15 @@ Everything not listed here is presumed **not** carried.
 The single most valuable asset. Port the **final** state of
 `supabase/migrations/` (27 files) into **one baseline migration**:
 
-- **15 tables**: profiles, teams, seasons, students, guardian_links,
-  invites, events, event_sessions, rsvps, attendance, notification_prefs,
-  calendar_feeds, email_log, audit_log, student_teams — with the rebuild's
-  two deliberate changes: drop `students.team_id` (ROS-3: junction only, and
-  ship its writer), and store recurrence rules on series (SCH-2).
+- **12 tables in the baseline**: profiles, teams, seasons, students,
+  guardian_links, invites, events, event_sessions, rsvps, attendance,
+  notification_prefs, student_teams — with the rebuild's two deliberate
+  changes: drop `students.team_id` (ROS-3: junction only, and ship its
+  writer), and store recurrence rules on series (SCH-2). The other three
+  tables from the old schema (`audit_log`, `calendar_feeds`, `email_log`)
+  serve features v1 cuts or rulings retired (D-9), so they stay out of the
+  baseline and return additively with their features (H-5) — no table ships
+  without a writer (C-4).
 - **RLS**: the three security-definer helpers (`auth_role()`, `is_staff()`,
   `my_student_ids()`), the uniform `staff_all` policy shape, `own_or_linked_read`,
   self-scoped prefs/feeds. Decide view security once (SEC-4): every view
@@ -103,8 +107,9 @@ The single most valuable asset. Port the **final** state of
 - The Linear dispatch pipeline (`supabase/functions/linear-dispatch/`,
   5 of 6 GitHub workflows), tier labels, declaration gates.
 - The injectable fixture-default loader seams, back-compat re-export shims,
-  `PLACEHOLDER_*` constants, and the ~50k LOC jsdom suite (NFR-11 replaces
-  it).
+  `PLACEHOLDER_*` constants, and the ~56k LOC jsdom component suite —
+  the ~10k LOC of pure-logic unit tests ride along with their modules per
+  §3 and NFR-11.
 - The 131 open Linear issues (PRD §12 Q13): mass-close with a `rebuild`
   label; their ~30 real domain findings are already encoded in PRD §5/§10.
 - `src/` wholesale. Individual pure modules listed in §3 are the exceptions.
