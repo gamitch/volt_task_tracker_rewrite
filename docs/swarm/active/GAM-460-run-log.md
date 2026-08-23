@@ -31,3 +31,28 @@ subagent or step is named in the line above it.
   a responsive rule).
 - Nothing known unresolved yet — about to read the current SeriesCard and
   loader code to check the actual premise before writing any packet.
+
+## 2026-08-23 — premise measured, packet written
+
+- Read `SeriesCard.tsx`, `types.ts` (`SeriesCardModel`, `CoachMeetingRow`),
+  and `loaders/meetings.ts`. Confirmed: the loader already carries
+  `gradedMarksCt` onto `CoachMeetingRow` (GAM-446, Done); `SeriesCardModel`
+  (frozen by GAM-444) has 9 fields and no `gradedMarksCt`; `SeriesCard.tsx`
+  renders `attendancePct` with an "across N held" caption but never the
+  marks count. Premise holds exactly as the issue describes.
+- **Coordination finding:** GAM-452 ("Assemble the redesigned meetings
+  page") is `In Progress`, PR #242 open, still packet-only (no code yet).
+  Its own dispatch-addendum packet (§9a) already found this identical gap,
+  decided it cannot fix it (frozen `SeriesCardModel`, `types.ts`/
+  `SeriesCard.tsx` both Forbidden in its own Allowed Files), and plans to
+  ship the real `attendancePct` passthrough with a comment naming D014 and
+  GAM-460 at that line. GAM-452's Allowed Files do not overlap this
+  ticket's, so no file collision — widening `SeriesCardModel` now is safe
+  and directly removes GAM-452's disclosed risk rather than conflicting
+  with it.
+- Wrote `docs/swarm/active/GAM-460-packet.md` (STANDARD tier, one worker,
+  orchestrator replays the mutation, no separate checker per item 26).
+  Committed and pushed.
+- About to dispatch `worker-implementer` with this packet,
+  `run_in_background: false`. If this line is the last one in this file,
+  the run died holding that dispatch.
