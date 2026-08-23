@@ -268,13 +268,26 @@ requested scope and the available concurrency limit.
 
 - FAST: the primary agent implements and verifies directly. Do not manufacture
   agent ceremony that item 26 explicitly removed.
-- STANDARD: dispatch one worker subagent with a compact packet. The primary
-  agent independently inspects the diff and replays the named mutation and
-  verification. A separate checker is optional unless the task or evidence
-  makes one useful.
-- HEAVY: use a premise-checker subagent before dispatch, a separate worker, and
-  a separate checker. The primary agent integrates only independently verified
-  work. Respect the two-round premise-gate cap and three-attempt worker cap.
+- STANDARD: dispatch one worker subagent with a compact packet — two workers
+  maximum, and only for genuinely disjoint packets with a declared collision
+  analysis and integration order. No separate premise checker for an ordinary
+  packet: the author verifies every operative claim first and may not use
+  STANDARD to avoid a HEAVY trigger. A separate acceptance checker is required
+  only when item 26's checker triggers apply (role- or tenant-sensitive
+  presentation, settled-contract user-data reporting, a core keyboard or
+  accessibility path, a cross-surface mapping or shared contract, a frozen
+  contract with no active sibling, or judgment the orchestrator cannot
+  independently settle); otherwise the primary agent inspects the committed
+  diff, replays the named mutation, and runs the final gates itself. Final
+  verification has exactly one owner — never both.
+- HEAVY: every packet gets an independent premise-checker DISPATCH before any
+  worker — full or light per item 19b, never skipped — then a separate worker
+  and one independent acceptance checker, which may run isolated process-level
+  verification lanes against the committed SHA. Up to three workers only after
+  the premise checker approves the explicit split. One bounded correction
+  round may reuse the same worker and checker; more rounds, a replacement
+  worker, arbitration, or a second checker requires owner authorization.
+  Respect the two-round premise-gate cap.
 
 Parallelize only independent work. `docs/swarm/WORKFLOWS.md` owns the file
 collision analysis. Never run two editing agents against the same working tree

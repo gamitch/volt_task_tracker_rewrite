@@ -4424,3 +4424,42 @@ edit checkable. The previous state had the permission without the gate.
   boss-architect approval on top.
 - **Item 8 was not on the table.** Tailwind, shadcn and any alternate UI/CSS library remain BLOCKER.
   2e says so explicitly because 2c is the clause most likely to be stretched toward them.
+
+## 2026-08-23 — George authorizes the item 26 rewrite: three tiers by measured risk (revision 4)
+
+The human owner approved replacing constitution item 26 wholesale with the
+revision-4 draft ("Three process tiers, triggered by measured risk"), together
+with its four companion amendments and the required downstream
+synchronization, all applied in this same governance change. Approval given
+2026-08-23 in the working session that fact-checked revisions 1 through 4
+against the repository record. The optional rewording of the STANDARD
+sentence *"A change capable of materially falsifying a user's own persisted
+records remains HEAVY"* was offered and expressly declined — the sentence
+stands as drafted.
+
+**Approved scope:**
+
+- the revised tier boundaries — unconditional HEAVY triggers applied first,
+  STANDARD as the default bounded tier, FAST available but never mandatory;
+- bounded, reversible writes through established seams at STANDARD, under the
+  six demonstrated conditions including the full-row before/after test;
+- process-level verification parallelism at every tier, with agent-level
+  parallelism reserved for disjoint implementation packets;
+- worker ceilings — FAST zero, STANDARD one by default and two maximum, HEAVY
+  one by default and three maximum after premise approval of the split;
+- retry and checker limits — one bounded correction round; every second
+  specialist checker requires an owner decision; and
+- the companion amendments (Non-Negotiables, item 19 opening and 19b, the
+  Definition of Ready, the Definition of Done) and the downstream
+  synchronization across `AGENTS.md`, `CODEX.md`, the execution skills, the
+  agent role files, and the live workflow documents.
+
+**Three deliberate choices are on record:** conservatively, T189-class work
+stays HEAVY and every second specialist checker requires an owner decision;
+liberally, an ordinary STANDARD packet receives premise review only when the
+orchestrator requests it or measurement reveals a HEAVY trigger.
+
+Historical session records — run logs, dated lessons documents, the frozen
+ledger, and banner-marked historical sections — were left as written: they
+quote the item 26 in force at the time. Live guidance was synchronized
+instead.

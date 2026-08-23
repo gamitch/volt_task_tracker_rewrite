@@ -92,8 +92,8 @@ TELL THE OWNER when T196 lands: it unblocks the EndMeetingDialog mount, which th
 workflow (W3) is waiting on.
 
 RULES THAT ARE NOT OPTIONAL:
-- State your tier choice per constitution item 26 in the PR and defend it. If two tiers are
-  arguable, take the heavier one.
+- State your tier choice per constitution item 26 in the claim comment and PR and defend it.
+  Measure first; if two tiers remain reasonably arguable after measurement, take the heavier one.
 - Update the ledger row AND the verification-log entry in the SAME commit that merges the
   work (item 24). Two of the last three merges drifted; do not add a third.
 - Stage named paths only. Never `git add -A` or `git add .` (item 22).
@@ -480,9 +480,10 @@ docs/swarm/WORKFLOWS.md section W4.
 YOUR WORKFLOW: every number the app shows a user about their own contribution — season
 hours, percentage toward goal, participation, the leaderboard, reports.
 
-THIS ENTIRE WORKFLOW IS HEAVY TIER. It is metric-view SQL, where a mistake lies to a user
-about their own data. Constitution item 26 names it explicitly. Do not let a small-looking
-diff talk you out of the tier.
+EVERY ROW HERE THAT TOUCHES METRIC-VIEW SQL IS HEAVY TIER. A mistake lies to a user about
+their own data, and constitution item 26 names metric SQL as an unconditional trigger no
+small-looking diff can lower. Rows that do not touch the SQL are tiered individually per
+item 26.
 
 FILES YOU OWN:
   supabase/migrations/*metric_views.sql, *kpi_views.sql, *dashboard_views.sql
@@ -982,8 +983,9 @@ ALSO OPEN IN YOUR BLOCK:
   T401, T402 — both filed by W1 but belong to W2. Do not execute them.
 
 RULES THAT ARE NOT OPTIONAL:
-- State your tier choice per constitution item 26 in the PR and defend it. If
-  two tiers are arguable, take the heavier one.
+- State your tier choice per constitution item 26 in the claim comment and PR
+  and defend it. Measure first; if two tiers remain reasonably arguable after
+  measurement, take the heavier one.
 - Update the ledger row AND the verification-log entry in the SAME commit that
   merges the work (item 24).
 - Stage named paths only. Never `git add -A` or `git add .` (item 22).
