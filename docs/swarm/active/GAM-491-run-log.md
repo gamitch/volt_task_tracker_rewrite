@@ -44,3 +44,13 @@ Append-only. One line per milestone. Pushed immediately after each append.
   `git fetch origin main` + rebase onto `5bf0cb78`, `CoachMeetingsView.tsx:760`
   mounts `<SchedulePanel` as the issue describes. **Premise holds.** Branch
   rebased onto `origin/main`; all further measurement is against `5bf0cb78`.
+- **11:52Z — packet written** (`docs/swarm/active/GAM-491-packet.md`), every
+  citation verified against `5bf0cb78` by the orchestrator (item 19c). Two of the
+  issue's own citations were corrected in §2. **§3 is the finding that decides the
+  packet:** `makeLoadAttendanceForSessions` (`attendance.ts:412`) is the only
+  attendance read in `loaders/` that does **not** apply `excludeUnmarked`
+  (`attendance.ts:391-402` selects `*` raw; `:308-322` copies `row.status`
+  straight into a type that cannot hold `'unmarked'`), so GAM-479's cleared-mark
+  sentinel can escape the loader boundary the invariant at `attendance.ts:224-231`
+  says it never does. The new roster loader must map it to `null` itself; the
+  upstream gap is an item 20 follow-up the orchestrator files.
