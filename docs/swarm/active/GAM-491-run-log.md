@@ -33,3 +33,14 @@ Append-only. One line per milestone. Pushed immediately after each append.
 - **11:31Z — draft PR #245 opened** at ~minute 5, with the branch carrying only
   the run log and the PR-body artifact. `check.mjs` on the artifact: `OK
   declaration closes GAM-491`, exit 0.
+- **11:38Z — premise re-measured; a stale checkout nearly produced a false
+  refusal, recorded here because the next reader deserves the correction.** The
+  dispatch container cloned `main` at `8f0f1eee` (PR #244), which is **one merge
+  behind**: GAM-452's PR #242 merged at `2026-08-23T11:25:19Z`, roughly one minute
+  before this run started, landing as `5bf0cb78`. Against the stale tree
+  `SchedulePanel` had **no caller anywhere in `src/`**, and the issue's
+  `CoachMeetingsView.tsx:760-790` citation resolved to unrelated code — which
+  reads exactly like a false premise. It is not one. After
+  `git fetch origin main` + rebase onto `5bf0cb78`, `CoachMeetingsView.tsx:760`
+  mounts `<SchedulePanel` as the issue describes. **Premise holds.** Branch
+  rebased onto `origin/main`; all further measurement is against `5bf0cb78`.
