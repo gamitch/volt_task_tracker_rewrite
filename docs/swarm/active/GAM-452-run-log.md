@@ -32,3 +32,13 @@ did not land.
   to spare. `docs/swarm/active/GAM-452-pr-body.md` written *before* the API
   call (pr-body skill) and validated: `OK declaration closes GAM-452`.
   <https://github.com/gamitch/volt_task_tracker_rewrite/pull/242>
+- `01:38Z` — **Packet written**: `docs/swarm/active/GAM-452-packet.md`. Four of
+  the issue's own claims measured false against `main` and corrected in §0
+  (`listGuardianChildren` does not exist and was deliberately cut by GAM-446's
+  gate; `MeetingsList.tsx` carries no `focusRequest` state; `--color-series-*`
+  is unmerged; `SeriesCardModel` has no `gradedMarksCt` and must not gain one).
+  §8 carries the five least-confident decisions item 19d requires.
+- `01:39Z` — **DISPATCHED `checker-premise`** on the packet (round 1 of the
+  item-19a two-round cap), `run_in_background: false`. *If this line is the
+  last one in this file, the run died holding this subagent* — the gate never
+  returned a verdict and no worker was ever dispatched.
