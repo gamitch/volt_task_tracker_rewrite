@@ -613,24 +613,27 @@ export function buildSeriesCardModels(
        * here, rendered as "—" by `SeriesCard.tsx:362-368`, never a
        * fabricated zero.
        *
-       * DISCLOSED, ACCEPTED RISK (D014 / GAM-460, still `Backlog`): this
-       * view does not also render `graded_marks_ct`
-       * (`types.ts:139-147`'s own capitalized warning calls that
-       * "MANDATORY whenever attendance_pct is rendered" -- `SeriesCardModel`
-       * is frozen without that field, and `SeriesCard.tsx` belongs to
-       * already-merged GAM-447, both outside this ticket's Allowed Files).
-       * Since T508 an unmarked student has no attendance row, so forgetting
-       * to mark someone INFLATES this percentage (measured 100% for an
-       * event 60% of the roster skipped). The migration itself assigns this
-       * mitigation to the consuming ticket
-       * (`20260821000000_meetings_event_attendance_view.sql:162-163`);
-       * GAM-460 is that ticket. Do not "fix" this back to `null` -- round 2
-       * of this packet's own premise gate proved that withholding a real
-       * number here is the worse half of the honesty trade (PRD MTG-01a:
-       * "The attendance % is DATA-01 passthrough ... never computed in
-       * TypeScript").
+       * D014's mitigation now rides beside it: GAM-460 (PR #244) made
+       * `gradedMarksCt` a required `SeriesCardModel` field and
+       * `SeriesCard.tsx` renders it unconditionally next to the percentage,
+       * which is what `types.ts:139-149`'s capitalized warning calls
+       * "MANDATORY whenever attendance_pct is rendered". Do not "fix" this
+       * back to `null` -- round 2 of this packet's own premise gate proved
+       * that withholding a real number here is the worse half of the honesty
+       * trade (PRD MTG-01a: "The attendance % is DATA-01 passthrough ...
+       * never computed in TypeScript").
        */
       attendancePct: row.attendancePct ?? null,
+      /**
+       * D014 / GAM-460 -- a COUNT, not a metric, so `?? 0` here is the true
+       * value rather than a fabricated one: the GAM-446 merge leaves this
+       * `undefined` only when the event has no `v_event_attendance` row at
+       * all, i.e. no marks exist ("0 marks graded" is what the view's own
+       * `count(...)` would say). `attendancePct` stays `null` on that same
+       * row, so the card shows "—" beside the zero count -- never a real
+       * percentage without its mark count.
+       */
+      gradedMarksCt: row.gradedMarksCt ?? 0,
       nextSessionLabel: buildNextSessionLabel(nextScheduled),
       paletteIndex: paletteIndexFor(row.eventId),
     };
