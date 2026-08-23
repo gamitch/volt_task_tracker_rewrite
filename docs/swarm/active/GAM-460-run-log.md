@@ -126,8 +126,9 @@ subagent or step is named in the line above it.
 - Moved GAM-460 `In Progress → In Review` (item 28e — never `Done`; the
   merge closes it). Posted the close-out run-log comment on the issue with
   the gate block, mutation replay result, and PR link.
-- **Done for this session.** PR #244 is open as a draft on
+- Cleared the draft flag (`gh pr ready 244`) now that the body is final and
+  all six gates are green — PR #244 is open and ready for review.
+- **Done for this session.** PR #244 (ready, not draft) on
   `claude/gam-460-graded-marks-ct-seriescard`, commit `8a20b80a`, six gates
-  green, mutation replayed, GAM-460 is `In Review`. Nothing left in flight.
-  If a human wants it merged, clearing the draft flag is the only remaining
-  step; nothing here needs further orchestrator action.
+  green, mutation replayed, GAM-460 is `In Review`. Nothing left in flight;
+  no further orchestrator action needed.
