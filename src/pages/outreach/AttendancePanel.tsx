@@ -87,10 +87,37 @@
  *    overwrite ... check-ins."): the un-mark (uncheck) path no longer
  *    branches on `method` at all. `resolveUnmarkAction` (T117's `'delete'`
  *    vs. `'setAbsent'` decision) is REMOVED from `loaders/attendance.ts`;
- *    `handleToggle` below now calls `onRemoveAttendance` (plain DELETE)
- *    unconditionally on uncheck, for a `'coach'`, `'qr'`, or `'import'` row
- *    alike -- a coach's attendance correction MAY now remove a real
- *    QR-originated check-in row outright, per D-7.
+ *    `handleToggle` below un-marks unconditionally, for a `'coach'`,
+ *    `'qr'`, or `'import'` row alike -- a coach's attendance correction MAY
+ *    remove a real QR-originated check-in outright, per D-7.
+ *
+ *    AMENDED AGAIN 2026-08-22 (GAM-479): the un-mark is no longer a row
+ *    DELETE. `handleToggle` calls `onClearAttendance`, which upserts the
+ *    `'unmarked'` sentinel status
+ *    (`supabase/migrations/20260822000000_attendance_unmarked_sentinel.sql`)
+ *    with a payload that names neither `check_in_at`/`check_out_at` nor
+ *    `hours_override`, so unchecking a student preserves a QR check-in
+ *    timestamp and the hours override this very panel sets two controls
+ *    away (the `NumberInput` below). Nothing recovered them before: the
+ *    attendance audit trigger was dropped by
+ *    `20260803000000_simplify_attendance_audit.sql:38-39`.
+ *
+ *    **D-7 IS NOT REOPENED.** D-7 struck down a coach VETO -- code that
+ *    refused to clear `qr`/`import` rows. Unchecking still clears any row,
+ *    of any `method`, in one click, and the coach still needs no permission
+ *    to do it. Only where the cleared state is STORED changed.
+ *
+ *    **The boundary, stated precisely.** `'unmarked'` is filtered out of
+ *    this panel's own load (`loaders/outreach.ts`'s `excludeUnmarked`), so
+ *    a cleared student reads as unchecked exactly as a deleted one did. If
+ *    the coach then RE-CHECKS, `onUpsertAttendance` runs with
+ *    `hoursOverride: null` and nulls the preserved override --
+ *    `check_in_at`/`check_out_at` still survive, since no upsert in
+ *    `attendance.ts` ever names them. So: an accidental uncheck no longer
+ *    destroys anything, and a deliberate uncheck-then-recheck is treated as
+ *    a fresh mark. That is a real limit, not an oversight; restoring the
+ *    override across a re-check needs this panel to read cleared rows,
+ *    which would put the sentinel above the loader boundary.
  *
  * -----------------------------------------------------------------------
  * 5. Persistence model: save on toggle / save on hours blur (packet's own
@@ -103,9 +130,9 @@
  * checked DISPLAY (`optimisticCheckedByKey`, overlaying -- never replacing
  * -- the last-committed truth in `attendanceByKey`) and marks the row
  * pending (`CheckboxInput`'s own `isLoading`), then calls the real mutation
- * (`onUpsertAttendance`/`onRemoveAttendance`, both defaulting to
+ * (`onUpsertAttendance`/`onClearAttendance`, both defaulting to
  * `loaders/attendance.ts`'s real implementations). On success the real
- * written/deleted row replaces the optimistic overlay entirely (the
+ * written/cleared row replaces the optimistic overlay entirely (the
  * overlay is cleared, committed truth now drives the checked state -- this
  * is what lets a subsequent edit correctly see the real persisted
  * `method`, module doc #4). On rejection the optimistic overlay is cleared
@@ -136,9 +163,9 @@
  *
  * -----------------------------------------------------------------------
  * 6. Injectable persistence/load seams (module doc #1) -- `loadAttendance`/
- *    `onUpsertAttendance`/`onRemoveAttendance` default to
+ *    `onUpsertAttendance`/`onClearAttendance` default to
  *    `../../lib/supabase/loaders/attendance.ts`'s real
- *    `loadAttendanceForSessions`/`upsertAttendance`/`removeAttendance`,
+ *    `loadAttendanceForSessions`/`upsertAttendance`/`clearAttendanceStatus`,
  *    same "real default, injectable for tests" convention every wired page
  *    in this codebase already uses (`RsvpControl.tsx`'s `onRsvpChange`,
  *    `MarkDayCompleteDialog.tsx`'s `onMarkComplete`, etc.).
@@ -226,13 +253,13 @@ import {
   VStack,
 } from '@astryxdesign/core';
 import {
+  clearAttendanceStatus,
   loadAttendanceForSessions,
-  removeAttendance,
   resolveAttendanceWriteMethod,
   upsertAttendance,
   type AttendanceRow,
+  type ClearAttendanceStatusFn,
   type LoadAttendanceForSessionsFn,
-  type RemoveAttendanceFn,
   type UpsertAttendanceFn,
 } from '../../lib/supabase/loaders/attendance';
 
@@ -571,7 +598,8 @@ export interface AttendancePanelProps {
   /** Injectable persistence seams (module doc #6). Default to the real
    * mutations. */
   onUpsertAttendance?: UpsertAttendanceFn;
-  onRemoveAttendance?: RemoveAttendanceFn;
+  /** GAM-479 -- the uncheck seam. A sentinel status write, not a DELETE. */
+  onClearAttendance?: ClearAttendanceStatusFn;
 }
 
 interface AttendanceRowViewProps {
@@ -639,7 +667,7 @@ export function AttendancePanel({
   currentUserProfileId,
   loadAttendance = loadAttendanceForSessions,
   onUpsertAttendance = upsertAttendance,
-  onRemoveAttendance = removeAttendance,
+  onClearAttendance = clearAttendanceStatus,
 }: AttendancePanelProps): ReactNode {
   // A session that's already canceled has nothing to record attendance
   // against (module doc, disclosed judgment call: `event_sessions.status`
@@ -719,10 +747,19 @@ export function AttendancePanel({
         });
         setAttendanceByKey((prev) => ({ ...prev, [key]: saved }));
       } else {
-        // T119/D-7: plain DELETE regardless of `method` -- the coach is the
-        // ultimate authority; a real qr/import row is no longer protected
-        // from removal.
-        await onRemoveAttendance({ sessionId: session.id, studentId: student.id });
+        // T119/D-7: un-mark regardless of `method` -- the coach is the
+        // ultimate authority; a real qr/import row is not protected from
+        // being cleared. GAM-479: that un-mark is a sentinel status write
+        // rather than a DELETE, so the row's check_in_at and hours_override
+        // survive it. `resolveAttendanceWriteMethod` is the SAME provenance
+        // call the checked branch above makes -- clearing a qr row keeps it
+        // saying 'qr', which is what the preserved check_in_at came from.
+        await onClearAttendance({
+          sessionId: session.id,
+          studentId: student.id,
+          method: resolveAttendanceWriteMethod(existing?.method ?? null),
+          recordedBy: currentUserProfileId,
+        });
         setAttendanceByKey((prev) => {
           if (!(key in prev)) return prev;
           const next = { ...prev };

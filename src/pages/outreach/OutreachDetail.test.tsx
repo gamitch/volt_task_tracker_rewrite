@@ -122,7 +122,7 @@ vi.mock('../../lib/supabase/loaders/attendance', async (importOriginal) => {
     ...actual,
     loadAttendanceForSessions: vi.fn(async () => []),
     upsertAttendance: vi.fn(),
-    removeAttendance: vi.fn(),
+    clearAttendanceStatus: vi.fn(),
   };
 });
 

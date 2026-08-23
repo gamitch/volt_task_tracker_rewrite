@@ -312,10 +312,12 @@ function mapAttendanceDbRowToAttendanceRow(row: AttendanceDbRow): AttendanceRow 
 //
 // T119 (PRD v2 D-7): `resolveUnmarkAction`/`UnmarkAction` (T117's un-mark
 // branch decision) are REMOVED from this file -- un-marking is no longer a
-// decision at all, it is an unconditional DELETE (`makeRemoveAttendance`
-// below) for every `method`. Only `resolveAttendanceWriteMethod` (the
-// CHECKED-row write-method LABEL, unchanged by D-7 per module doc #2)
-// remains here.
+// decision at all, it is unconditional for every `method`. GAM-479 changed
+// what that unconditional action IS (a `'unmarked'` sentinel write via
+// `makeClearAttendanceStatus`, no longer a row DELETE) without reintroducing
+// a branch. Only `resolveAttendanceWriteMethod` (the write-method LABEL,
+// unchanged by D-7 per module doc #2, and used by the clear path too so a
+// cleared `qr` row keeps saying `qr`) remains here.
 // ---------------------------------------------------------------------------
 
 /**
@@ -637,33 +639,22 @@ export function makeClearAttendanceStatus(
 export const clearAttendanceStatus: ClearAttendanceStatusFn = makeClearAttendanceStatus();
 
 // ---------------------------------------------------------------------------
-// Delete -- the ONE place the `'delete'` un-mark action (module doc #2) is
-// executed.
+// There is no attendance DELETE in this file, deliberately (GAM-479).
+//
+// `RemoveAttendanceParams`, `RemoveAttendanceFn`, `makeRemoveAttendance` and
+// `removeAttendance` used to live here and are GONE. Both callers moved to
+// `makeClearAttendanceStatus` above: `SessionRow.tsx`'s chip cycle and
+// `AttendancePanel.tsx`'s checkbox. The seam is removed rather than left
+// exported-but-unused because an exported delete is an invitation to re-wire
+// the exact data-loss path GAM-479 closed -- a coach clearing a mark must not
+// be able to destroy a QR `check_in_at` or an `hours_override` again, and the
+// audit trigger that would have recovered them was dropped by
+// `20260803000000_simplify_attendance_audit.sql:38-39`.
+//
+// D-7 is untouched by the removal: a coach still clears any mark, of any
+// `method`, with one action and no permission check. Consequence worth
+// knowing: `attendance` rows are now append-and-update only, so a session
+// that ever carried marks stays undeletable (`session_id` is
+// `on delete restrict`) and `meetings.ts`'s own session-removal guard routes
+// it to `cancel` -- which is what it already did for a session with marks.
 // ---------------------------------------------------------------------------
-
-export interface RemoveAttendanceParams {
-  sessionId: string;
-  studentId: string;
-}
-
-export type RemoveAttendanceFn = (params: RemoveAttendanceParams) => Promise<void>;
-
-export function makeRemoveAttendance(
-  getClient: () => SupabaseClient = getSupabaseClient,
-): RemoveAttendanceFn {
-  const mutate = runMutation<RemoveAttendanceParams, void>(
-    (client, params) =>
-      client
-        .from('attendance')
-        .delete()
-        .eq('session_id', params.sessionId)
-        .eq('student_id', params.studentId),
-    getClient,
-  );
-  return async (params) => {
-    await mutate(params);
-  };
-}
-
-/** Default `onRemoveAttendance` for `AttendancePanel.tsx` -- real delete. */
-export const removeAttendance: RemoveAttendanceFn = makeRemoveAttendance();

@@ -6,7 +6,7 @@
  *   expander: a confirmed cancel for `scheduled`, tap-to-cycle attendance
  *   chips for `completed`, a plain sentence for `canceled`. See
  *   `SchedulePanel.tsx`'s own module doc for the write-seam correction
- *   (`makeSetAttendanceStatus`/`makeRemoveAttendance`, never the
+ *   (`makeSetAttendanceStatus`/`makeClearAttendanceStatus`, never the
  *   `endMeeting.ts:489` factory the original issue named -- criterion 14
  *   reads this file literally, so that name is not spelled out here even in
  *   a comment) and the `expectedCt` omission -- both apply here too.
@@ -103,8 +103,9 @@
  *    in the sense that mattered -- this seam cannot write one of the four
  *    real statuses -- and the payload is exactly
  *    `{ sessionId, studentId, method: 'coach', recordedBy }`.
- *    `makeRemoveAttendance` is not imported here at all any more; it survives
- *    only for `AttendancePanel.tsx`'s checkbox.
+ *    `makeRemoveAttendance` no longer exists anywhere -- GAM-479 retired it
+ *    once its last caller (`AttendancePanel.tsx`'s checkbox) moved to the
+ *    same clear seam. There is no attendance row DELETE left in this app.
  *
  *    **Optimistic update with rollback, LAST WRITE WINS** (2026-08-02
  *    ruling, `LiveConsole.tsx:1042-1060`'s own citation) -- `statusById`

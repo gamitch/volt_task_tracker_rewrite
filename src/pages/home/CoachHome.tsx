@@ -468,9 +468,11 @@
  *
  * (f) Hard-delete feed limitation (Trap #3, D-7) -- disclosed a THIRD time
  *     here (also in the migration's own header and `dashboard.ts`'s own
- *     module doc #2): `attendance.ts`'s real `makeRemoveAttendance` and the
+ *     module doc #2). NARROWED 2026-08-22 by GAM-479: the ATTENDANCE half is
+ *     no longer true -- `makeRemoveAttendance` is gone and an un-mark now
+ *     writes the `'unmarked'` sentinel, leaving the row in place. The
  *     event-edit checklist's own RSVP-uncheck path (D-7, "the checklist
- *     wins") are unconditional DELETEs with no history left behind. This
+ *     wins") IS still an unconditional DELETE with no history left behind. This
  *     file does NOT add a tracking table or a status-transition column to
  *     recover that history (worker packet's explicit instruction) --
  *     `buildActivityFeed` is built from CURRENT `rsvps`/`attendance` rows

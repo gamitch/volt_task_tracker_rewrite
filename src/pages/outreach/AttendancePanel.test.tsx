@@ -24,11 +24,13 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   makeLoadAttendanceForSessions,
-  makeRemoveAttendance,
   makeUpsertAttendance,
   resolveAttendanceWriteMethod,
   type AttendanceRow,
 } from '../../lib/supabase/loaders/attendance';
+import attendanceLoaderSource from '../../lib/supabase/loaders/attendance.ts?raw';
+import attendancePanelSource from './AttendancePanel.tsx?raw';
+import sessionRowSource from '../meetings/coach/SessionRow.tsx?raw';
 import {
   AttendancePanel,
   computeSessionAttendanceTotalHours,
@@ -490,20 +492,42 @@ describe('makeUpsertAttendance (module doc #3 -- onConflict, no check_in_at/chec
   });
 });
 
-describe('makeRemoveAttendance', () => {
-  it('deletes by session_id + student_id', async () => {
-    const secondEqSpy = vi.fn().mockResolvedValue({ data: null, error: null });
-    const firstEqSpy = vi.fn(() => ({ eq: secondEqSpy }));
-    const deleteSpy = vi.fn(() => ({ eq: firstEqSpy }));
-    const fromSpy = vi.fn(() => ({ delete: deleteSpy }));
-    const client = { from: fromSpy } as unknown as SupabaseClient;
+// GAM-479 replaced this block. It used to be `describe('makeRemoveAttendance')`
+// -- a test that the delete seam deleted by `session_id` + `student_id`. That
+// seam is gone, and the useful thing to assert now is that it STAYS gone: an
+// exported attendance DELETE is how the data-loss path gets re-wired by
+// someone who does not know why it was removed.
+describe('GAM-479 -- the attendance loader exports no DELETE seam', () => {
+  it('exports the clear seam and neither of the removed delete symbols', async () => {
+    const attendanceModule = await import('../../lib/supabase/loaders/attendance');
+    const exported = Object.keys(attendanceModule);
 
-    const remove = makeRemoveAttendance(() => client);
-    await remove({ sessionId: 'session-1', studentId: 'student-sofia' });
+    expect(exported).toContain('makeClearAttendanceStatus');
+    expect(exported).toContain('clearAttendanceStatus');
+    expect(exported).not.toContain('makeRemoveAttendance');
+    expect(exported).not.toContain('removeAttendance');
+  });
 
-    expect(fromSpy).toHaveBeenCalledWith('attendance');
-    expect(firstEqSpy).toHaveBeenCalledWith('session_id', 'session-1');
-    expect(secondEqSpy).toHaveBeenCalledWith('student_id', 'student-sofia');
+  it('neither the loader nor either former caller issues a PostgREST .delete() against attendance', () => {
+    // The export check above cannot see a delete written inline at a call
+    // site, so this reads the real source of the three files that could
+    // plausibly reintroduce one -- the loader that owned the seam, and the
+    // two surfaces that used to call it. `?raw` is this repo's own
+    // source-inspection idiom (`AttendanceChips.test.tsx:24`).
+    //
+    // The pattern is `.delete()` with NO arguments, which is what
+    // distinguishes PostgREST's delete builder from an ordinary
+    // `Map`/`Set.delete(key)`. A blunter `.delete(` substring matched
+    // `AttendancePanel.tsx:709`'s `next.delete(key)` -- local pending-key
+    // state, nothing to do with the database -- so this is deliberately the
+    // narrower pattern, not an oversight.
+    for (const [name, source] of [
+      ['attendance.ts', attendanceLoaderSource],
+      ['AttendancePanel.tsx', attendancePanelSource],
+      ['SessionRow.tsx', sessionRowSource],
+    ] as const) {
+      expect(`${name}: ${String(/\.delete\(\s*\)/.test(source))}`).toBe(`${name}: false`);
+    }
   });
 });
 
@@ -521,7 +545,7 @@ function renderPanel(props: Partial<Parameters<typeof AttendancePanel>[0]> = {})
         currentUserProfileId={COACH_PROFILE_ID}
         loadAttendance={async () => []}
         onUpsertAttendance={vi.fn()}
-        onRemoveAttendance={vi.fn()}
+        onClearAttendance={vi.fn()}
         {...props}
       />,
     );
@@ -647,14 +671,20 @@ describe('<AttendancePanel /> checking a student with no existing row (module do
   });
 });
 
-describe('<AttendancePanel /> Trap #2 -- un-marking (unchecking) an attended student (T119/D-7: plain DELETE for every method)', () => {
-  it('a coach-originated row is DELETED on uncheck, not upserted', async () => {
-    const onRemoveAttendance = vi.fn().mockResolvedValue(undefined);
+// GAM-479 rewrote this block. D-7's rule is UNCHANGED and still asserted
+// here: unchecking clears a row of ANY `method`, with no veto and no demote-
+// to-`absent` branch. What changed is that the un-mark is a sentinel status
+// write instead of a row DELETE, so the cleared row keeps its `check_in_at`
+// and `hours_override` -- the second of which this very panel sets, two
+// controls away from the checkbox that used to destroy it.
+describe('<AttendancePanel /> Trap #2 -- un-marking (unchecking) an attended student (T119/D-7 no veto; GAM-479 no DELETE)', () => {
+  it('a coach-originated row is CLEARED on uncheck -- the clear seam, never the upsert', async () => {
+    const onClearAttendance = vi.fn().mockResolvedValue(undefined);
     const onUpsertAttendance = vi.fn();
     renderPanel({
       loadAttendance: async () => [makeRow({ method: 'coach', status: 'present' })],
       onUpsertAttendance,
-      onRemoveAttendance,
+      onClearAttendance,
     });
     await flushMicrotasks();
 
@@ -663,16 +693,18 @@ describe('<AttendancePanel /> Trap #2 -- un-marking (unchecking) an attended stu
     clickElement(amaraCheckbox);
     await flushMicrotasks();
 
-    expect(onRemoveAttendance).toHaveBeenCalledWith({
+    expect(onClearAttendance).toHaveBeenCalledWith({
       sessionId: 'session-1',
       studentId: 'student-amara',
+      method: 'coach',
+      recordedBy: COACH_PROFILE_ID,
     });
     expect(onUpsertAttendance).not.toHaveBeenCalled();
     expect((getFieldControl('Amara Chen') as HTMLInputElement).checked).toBe(false);
   });
 
-  it('T119/D-7 inversion: a real qr-originated row is HARD-DELETED on uncheck too, never demoted to absent', async () => {
-    const onRemoveAttendance = vi.fn().mockResolvedValue(undefined);
+  it('T119/D-7 no veto, GAM-479 no data loss: a real qr row is CLEARED like any other -- never demoted to absent, and its qr provenance is preserved', async () => {
+    const onClearAttendance = vi.fn().mockResolvedValue(undefined);
     const onUpsertAttendance = vi.fn();
     renderPanel({
       loadAttendance: async () => [
@@ -684,7 +716,7 @@ describe('<AttendancePanel /> Trap #2 -- un-marking (unchecking) an attended stu
         }),
       ],
       onUpsertAttendance,
-      onRemoveAttendance,
+      onClearAttendance,
     });
     await flushMicrotasks();
 
@@ -692,25 +724,31 @@ describe('<AttendancePanel /> Trap #2 -- un-marking (unchecking) an attended stu
     clickElement(amaraCheckbox);
     await flushMicrotasks();
 
-    // T117's `resolveUnmarkAction`/`setAbsent` branch is removed (T119/D-7:
-    // "coach attendance corrections MAY remove QR-originated check-in rows
-    // outright") -- a real qr row is now DELETED exactly like a coach row,
-    // never upserted to `status: 'absent'`.
-    expect(onRemoveAttendance).toHaveBeenCalledWith({
+    // T117's `resolveUnmarkAction`/`setAbsent` branch stays removed (T119/
+    // D-7): a real qr row is cleared exactly like a coach row, never upserted
+    // to `status: 'absent'`, and the coach needs no permission for it.
+    //
+    // `method: 'qr'` is the GAM-479 half. The cleared row keeps the check-in
+    // timestamp the scan produced, so it must keep saying where that
+    // timestamp came from -- `resolveAttendanceWriteMethod`'s own rule, the
+    // same one the checked branch uses.
+    expect(onClearAttendance).toHaveBeenCalledWith({
       sessionId: 'session-1',
       studentId: 'student-amara',
+      method: 'qr',
+      recordedBy: COACH_PROFILE_ID,
     });
     expect(onUpsertAttendance).not.toHaveBeenCalled();
     expect((getFieldControl('Amara Chen') as HTMLInputElement).checked).toBe(false);
   });
 
-  it('T119/D-7 inversion: a real import-originated row is also HARD-DELETED on uncheck', async () => {
-    const onRemoveAttendance = vi.fn().mockResolvedValue(undefined);
+  it('T119/D-7 no veto: a real import-originated row is also CLEARED on uncheck, keeping its import provenance', async () => {
+    const onClearAttendance = vi.fn().mockResolvedValue(undefined);
     const onUpsertAttendance = vi.fn();
     renderPanel({
       loadAttendance: async () => [makeRow({ method: 'import', status: 'present' })],
       onUpsertAttendance,
-      onRemoveAttendance,
+      onClearAttendance,
     });
     await flushMicrotasks();
 
@@ -718,18 +756,20 @@ describe('<AttendancePanel /> Trap #2 -- un-marking (unchecking) an attended stu
     clickElement(amaraCheckbox);
     await flushMicrotasks();
 
-    expect(onRemoveAttendance).toHaveBeenCalledWith({
+    expect(onClearAttendance).toHaveBeenCalledWith({
       sessionId: 'session-1',
       studentId: 'student-amara',
+      method: 'import',
+      recordedBy: COACH_PROFILE_ID,
     });
     expect(onUpsertAttendance).not.toHaveBeenCalled();
   });
 
   it('rolls back the checked display and shows an inline error when the mutation rejects', async () => {
-    const onRemoveAttendance = vi.fn().mockRejectedValue(new Error('write failed'));
+    const onClearAttendance = vi.fn().mockRejectedValue(new Error('write failed'));
     renderPanel({
       loadAttendance: async () => [makeRow({ method: 'coach', status: 'present' })],
-      onRemoveAttendance,
+      onClearAttendance,
     });
     await flushMicrotasks();
 

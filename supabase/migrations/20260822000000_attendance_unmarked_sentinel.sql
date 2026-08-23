@@ -23,15 +23,32 @@
 -- coach I am ultimate authority and should be able to overwrite an RSVP or
 -- check-ins"). D-7 removed code that REFUSED to clear `qr`/`import` rows,
 -- protecting them from the coach. A coach still clears any mark, of any
--- `method`, in one tap. Only the storage of the cleared state changes, never
--- who may clear it. `makeRemoveAttendance` also survives untouched for
--- `AttendancePanel.tsx`'s checkbox, whose uncheck remains a real DELETE.
+-- `method`, in one action. Only the storage of the cleared state changes,
+-- never who may clear it.
+--
+-- BOTH un-mark surfaces moved to it: `SessionRow.tsx`'s chip cycle and
+-- `AttendancePanel.tsx`'s checkbox. `makeRemoveAttendance` therefore has no
+-- callers left and was REMOVED rather than kept exported -- an exported
+-- attendance DELETE is how this data-loss path gets re-wired later by
+-- someone who does not know why it went. There is no `delete from
+-- attendance` anywhere in the application now, and a test asserts that.
+--
+-- Consequence, stated here rather than discovered later: `attendance` rows
+-- are append-and-update only, so a session that ever carried marks stays
+-- undeletable (`session_id` is `on delete restrict`) and `meetings.ts`'s
+-- session-removal guard routes it to `cancel`. That guard already did
+-- exactly this for a session with marks; what changes is that clearing every
+-- mark no longer makes the session deletable again.
 --
 -- THE INVARIANT THIS FILE ESTABLISHES. `'unmarked'` is a STORAGE state, not an
 -- application state. Every read in `src/lib/supabase/loaders/**` filters it
--- out (`.neq('status', 'unmarked')`), so a cleared row is indistinguishable
--- from no row everywhere above the loader boundary and the four-value
--- `AttendanceStatus` union is unchanged. The two exceptions are deliberate and
+-- out through `attendance.ts`'s `excludeUnmarked` helper -- in TypeScript,
+-- on the mapped result, NOT as a `.neq(...)` clause on each query: this
+-- repo's hand-rolled query-builder fakes are passthrough chains that record
+-- arguments instead of filtering, so a `.neq` would be invisible to every
+-- fixture and no test could show a cleared row being dropped. So a cleared
+-- row is indistinguishable from no row everywhere above the loader boundary,
+-- and the four-value `AttendanceStatus` union is unchanged. The two exceptions are deliberate and
 -- documented at their call sites:
 --   * `meetings.ts`'s `queryAttendanceExistsForSessions` -- the session-delete
 --     guard. `attendance.session_id` is `on delete restrict`

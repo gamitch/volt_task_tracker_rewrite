@@ -45,8 +45,8 @@
  *   change -- and, since GAM-479, the `(unset)` cycle stop goes through
  *   `makeClearAttendanceStatus`, which upserts the `UNMARKED_DB_STATUS`
  *   sentinel with the same `hours_override`/`check_in_at`-omitting payload
- *   rather than deleting the row. `makeRemoveAttendance` is no longer
- *   reachable from this panel. The `endMeeting.ts:489` factory is imported
+ *   rather than deleting the row. `makeRemoveAttendance` no longer exists at
+ *   all -- GAM-479 retired it with its last caller. The `endMeeting.ts:489` factory is imported
  *   nowhere in this file, `SessionRow.tsx` or `AttendanceChips.tsx`
  *   (criterion 14).
  *
