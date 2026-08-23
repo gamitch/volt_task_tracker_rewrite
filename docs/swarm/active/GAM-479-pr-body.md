@@ -60,27 +60,45 @@ claims are measured on a real cluster, in both directions).
 ## Verification
 
 ```
-GATE RUN — 2878b4e on claude/attendance-cycle-looping-wl9pef — tree clean
+GATE RUN — 276f8ca on claude/attendance-cycle-looping-wl9pef — tree clean
 
-  1 tsc                         exit 0  PASS
-  2 vite build                  exit 0  PASS
-  3 format:check                exit 0  PASS
-  4 eslint                      exit 0  PASS       0 errors, 382 warnings
-  5 vitest (full)               exit 0  PASS       114 files / 2769 tests  baseline 2759 (+10)
-  6 vitest src/pages/outreach/  exit 0  PASS       10 files / 525 tests  baseline 524 (+1)
+  1 tsc                               exit 0  PASS
+  2 vite build                        exit 0  PASS
+  3 format:check                      exit 0  PASS
+  4 eslint                            exit 0  PASS       0 errors, 382 warnings
+  5 vitest (full)                     exit 0  PASS       114 files / 2779 tests  baseline 2768 (+11)
+  6 vitest src/lib/supabase/loaders/  exit 0  PASS       15 files / 258 tests  baseline 248 (+10)
 
 VERDICT: PASS — all six gates exit 0
 ```
 
-Baselines measured, not assumed: 2759 full and 243 for
-`src/lib/supabase/loaders/` come from a worktree at `d6f3864`, this branch's
-merge base. The 524 scoped figure was taken on this branch before the outreach
-commit; `d6f3864` gives the same number, since the first commit changed no
-outreach test.
+Baselines measured, not assumed: 2768 full and 248 scoped come from a worktree
+at `987bba2`, current `main`, re-measured after the merge below.
 
-An earlier gate run on the same tree returned **UNTRUSTWORTHY** — three paths
-were passed to `--scope`, which takes one, and gate 6 exited 1 with no summary.
-Those numbers were discarded rather than recorded.
+**CI caught a defect no local run here could have, and it was mine.** The first
+push went red on `Typecheck, Lint, Format, Test, Build, Bundle Size`. GitHub
+Actions tests the *merge result*; this container's `origin/main` was a
+clone-time ref twelve commits stale, so every local gate run had been green
+against a `main` that no longer existed. Merging `origin/main` @ `987bba2`
+(GAM-451, PR #240) reproduced the failure in one run.
+
+The cause: `excludeUnmarked` replaced the expression
+`(result.data as SomeDbRow[] | null) ?? null`, and that `?? null` was
+load-bearing. Postgrest can resolve `data` as `undefined`, and this repo's
+query-builder fakes return a bare `{}` for a table a fixture never stubs —
+GAM-451's new selected-child boundary test does exactly that. Dropping the
+coercion made it `undefined.filter(...)`. The parameter is now
+`T[] | null | undefined` with an `== null` check; the doc comment records that
+narrowing it back would compile and break again, since every call site passes a
+cast that hides `undefined` from the compiler. **Types could not have caught
+this one.**
+
+No migration landed in the merge, so `20260822000000` is still last and the
+seven database assertions were re-run green on the merged tree.
+
+An earlier gate run returned **UNTRUSTWORTHY** — three paths were passed to
+`--scope`, which takes one, and gate 6 exited 1 with no summary. Those numbers
+were discarded rather than recorded.
 
 ### Database assertions
 
@@ -110,7 +128,7 @@ directories deleted.
 
 ### Mutations
 
-Eight, each reddening the test that claims to guard it. Tree verified clean after
+Nine, each reddening the test that claims to guard it. Tree verified clean after
 each.
 
 | Mutation | Result |
@@ -123,6 +141,7 @@ each.
 | uncheck hardcodes `'coach'`, losing qr provenance | red — 2 failed / 40 passed |
 | uncheck demotes to `absent` instead of clearing (D-7) | red — 4 failed / 38 passed |
 | a DELETE seam is reintroduced in the loader | red — 2 failed / 40 passed |
+| `excludeUnmarked` checks `=== null`, not `== null` | red — 2 failed / 33 passed (its own regression test **and** GAM-451's boundary test) |
 
 A6 above is the database-side mutation, built into the assertions file.
 
@@ -182,6 +201,10 @@ Both to `Backlog` carrying `unreviewed`, before this PR opened.
 - **`supabase/tests/run_gam479_unmarked_sentinel.sh` is not wired into CI**, like
   every other assertion script in that directory (the T701 problem). It has a
   runner; nothing runs it automatically.
+- **Every gate figure in the first two commits was measured against a stale
+  `main`.** They were honest about the SHA they described and wrong about what
+  that SHA would merge into. The numbers above are post-merge; the earlier ones
+  should not be quoted.
 
 Ignore GAM-487
 Ignore GAM-488
