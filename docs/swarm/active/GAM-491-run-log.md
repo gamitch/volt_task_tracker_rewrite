@@ -75,3 +75,15 @@ Append-only. One line per milestone. Pushed immediately after each append.
   and one design disclosure (a `(row.status as string)` cast, because `tsc` rejects
   the comparison as TS2367 when the declared union cannot hold `'unmarked'`).
   Not self-certified — a `checker-reviewer` grades this next.
+- **12:16Z — item 20 follow-up filed: GAM-496**, `Backlog`, `tier/unreviewed` +
+  `Bug`, written through `.claude/skills/linear-task-writing` per item 30. It
+  carries the packet's §3 finding as its own row, plus two traps the fixer needs:
+  `excludeUnmarked` must be called rather than replaced by a `.neq` clause (this
+  repo's query-builder fakes are passthroughs and cannot see a `.neq`), and the
+  filter interacts with the T320 paging loop's short-page test. Its verification
+  note is explicit that what each of the five consumers *renders* when handed
+  `'unmarked'` was **not** measured.
+- **12:17Z — DISPATCHED `checker-reviewer`** against committed SHA `86ca2a9a`,
+  with `run_in_background: false`; this orchestrator is blocking on it.
+  **If this line is the last one in this file, the run died holding this
+  subagent.**
