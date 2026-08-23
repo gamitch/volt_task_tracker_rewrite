@@ -28,3 +28,8 @@ Append-only. One line per milestone. Pushed immediately after each append.
   presented-values carve-out routes this to STANDARD **with a required acceptance
   checker** (role-sensitive presentation; user-data reporting whose mapping could
   mislead; item 6's first-name + last-initial rule).
+- **11:29Z — claim comment posted** to GAM-491 (`comment-3863a292`), carrying the
+  tier defence in full.
+- **11:31Z — draft PR #245 opened** at ~minute 5, with the branch carrying only
+  the run log and the PR-body artifact. `check.mjs` on the artifact: `OK
+  declaration closes GAM-491`, exit 0.
