@@ -162,3 +162,39 @@ did not land.
   `run_in_background: false`. *If this line is the last one in this file, the
   run died holding this subagent* — the work is pushed and on PR #242, but
   ungraded, and nobody has checked the four deleted tests.
+- `02:52Z` — **`checker-reviewer` VERDICT: FAIL** (agent `a247c864c2fe8a4e7`,
+  ~133K tokens, 81 tool calls). 1 MAJOR, 2 MINOR, 3 NIT — no BLOCKER. It ran
+  four mutation experiments in its own worktree (item 23) rather than reading.
+  - **MAJOR-1 — the per-session Edit reconcilability gate was silently
+    dropped.** The worker's factual claim was true (the gate lived in deleted
+    code) but the conclusion was wrong: the *surface* did not go away, only its
+    *gate* did, so §4's "surface is gone" clause does not cover deleting its
+    test. Proven by probe, not argued — a coach now gets "Edit" on a **canceled**
+    session and on an **already-started** one, where all three cases previously
+    differed. `EditMeetingSessionDialog.tsx:21-27` documents that it deliberately
+    does not re-check *because it relies on the caller*; that caller's check is
+    now gone, so its documented guarantee is false. Held below BLOCKER only
+    because `makeSaveMeetingSession` enforces the same rule at the database
+    layer (`.eq('status','scheduled').gt('starts_at','now')`) — no corruption,
+    but a prefilled dead-end that fails at Save.
+  - **Both of the worker's self-disclosed judgement calls were ruled CORRECT.**
+    The "Edit series" button (dropping T510's only trigger would have reversed
+    passed work) and the cancel tab-follow (it fixes a defect this ticket's own
+    partition introduced; the rollback was mutation-proved to genuinely roll
+    back). Disclosing them is what got them adjudicated instead of missed.
+  - **T511 and criterion 8 both survived mutation** — C1/C3/C4 go red when the
+    Go-live link is deleted, and C3 fails at its own phase-1 guard, so §9c's
+    vacuous-green hazard is closed. The overlap test goes red when the fixture
+    pair is nudged to merely touching.
+  - **MINOR-1 — `Grouped Table` DOES exist.** `npx astryx template --list`
+    lists it. My §9b told the worker it does not, on the strength of a gate
+    that could not run the CLI (§9j). The worker complied correctly and the
+    record is wrong; `PRD:357-359` may not be a PRD defect after all. This one
+    is mine, not the worker's.
+  - Item 27 **Partial confirmed**, and for a sharper reason than I had: the
+    panel's "No roster recorded" is backed by *nothing*, so it does not qualify
+    for item 27's "empty state backed by the real loader" carve-out.
+- `02:53Z` — **DISPATCHED `worker-implementer` attempt 2** (loop limit is 3;
+  this is 2) for the MAJOR-1 rework only, `run_in_background: false`. *If this
+  line is the last one in this file, the run died holding this subagent* — the
+  MAJOR is unfixed and the branch still ships the ungated Edit affordance.
