@@ -25,7 +25,7 @@ accumulated.
 
 | File | What it is | Read it when |
 |---|---|---|
-| **PRD.md** | The rebuild's product spec: mission, domain rules, vertical-slice milestones M0–M5, NFRs from the old defect classes, persona acceptance suite, and the 14 decisions George still owes | First — it's the plan |
+| **PRD.md** | The rebuild's product spec, **ratified 2026-08-26**: mission, domain rules, vertical-slice milestones M0–M4, NFRs from the old defect classes, persona acceptance suite, and §12 — the record of George's fourteen answered decisions | First — it's the plan |
 | **CONSTITUTION.md** | The working rules, ~130 lines instead of 1,223: hard floors, working-software rules C-1..C-11 (each citing the failure that paid for it), agreements W-1..W-6 | Before any build session |
 | **DECISIONS.md** | George's ~30 standing rulings, consolidated and dated, several verbatim — the project's real domain spec | When any "should it…?" comes up |
 | **LESSONS.md** | The post-mortem with receipts: the five failures, what worked, and how each maps to a constitution rule | To understand *why* the rules exist |
@@ -33,19 +33,25 @@ accumulated.
 
 ## How to start (the first week)
 
-1. George reads `PRD.md` §12 and answers the 14 decisions — thirteen
-   yes/nos with proposed defaults, plus one genuine choice (Q2, the design
-   system) — and that unblocks everything.
+All fourteen §12 decisions are answered (2026-08-26) — nothing is blocked
+on George except two inputs he owns:
+
+1. **George supplies the student roster spreadsheet** (usernames + default
+   password, R-1) — needed by M1, not M0.
 2. Create the fresh Supabase project; squash the schema per `SALVAGE.md` §2
-   into one baseline migration; re-run the ETL (`SALVAGE.md` §5).
+   into one 10-table baseline migration; adapt and re-run the ETL from a
+   fresh export (`SALVAGE.md` §5).
 3. Stand up M0: auth, guards, error boundary, generated types, CI with the
    persona suite, deployed to the real domain.
 4. Accept M0 the only way anything gets accepted now: **George signs in on
    the production URL and sees the real roster.**
+5. Close the old Linear backlog whole (R-6): all 131 open issues,
+   `rebuild` label, infrastructure tickets included.
 
 ## What this folder is not
 
 It is not a migration plan for the current codebase — per `SALVAGE.md` §7,
 `src/` is left behind except for the named pure modules. It is not a
 process framework — the constitution fits on two screens on purpose. And it
-is not finished until George edits it: §12 of the PRD is his queue.
+stays alive the same way it was born: decisions land in `DECISIONS.md`
+dated, and the PRD edits in place.

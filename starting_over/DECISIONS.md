@@ -140,7 +140,47 @@ record).
 - **PR-4 — Explicit pathspecs when staging commits; never `git add -A`.**
   (constitution item 22)
 
-## Open questions the rebuild PRD puts back to George
+## 2026-08-26 — Rebuild ratification
 
-See `PRD.md` §12 ("Decisions needed from George") — the questions the first
-rewrite never answered, each with a proposed default so work can proceed.
+George answered all fourteen `PRD.md` §12 decisions and added one new
+domain ruling. The yes/no confirmations are recorded in §12 itself; the
+rulings that change or add to the record are:
+
+- **D-2b — A meeting can sometimes also count for outreach.** Verbatim:
+  "A Meeting can sometimes also count for outreach." An admin may opt a
+  **specific meeting** into volunteer hours (`counts_volunteer_hours =
+  true`); it then earns hours in addition to participation. This
+  supersedes the meeting half of D-2a's "regardless of how the flag is
+  ever set" clause; **the competition half stands in full** (Q14, answered
+  the same day: "Competition hours stay out") and is enforced by a
+  database CHECK forbidding the flag on `type='competition'`.
+  (2026-08-26 · this session)
+- **R-1 — Student accounts are username + password.** George supplies a
+  spreadsheet of usernames and a default password; accounts are
+  provisioned in bulk; no student email addresses exist or are collected;
+  coach/admin resets forgotten passwords. Staff keep email/Google invites.
+  (2026-08-26)
+- **R-2 — The kiosk and QR/short-code check-in path is abandoned for v1.**
+  Verbatim: "Abandon Kiosk. Coach will take attendance." PRD ATT-5/ATT-6
+  and the proven HMAC implementation are preserved dormant.
+  (2026-08-26)
+- **R-3 — Parent scope is removed from v1 entirely** — accounts, guardian
+  linking, parent home, RSVP-on-behalf. First post-launch milestone
+  candidate. (2026-08-26)
+- **R-4 — Astryx is dropped.** Verbatim: "Do not Keep Astryx." The rebuild
+  uses a mainstream design system (PRD §10 proposes shadcn/ui + Tailwind);
+  the old D2/D3 no-Tailwind/no-shadcn ban was an artifact of the Astryx
+  lock and dissolves with it. The volt tokens (S-1), lucide icons, and the
+  design language carry. S-6's React-19 lock loses its original rationale
+  but React 19 remains the current stack. (2026-08-26)
+- **R-5 — Space Grotesk** for display headings (resolves the open H1
+  question from the 2026-08-21 session). (2026-08-26)
+- **R-6 — Close the old backlog whole**: all 131 open Linear issues get a
+  `rebuild` label and close, infrastructure tickets included — the process
+  machinery they serve is abandoned with the codebase. (2026-08-26)
+- **S-4 (amended)** — the "persistent KPI strip" element of the craft
+  reference is narrowed: the KPI strip lives on the dashboard only.
+  (2026-08-26 · Q9)
+- **Confirmations**: Q1 data path, Q4 attendance-backed hours, Q5
+  roster-based attendance %, Q7 cut list, Q10 dashboard shortlist, Q11
+  palette delegated, Q14 competitions excluded — all "yes" as proposed.

@@ -1,6 +1,7 @@
 # VOLT Team Portal — Rebuild PRD (v1.0)
 
-**Status: draft for George's review.**
+**Status: v1.1 — ratified by George 2026-08-26 (all §12 decisions
+answered). Ready to build.**
 This PRD starts the project over. It replaces `VOLT_Portal_PRD.md` (v1.5),
 `VOLT_Portal_PRD_v2.md`, and `VOLT_UX_Craft_PRD_v3.md`. It keeps everything
 those documents learned — the domain rules, the owner rulings, the design
@@ -31,8 +32,10 @@ and sibling FTC/FLL teams) that:
 - tracks **outreach volunteering** as hours toward season goals,
 - keeps those two ideas cleanly separate everywhere (D-1),
 - makes recording attendance easy enough that it actually happens — coach
-  roll-call first, student self check-off second, QR check-in third (D-10),
-- and keeps students and parents informed without nagging them (P-4).
+  roll-call first, student self check-off second (D-10; the QR/kiosk path
+  is retired to post-launch, R-2),
+- and keeps students informed without nagging them (P-4) — parents join
+  post-launch (R-3).
 
 It replaces volt-timetracker.lovable.app, whose workflow the team likes and
 whose total lack of authentication — children's names, teams, and hours
@@ -48,8 +51,8 @@ is correct on every screen that shows it.**
 |---|---|---|
 | **Admin / head coach** (George) | desktop | Runs everything: roster, seasons, events, attendance, reports. |
 | **Coaches / mentors** (2–5) | desktop + phone | Schedule events, run check-in/roll-call, correct attendance, read the dashboard. |
-| **Students** (~20, ages 13–18) | phone | Check in, RSVP to outreach, self-report attendance they missed recording, watch their own hours and participation. |
-| **Parents** | phone + email | See their own kids' events, attendance, and progress; RSVP on a kid's behalf. |
+| **Students** (~20, ages 13–18) | phone | RSVP to outreach, self-report attendance they missed recording, watch their own hours and participation. |
+| **Parents** *(post-launch, R-3)* | phone + email | See their own kids' events, attendance, and progress; RSVP on a kid's behalf. |
 
 Org ground truth (carried from `docs/backlog.html` §1 — it lives in no code
 file): VOLT FRC 11195, P3 FTC 16751, Gear Girls FTC 23469, plus five
@@ -74,35 +77,38 @@ Two loops and a read layer:
 
 **The meetings loop.** A coach schedules a recurring meeting series (e.g.
 "Build season — Mon/Thu 6–8 PM"). Sessions materialize from the stored
-recurrence rule. At a meeting the coach runs roll-call (tap a student, cycle
-present → late → excused → absent → unmarked), or students check in by QR /
-6-char code when that path ships. Ending a meeting records exactly what was
-marked (D-7). Completed meetings produce each student's **participation %**
-(§5). Meetings never produce volunteer hours (D-2).
+recurrence rule. At a meeting the coach runs roll-call: tap a student,
+cycle present → late → excused → absent → unmarked. Ending a meeting
+records exactly what was marked (D-7). Completed meetings produce each
+student's **participation %** (§5), and don't produce volunteer hours
+unless an admin opts a specific meeting in (D-2b).
 
 **The outreach loop.** A coach creates an outreach event (single or
-multi-day) with expected attendees. Students/parents RSVP; the coach can RSVP
-on anyone's behalf (D-5). After each day the coach "marks the day complete,"
+multi-day) with expected attendees. Students RSVP; the coach can RSVP on
+anyone's behalf (D-5). After each day the coach "marks the day complete,"
 checking who attended with per-student hour overrides. Students can
 retroactively self-check-off attendance (badged `self`, trusted, D-10).
 Completed outreach sessions produce **volunteer hours** toward each
 student's season goal (§5).
 
 **The read layer.** A coach dashboard that answers the questions George
-actually asks weekly (§8); student and parent homes showing *their own*
-numbers; a combined calendar; CSV export for season reporting.
+actually asks weekly (§8); a student home showing *their own* numbers; a
+combined calendar; CSV export for season reporting.
 
 ## 4. What's explicitly out of v1
 
-Cut deliberately. Each was fully or partially built last time and none was
-ever functional-and-used; they return only as post-launch milestones if
-George asks (§12 confirms the cuts):
+Cut deliberately — ratified by George 2026-08-26 (§12). Each was fully or
+partially built last time and none was ever functional-and-used; they
+return only as post-launch milestones if George asks:
 
+- **All parent scope** (R-3): accounts, guardian linking, parent home,
+  RSVP-on-behalf by parents. First post-launch candidate.
+- **The entire QR/kiosk check-in path** (R-2): kiosk, rotating QR, short
+  codes, `/checkin`. The coach takes attendance; the proven implementation
+  is preserved (ATT-5/6 dormant, `SALVAGE.md` §3).
 - ICS calendar feeds (never worked end-to-end last time)
-- Weekly parent digest and all reminder emails (only the invite email ships
-  in v1, via Supabase's built-in mailer)
-- Kiosk projection view (QR check-in ships in M4; a dedicated TV view can
-  follow)
+- Digest and reminder emails — the only v1 email is the staff invite, via
+  Supabase's built-in mailer; students have no email at all (R-1)
 - Milestone celebration toasts, avatar upload, activity feed
 - Reports beyond one participation table, one hours table, and CSV export
 - Any Band-style community features (posts, chat, files), push
@@ -122,18 +128,21 @@ not re-derive it.
   sentinel rows are excluded. When the denominator is empty the value is
   **NULL, rendered as an em-dash, never 0%** (D-15, D-16).
 - **MET-2 · Volunteer hours** = Σ over present/late marks on **completed**
-  sessions of `type='outreach'` events with `counts_volunteer_hours = true`,
-  of: `hours_override` if set, else the check-in/out interval clamped to the
-  session window, else the scheduled session length. The `type='outreach'`
-  condition is George's 2026-08-03 ruling (D-2a), not an implementation
-  detail: competition hours never enter the total regardless of any flag.
-- **MET-2a · The flags exclude, they never opt in.** Hours count by event
-  **type**, never name (D-2/D-2a). The `counts_*` flags' only role is to let
-  an admin *exclude* a specific event from its own type's metric (an
-  outreach event that shouldn't count, a meeting that shouldn't affect
-  participation) — never to opt a different type in. PRD v1's
-  competition-opt-in design (CMP-02) predates D-2a and is retired; §12 Q14
-  confirms.
+  sessions of events with `counts_volunteer_hours = true`, of:
+  `hours_override` if set, else the scheduled session length (the
+  check-in-interval middle term returns only if the QR path ever does).
+- **MET-2a · What the flag may say, by type (D-2, D-2a, D-2b, Q14).**
+  Defaults are set by event **type**, never name: `outreach` counts hours,
+  `meeting` doesn't, `competition` doesn't. Two overrides exist and one is
+  forbidden: an admin may *exclude* a specific event from its own type's
+  metric, and per George's 2026-08-26 ruling (D-2b, "a Meeting can
+  sometimes also count for outreach") an admin may opt a **specific
+  meeting** into volunteer hours — it then earns hours *in addition to*
+  participation. Competitions can never be opted in (D-2a, reaffirmed in
+  §12 Q14): the database CHECK-forbids `counts_volunteer_hours` on
+  `type='competition'`. Consequence for the ported SQL: the hours view
+  keys on the flag, with the competition exclusion enforced by the
+  constraint, replacing the old view's `type='outreach'` filter.
 - **MET-3 · Goal** = `student.goal_hours_override ?? season.default_goal_hours`
   (90h — the old tracker's season goal, carried by the ETL; the abandoned
   project's active test season and its schema column default both read 100
@@ -159,27 +168,32 @@ not re-derive it.
   Absent is only ever set by explicit coach action (D-7). Un-marking writes
   the `unmarked` sentinel, never deletes the row (D-8).
 - **ATT-2** · Last write wins, whoever writes it (D-6). The row records
-  `method` (`coach | self | qr | code`) and `recorded_by`.
+  `method` and `recorded_by`. v1 methods are `coach | self`; `qr | code`
+  exist in the enum for the day that path returns (R-2).
 - **ATT-3** · Excused is settable only by coach/admin. Excused shrinks the
   participation denominator and never renders as failure (D-15).
 - **ATT-4** · No audit trail on attendance edits beyond
   `recorded_by`/`updated_at` — corrections are normal workflow (D-9).
-- **ATT-5** · Check-in timing: a session accepts check-ins from 15 minutes
-  before start until end; check-in ≤ start+10 min is `present`, later is
-  `late`; duplicate check-in is idempotent and friendly ("Already checked in
-  at 6:04 PM").
-- **ATT-6** · QR/code mechanics (M4): HMAC-SHA256 over
-  `sessionId:floor(unix/60)`; QR token = first 16 digest bytes; 6-char
-  A-Z/2-9 code from bytes 16–22; current + previous bucket accepted;
-  constant-time compare; server assigns status, never the client; manual
-  code entry ships in the same milestone as the QR path.
+- **ATT-5 · (dormant)** · Check-in timing, preserved for the day the QR
+  path returns (R-2): a session accepts check-ins from 15 minutes before
+  start until end; check-in ≤ start+10 min is `present`, later is `late`;
+  duplicates are idempotent and friendly ("Already checked in at 6:04 PM").
+  In v1 the coach sets present/late directly; no timing rule applies.
+- **ATT-6 · (dormant)** · QR/code mechanics, preserved likewise:
+  HMAC-SHA256 over `sessionId:floor(unix/60)`; QR token = first 16 digest
+  bytes; 6-char A-Z/2-9 code from bytes 16–22; current + previous bucket
+  accepted; constant-time compare; server assigns status, never the
+  client; manual code entry ships in the same slice as QR, with a durable
+  5/min-per-user rate limit. The proven implementation is preserved per
+  `SALVAGE.md` §3.
 
 ### Scheduling
 
 - **SCH-1** · Event types: `meeting | outreach | competition`. Competitions
-  count toward neither metric (D-2a). The `counts_participation` /
-  `counts_volunteer_hours` flags are exclusion switches within a type per
-  MET-2a, not opt-ins across types.
+  count toward neither metric, ever (D-2a). The `counts_participation` /
+  `counts_volunteer_hours` flags default by type and follow MET-2a's rules:
+  exclusion within a type, plus the one sanctioned cross-type opt-in — a
+  meeting into hours (D-2b).
 - **SCH-2** · **Recurrence is stored, not reverse-derived.** A series stores
   its rule (weekdays + start/end minutes + date range); sessions materialize
   from it; schedule chips, next-session lines, and the edit form all read the
@@ -201,15 +215,22 @@ not re-derive it.
 
 ### Roster & identity
 
-- **ROS-1** · Closed roster, invite-only. Email/password + Google sign-in
-  with public signups disabled; an uninvited Google sign-in reaches zero
-  data. Wherever this PRD or a ruling says "authenticated," it means an
-  invited, role-holding account — a session with no role sees nothing (this
-  is the scope D-13 and P-2 operate within).
-- **ROS-2** · Roles: `admin | coach | student | parent`. Students may exist
-  with no account; parents link to students via guardian rows and see only
-  their own kids' private data (guardian-link scoping via the
-  `my_student_ids()` RLS design).
+- **ROS-1** · Closed roster; public signups disabled; a session with no
+  role reaches zero data. Two sign-in paths (R-1): **staff** (admin/coach)
+  use email/password + Google via email invites; **students** use a
+  username + team-issued password, provisioned in bulk from George's
+  roster spreadsheet — no student email addresses exist or are collected.
+  Students change the default password on first sign-in; a coach/admin
+  resets a forgotten one (there is no email recovery for students).
+  Implementation note: Supabase auth is email-keyed, so usernames are
+  backed by synthetic addresses (`<username>@students.voltfrc.org`-style)
+  that are never displayed or mailed. Wherever this PRD or a ruling says
+  "authenticated," it means a role-holding account (the scope D-13 and P-2
+  operate within).
+- **ROS-2** · Roles: `admin | coach | student` in v1; `parent` stays in the
+  role enum and `guardian_links` in the schema design, but all parent
+  surfaces, linking, and accounts are out of v1 (R-3) — they are the first
+  post-launch milestone candidate. Students may exist with no account.
 - **ROS-3** · **`student_teams` is the only membership source** — there is
   no legacy `team_id` column, and the membership writer ships in the same
   milestone as the table (the writer-less junction was the costliest single
@@ -240,7 +261,7 @@ persona test, accepted by George **on the deployed app** before the next
 starts. No parallel waves. Acceptance criteria are the persona tests in §11.
 
 - **M0 · Deployed skeleton (week 1).** Fresh Supabase project. One squashed
-  baseline migration: the 11-table baseline schema, RLS helpers + policies,
+  baseline migration: the 10-table baseline schema, RLS helpers + policies,
   and the final metric views, ported per `SALVAGE.md` §2. Generated DB
   types. Auth + role guards + route error boundary. Deployed to the real
   domain with CI (typecheck, build, lint, unit, **and the persona e2e
@@ -256,39 +277,38 @@ starts. No parallel waves. Acceptance criteria are the persona tests in §11.
   the real roster, matching the fresh export's signed-off dry-run report
   exactly (20 students / 4 teams / 341.75 hours are the 2026-08 reference
   figures; a fresh export from the still-live old app may differ).*
-- **M1 · Run a meeting.** Roster CRUD (with membership writer), season
+- **M1 · Run a meeting.** Roster CRUD (with membership writer), bulk
+  student-account provisioning from George's spreadsheet (R-1), season
   settings, meeting series creation from a stored recurrence rule,
   roll-call console with tap-to-cycle marking writing real rows, end-meeting
   per D-7, participation % correct on coach and student views.
   *Accepted when: George schedules and runs a real team meeting end-to-end.*
 - **M2 · Outreach hours.** Outreach event creation (transactional, expected
-  attendees), RSVP (student / parent-on-behalf / coach-on-behalf),
-  mark-day-complete with per-student hours, retroactive self check-off,
-  mark-whole-event-complete, hours + goal + planned on student home. Parent
-  **accounts and guardian linking ship here** — the on-behalf RSVP and
-  self check-off paths need them; parent home/calendar surfaces wait for M5.
-  *Accepted when: a real outreach event's hours land correctly for every
-  attendee, verified against the database.*
+  attendees), RSVP (student, or coach-on-behalf per D-5),
+  mark-day-complete with per-student hours, retroactive student self
+  check-off, mark-whole-event-complete, hours + goal + planned on student
+  home. *Accepted when: a real outreach event's hours land correctly for
+  every attendee, verified against the database.*
 - **M3 · One set of numbers.** Coach dashboard (the §8 shortlist),
   leaderboard (S-5), reports (participation table, hours table, CSV export).
   Acceptance is the same-numbers-everywhere gate from the first rewrite,
   promoted to a release gate: *the same student's numbers agree on every
   screen that shows them.*
-- **M4 · Fast check-in.** QR + rotating 6-char code + manual entry + student
-  self check-in, per ATT-5/6 — shipped as one slice including its fallback.
-  The Edge Function's deployment is part of the milestone's definition of
-  done, verified by CI (the old one was never deployed and nothing noticed).
-- **M5 · Family & calendar.** Parent home with child switcher (the
-  multi-child answer in §12 decides its shape), combined calendar page,
+- **M4 · Calendar & deep links.** Combined calendar page on real data, and
   meeting deep links (`/meetings/:sessionId` — specced and never built last
   time).
 - **Launch.** The gates, scheduled with dates, not open-ended tickets:
   domain live (already at M0), data cutover/teardown decision executed,
-  student/guardian emails collected and invites sent, RLS anon audit passes,
-  George's sign-off on the §11 persona suite run against production.
+  student accounts provisioned from George's spreadsheet and staff invites
+  sent, RLS anon audit passes, George's sign-off on the §11 persona suite
+  run against production.
 
-Post-launch candidates (only by George's request): reminder emails + digest,
-ICS feeds, kiosk TV view, activity feed backed by a real event log, avatars.
+Post-launch candidates, in George's stated order of interest: **parent
+scope first** (accounts, guardian linking, parent home, RSVP-on-behalf —
+R-3), then only by request: the QR/code check-in path (R-2, ATT-5/6),
+reminder emails + digest, ICS feeds, activity feed backed by a real event
+log, avatars. v1 ships **zero Edge Functions**; NFR-12 applies when the
+first one returns.
 
 ## 7. Screens & routes
 
@@ -296,17 +316,20 @@ Carried from the audited route map, minus what §4 cuts:
 
 | Route | Roles | Purpose |
 |---|---|---|
-| `/login`, `/accept-invite` | public | Auth; invite acceptance |
-| `/` | all | Role dashboard dispatcher (admin/coach → coach home; student; parent) |
-| `/meetings` | all | Coach: series cards (S-3). Student/parent: hero card + upcoming + attendance summary (port GAM-451's shipped design) |
+| `/login`, `/accept-invite` | public | Auth (staff email/Google, student username); staff invite acceptance |
+| `/` | all | Role dashboard dispatcher (admin/coach → coach home; student → student home) |
+| `/meetings` | all | Coach: series cards (S-3). Student: hero card + upcoming + attendance summary (port GAM-451's shipped design) |
 | `/meetings/live/:sessionId` | staff | Roll-call console (chromeless) |
-| `/meetings/:sessionId` | all | Meeting detail / deep-link target (M5) |
-| `/checkin` | student | QR landing + manual code entry (M4) |
+| `/meetings/:sessionId` | all | Meeting detail / deep-link target (M4) |
 | `/outreach`, `/outreach/:eventId` | all | Dense event rows (S-4); RSVP; detail with day list |
-| `/calendar` | all | Combined view, real data only (M5) |
-| `/roster` | staff | Students, teams, memberships, invites |
+| `/calendar` | all | Combined view, real data only (M4) |
+| `/roster` | staff | Students, teams, memberships, account provisioning, staff invites |
 | `/reports` | staff | Participation + hours tables, CSV |
-| `/settings` | per-role | Profile; admin: season settings (notification prefs return with email post-launch) |
+| `/settings` | per-role | Profile, password change; admin: season settings (notification prefs return with email post-launch) |
+
+(`/checkin` and the kiosk routes return with the QR path, post-launch;
+parent views of `/meetings`, `/outreach`, and `/calendar` return with
+parent scope.)
 
 Meetings UX: the series-card model is settled (S-3) and its design contract
 (`.claude/skills/meetings-design/SKILL.md`) carries forward: schedule-chip
@@ -388,8 +411,9 @@ Each of these is a defect class from the first rewrite turned into a rule:
   the roll-call console (10s) and says so; no "honest no-op" seams.
 - **NFR-9 · Performance:** initial route chunk ≤ 300KB gzip; dashboard
   interactive < 2s on a phone.
-- **NFR-10 · Durable rate limiting** for code entry (a small table, not
-  per-isolate memory) — 5/min per user (MTG-06).
+- **NFR-10 · (dormant with ATT-6)** Durable rate limiting for code entry
+  (a small table, not per-isolate memory) — 5/min per user (MTG-06) —
+  applies when the QR/code path returns.
 - **NFR-11 · Testing pyramid inverted from last time:** persona e2e flows
   (real Postgres, real migrations, real browser) are the primary acceptance
   layer and run in CI; unit tests cover pure domain logic (metrics,
@@ -397,100 +421,106 @@ Each of these is a defect class from the first rewrite turned into a rule:
   default. Target: the e2e suite green on clean checkout forever.
 - **NFR-12 · Edge Functions share code via `_shared/` or a build step**
   (never `../../../src/` imports), and CI verifies deployed functions match
-  the repo.
+  the repo. v1 ships zero Edge Functions; this applies when the first one
+  returns.
 
 Stack: Vite + React 19 + TypeScript strict + Supabase (fresh project),
-deployed on Vercel. Design system: §12 decision — Astryx (with its verified
-constraints written down) or a mainstream alternative; the volt tokens and
-design language carry either way.
+deployed on Vercel. Design system (R-4, George 2026-08-26): **Astryx is
+dropped.** The rebuild uses a mainstream system — proposed default:
+shadcn/ui + Tailwind CSS, chosen for component completeness (real tables,
+cross-row alignment, segmented progress) and agent fluency; the old
+no-Tailwind/no-shadcn ban was an artifact of the Astryx lock and dissolves
+with it. The volt tokens (S-1), lucide icons, and the §9 design language
+carry unchanged.
 
 ## 11. Acceptance — the persona suite
 
-The four persona smoke tests survived every churn of the old project and are
+The persona smoke tests survived every churn of the old project and are
 the rebuild's release gate, run against the **deployed** app in both color
 modes, verified by reading rows back from the database. The suite grows one
 flow per milestone (M0 ships sign-in + zero-data + role-guard specs only),
 the ported harness config gains mobile-viewport and dark-mode projects
 (today it defines a single desktop-light project), and the
 both-color-modes-against-production run is the launch gate — distinct from
-the CI harness run, which uses local stand-ins for auth and Edge Functions:
+the CI harness run, which uses local stand-ins for auth:
 
 - **P-COACH:** signs in on a phone, starts roll-call for tonight's meeting
   in ≤ 2 taps from the dashboard, marks three students, ends the meeting;
   the participation views reflect exactly those marks (and nothing else —
   D-7).
-- **P-STUDENT:** signs in on a phone; sees own hours, goal, participation,
-  and next events above the fold; RSVPs to an outreach event and the row
-  exists in the database; (M4) scans the QR and is checked in inside 10
-  seconds.
+- **P-STUDENT:** signs in on a phone with username + password; sees own
+  hours, goal, participation, and next events above the fold; RSVPs to an
+  outreach event and the row exists in the database; self-checks-off a
+  past outreach day and the `self`-badged attendance row exists.
 - **P-COACH2:** answers "which students are below 70% participation?" and
   "who is short of their hours goal?" from the dashboard without exporting.
-- **P-PARENT:** signs in, sees each linked kid's next event above the fold
-  and their attendance/hours; RSVPs on a kid's behalf; the student sees who
-  did it; sees **zero private data** about unlinked students — no attendance,
-  hours, contact info, or full names. (Seeing unlinked students as
-  "First L." on shared surfaces like event signups is expected behavior per
-  D-13/P-2, not a failure.)
+- **P-PARENT** *(dormant — becomes the parent milestone's acceptance test
+  post-launch, R-3)*: signs in, sees each linked kid's next event above
+  the fold and their attendance/hours; RSVPs on a kid's behalf; the
+  student sees who did it; sees **zero private data** about unlinked
+  students — no attendance, hours, contact info, or full names. (Seeing
+  unlinked students as "First L." on shared surfaces like event signups is
+  expected behavior per D-13/P-2, not a failure.)
 
-Plus the standing gates: same-numbers-everywhere (M3), uninvited sign-in
+Plus the standing gates: same-numbers-everywhere (M3), a role-less sign-in
 reaches zero data, RLS anon audit, DST-window tests, CSV export opens in
 Sheets with ISO dates.
 
-## 12. Decisions needed from George
+## 12. Decisions — taken by George, 2026-08-26
 
-Answers unblock the build. Thirteen are yes/nos with proposed defaults;
-Q2 is a genuine choice with no default:
+**All fourteen answered by George on 2026-08-26.** This section is now the
+record of those answers (new rulings carry R-x / D-2b ids in
+`DECISIONS.md`); nothing here is open.
 
-1. **Data**: fresh Supabase project, seeded by re-running the (adapted —
-   see M0) ETL from a fresh export of the still-live old app; the current
-   half-built project is decommissioned after cutover, not before.
-   *(Default: yes — the fresh-project path is RUNBOOK.md §2 fresh export →
-   §3 dry run → §4 real run; §5's account-preserving teardown applies only
-   to the old mixed-state project at decommission time, and its durable
-   manifest-teardown branch is unmerged and unverified — check before
-   relying on it. §8 records the proven first run.)*
-2. **Design system**: keep Astryx (its real constraints are now documented)
-   or switch to a mainstream system, keeping the volt tokens. *(Default:
-   George's call — the friction was real but so is the sunk fluency; no
-   recommendation without his input.)*
-3. **Student accounts**: collect ~20 student/guardian emails before M1 so
-   invites are real. Students get accounts; FLL kids do not (counts only).
-   *(Default: yes.)*
-4. **Confirmed hours** are attendance-backed only; RSVPs never accrue hours.
-   *(Default: yes — GAM-431's finding, and the natural completion of D-12's
-   planned-vs-confirmed separation.)*
-5. **Attendance %** computes against the expected roster with a pending
-   state until fully marked (MET-6). *(Default: yes.)*
-6. **QR/kiosk** waits until M4, after the coach loop works. *(Default:
-   yes.)*
-7. **§4 cut list** confirmed (ICS, digest emails, kiosk TV view, toasts,
-   avatars, activity feed out of v1). *(Default: yes.)*
-8. **Parent scope split**: parent accounts, guardian linking, RSVP-on-behalf,
-   and self check-off ship inside M2 (the outreach loop needs them); parent
-   home, child switcher, and calendar land in M5. Multi-child parents get a
-   child switcher. *(Default: yes.)*
-9. **KPI strip**: dashboard-only, not persistent across pages. This narrows
-   S-4's "persistent KPI strip" element — a yes here amends that ruling.
-   *(Default: yes — it dominated small viewports last time.)*
-10. **Dashboard widgets**: the §8 six-question shortlist and nothing more.
-    *(Default: yes; George names any widget he actually misses.)*
-11. **Series palette hues**: delegate the eight hues to the design system's
-    categorical ramp unless George wants to pick. *(Default: delegate.)*
-12. **H1 font**: Space Grotesk (VOLT's own heading font) over Inter.
-    *(Default: Space Grotesk.)*
-13. **The old Linear backlog**: close all 131 open issues with a `rebuild`
-    label; carry nothing forward except what this PRD already encodes.
-    *(Default: yes — the ~30 domain-rule findings are already folded into
-    §5/§10.)*
-14. **Competition hours stay out, permanently** (MET-2a): your 2026-08-03
-    ruling (D-2a) — competition hours never count toward the volunteer
-    goal, even flagged — stands, and PRD v1's competition-opt-in design
-    (CMP-02) is formally retired rather than carried as a dead letter.
-    *(Default: yes — reaffirms your recorded ruling; answer "no" only if
-    you want opt-in competitions back, which reverses D-2a.)*
+1. **Data — YES.** Fresh Supabase project, seeded by re-running the
+   adapted ETL from a fresh export (RUNBOOK §2 → §3 dry run → §4 real
+   run); the current half-built project is decommissioned after cutover,
+   not before (§5's account-preserving teardown applies then; its durable
+   manifest-teardown branch is unmerged and unverified — check first).
+2. **Design system — DO NOT KEEP ASTRYX** (R-4). Mainstream system;
+   proposed default shadcn/ui + Tailwind (see §10); volt tokens and design
+   language carry.
+3. **Student accounts — username + password** (R-1). George supplies a
+   spreadsheet of usernames and a default password; accounts provisioned
+   in bulk in M1; no student emails. FLL kids still get no accounts
+   (counts only).
+4. **Confirmed hours are attendance-backed only — YES.** RSVPs never
+   accrue hours (GAM-431's finding; completes D-12's planned-vs-confirmed
+   separation).
+5. **Attendance % against the expected roster — YES** (MET-6), with a
+   pending state until fully marked.
+6. **Kiosk/QR — ABANDONED for v1** (R-2). The coach takes attendance.
+   ATT-5/6 and the proven implementation go dormant, not lost.
+7. **Cut list — CONFIRMED.** ICS, digest emails, kiosk TV view, toasts,
+   avatars, activity feed all out of v1.
+8. **Parent scope — REMOVED from v1 entirely** (R-3). First post-launch
+   milestone candidate; guardian_links leaves the baseline until then.
+9. **KPI strip — dashboard-only.** This amends S-4's "persistent KPI
+   strip" element (it dominated small viewports last time).
+10. **Dashboard widgets — YES**, the §8 shortlist and nothing more.
+11. **Series palette hues — DELEGATED** to the design system's categorical
+    ramp.
+12. **H1 font — Space Grotesk** (R-5).
+13. **Old Linear backlog — close all 131 open issues** with a `rebuild`
+    label, infrastructure tickets included (R-6): the ~45 process tickets
+    serve the dispatch machinery being abandoned with the codebase, the
+    Linear export backup already preserves history, and the rebuild's CI
+    is specced here. The ~30 domain-rule findings are already folded into
+    §5/§10.
+14. **Competition hours stay out, permanently — YES.** D-2a reaffirmed;
+    PRD v1's competition-opt-in design (CMP-02) is retired. Note the
+    same-day companion ruling D-2b: a **meeting** can be opted into
+    outreach hours per-event (MET-2a) — the opt-in door that stays open is
+    meetings, never competitions.
 
 ## 13. Changelog
 
+- **v1.1 (2026-08-26)** — George answered all fourteen §12 decisions and
+  added ruling D-2b ("a Meeting can sometimes also count for outreach").
+  Folded in: Astryx dropped (R-4), student username auth (R-1), QR/kiosk
+  path dormant (R-2), parent scope out of v1 (R-3), milestones
+  restructured to M0–M4, 10-table baseline, §12 converted from questions
+  to the record of answers.
 - **v1.0 (2026-08-23)** — Initial rebuild PRD, synthesized from the first
   rewrite's PRDs v1.5/v2/v3.1, the external UX audit + triage, the live
   Linear backlog (496 issues), the meetings and coach-dashboard redesigns,

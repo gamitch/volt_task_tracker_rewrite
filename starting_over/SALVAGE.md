@@ -20,29 +20,33 @@ Everything not listed here is presumed **not** carried.
 The single most valuable asset. Port the **final** state of
 `supabase/migrations/` (27 files) into **one baseline migration**:
 
-- **11 tables in the baseline**: profiles, teams, seasons, students,
-  guardian_links, invites, events, event_sessions, rsvps, attendance,
-  student_teams — with the rebuild's two deliberate changes: drop
-  `students.team_id` (ROS-3: junction only, and ship its writer), and store
-  recurrence rules on series (SCH-2). The other four tables from the old
-  schema (`audit_log`, `calendar_feeds`, `email_log`, `notification_prefs`)
-  serve features v1 cuts or rulings retired (D-9), so they stay out of the
-  baseline and return additively with their features (H-5) — no table ships
-  without a writer (C-4). Their companion artifacts (the feeds `self_all`
-  policies, the one-active-feed partial index, the email-dedupe key) travel
+- **10 tables in the baseline**: profiles, teams, seasons, students,
+  invites, events, event_sessions, rsvps, attendance, student_teams — with
+  the rebuild's two deliberate changes: drop `students.team_id` (ROS-3:
+  junction only, and ship its writer), and store recurrence rules on
+  series (SCH-2). The other five tables from the old schema (`audit_log`,
+  `calendar_feeds`, `email_log`, `notification_prefs`, and — per R-3 —
+  `guardian_links`) serve features v1 cuts or rulings retired, so they
+  stay out of the baseline and return additively with their features
+  (H-5) — no table ships without a writer (C-4). Their companion artifacts
+  (the feeds `self_all` policies, the one-active-feed partial index, the
+  email-dedupe key, the guardian-link half of `my_student_ids()`) travel
   with them, not with the baseline.
 - **RLS**: the three security-definer helpers (`auth_role()`, `is_staff()`,
   `my_student_ids()`), the uniform `staff_all` policy shape, and
   `own_or_linked_read`. Decide view security once (SEC-4): every view
   `security_invoker` or documented owner-bypass + `revoke all from anon`.
 - **Views — final forms only**: `v_student_hours` (20260804 form:
-  override-wins, clamped, and **keep its `type='outreach'` clause — it
-  implements George's D-2a ruling**, not an accident), `v_student_participation`
-  (20260822 form: explicit marks, unmarked excluded, NULL not 0),
-  `v_team_*`, `v_season_kpis`, goal projection, leaderboard (with privacy
-  gate). Two deliberate changes: rename the lying `expected_ct` column to
-  `marked_ct` — the rebuild is the one chance — and recompute session
-  attendance rate against the expected roster (MET-6).
+  override-wins, clamped), `v_student_participation` (20260822 form:
+  explicit marks, unmarked excluded, NULL not 0), `v_team_*`,
+  `v_season_kpis`, goal projection, leaderboard (with privacy gate).
+  Three deliberate changes: rename the lying `expected_ct` column to
+  `marked_ct` — the rebuild is the one chance; recompute session
+  attendance rate against the expected roster (MET-6); and per D-2b/Q14
+  the hours view keys on `counts_volunteer_hours` with a CHECK forbidding
+  that flag on `type='competition'`, replacing the 20260804 form's
+  `type='outreach'` clause (this opens the meeting-into-hours door D-2b
+  requires while keeping competitions out permanently).
 - **Keepers**: the `unmarked` sentinel (20260822), the one-active-season
   partial index, `leaderboard_privacy_enabled`, the invite-acceptance
   trigger design (but live-verify it this time), the anon-revoke discipline
@@ -56,14 +60,14 @@ The single most valuable asset. Port the **final** state of
 
 | What | Where | Notes |
 |---|---|---|
-| Check-in HMAC scheme | `supabase/functions/checkin/hmac.ts` | Pure, tested, exactly ATT-6. Port with its tests |
-| Grace + liveness rules | `supabase/functions/checkin/grace.ts`, `liveness.ts` | ATT-5's implementation |
-| Idempotent attendance upsert | `supabase/functions/checkin/index.ts` | onConflict(session_id,student_id), server-assigned status |
+| Check-in HMAC scheme | `supabase/functions/checkin/hmac.ts` | Pure, tested, exactly ATT-6 — dormant, port only if the QR path returns (R-2) |
+| Grace + liveness rules | `supabase/functions/checkin/grace.ts`, `liveness.ts` | ATT-5's implementation — dormant with the QR path |
+| Idempotent attendance upsert | `supabase/functions/checkin/index.ts` | onConflict(session_id,student_id), server-assigned status — the semantics carry into v1's coach/self write paths |
 | Timezone discipline | `src/lib/meetings/format.ts` (`parseDateOnly`, chips, meridiem), `overlap.ts` | The noon-UTC/Chicago reasoning is hard-won; port as the **one** date module (NFR-6) |
 | Meetings pure models | `src/lib/meetings/coachModel.ts` partition/build functions | Good shape (loader → pure model → view); strip the process comments |
 | ICS builder | `supabase/functions/ics/ics_builder.ts` | Only if/when ICS returns post-launch |
 | Email templates + dedupe design | `src/emails/*`, `send-reminders` email_log key `(template, session_id, to_email)` | Only if/when email returns post-launch |
-| Theme tokens | `src/theme/volt.ts` | Accent pairs, on-accent, GoalBar fills, side-nav overrides — measured WCAG work, port verbatim (S-1) |
+| Theme tokens | `src/theme/volt.ts` | Accent pairs, on-accent, GoalBar fills — measured WCAG work; port the **values** into the new design system's token layer (S-1, R-4). The Astryx-specific overrides (side-nav keys etc.) die with Astryx |
 
 ## 4. Test infrastructure (carry as-is, then promote to CI)
 
