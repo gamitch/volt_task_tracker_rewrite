@@ -1054,6 +1054,17 @@ function goLiveLinks(): { href: string; name: string }[] {
 }
 
 describe('T511 -- live console entry point (coach session row)', () => {
+  // The fixture's sessions straddle the end of August 2026 and the schedule
+  // panel is driven by the real calendar, so the clock is pinned; otherwise
+  // the August rows drop out of view once the real date passes them.
+  const T511_NOW = new Date('2026-08-26T12:00:00.000Z');
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'], now: T511_NOW });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('C1: a scheduled session links to /meetings/live/<that session’s own id>', async () => {
     renderAsUser(COACH_USER, { loadCoachData: () => Promise.resolve(T511_ROW) });
     await flushMicrotasks();
